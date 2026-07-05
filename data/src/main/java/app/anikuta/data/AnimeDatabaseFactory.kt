@@ -16,10 +16,10 @@ object AnimeDatabaseFactory {
         )
         return AnimeDatabase(
             driver = driver,
-            animehistoryAdapter = Animehistory.Adapter(
+            animehistoryAdapter = AnimeDatabase.Animehistory.Adapter(
                 last_seenAdapter = DateColumnAdapter,
             ),
-            animesAdapter = Animes.Adapter(
+            animesAdapter = AnimeDatabase.Animes.Adapter(
                 genreAdapter = StringListColumnAdapter,
                 update_strategyAdapter = AnimeUpdateStrategyColumnAdapter,
                 fetch_typeAdapter = FetchTypeColumnAdapter,
