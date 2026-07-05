@@ -20,7 +20,6 @@ class LibraryPreferences(
         LibraryDisplayMode.Serializer::deserialize,
     )
 
-    )
 
     fun animeSortingMode() = preferenceStore.getObject(
         "animelib_sorting_mode",
@@ -40,6 +39,7 @@ class LibraryPreferences(
     )
 
     fun autoUpdateItemRestrictions() = preferenceStore.getStringSet(
+        "library_update_item_restriction",
         setOf(
             ENTRY_HAS_UNVIEWED,
             ENTRY_NON_COMPLETED,
