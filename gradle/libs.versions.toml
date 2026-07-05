@@ -16,6 +16,7 @@ preference-ktx = "1.2.1"
 coroutines = "1.10.1"
 serialization = "1.9.0"
 jsoup = "1.19.1"
+injekt = "91edab2317"
 
 [libraries]
 # AndroidX
@@ -48,6 +49,7 @@ coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutin
 serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 serialization-json-okio = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json-okio", version.ref = "serialization" }
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
+injekt = { group = "com.github.mihonapp", name = "injekt", version.ref = "injekt" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }

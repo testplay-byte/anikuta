@@ -14,6 +14,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven(url = "https://www.jitpack.io")  // Injekt (Mihon fork)
     }
 }
 

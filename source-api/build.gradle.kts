@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -22,6 +23,19 @@ android {
 }
 
 dependencies {
-    implementation(project(":core"))
+    // Internal
+    api(project(":core"))
+
+    // DI (Injekt — Mihon fork from JitPack)
+    api(libs.injekt)
+
+    // Compose runtime (for @Stable annotation in AnimeFilterList)
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+
+    // HTML parsing
+    api(libs.jsoup)
+
+    // Testing
     testImplementation(libs.junit)
 }
