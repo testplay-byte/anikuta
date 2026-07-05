@@ -36,5 +36,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { AnimeExtensionLoader(get()) }
         addSingletonFactory { AnimeExtensionManager(get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get(), get()) }
+
+        // AniList client (ours — discovery layer)
+        addSingletonFactory { app.anikuta.data.anilist.repository.AniListRepository(get()) }
     }
 }
