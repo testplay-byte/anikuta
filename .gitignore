@@ -2,7 +2,9 @@
 # Secrets — NEVER commit these
 # =============================================================================
 MEMORY/CREDENTIALS/github-token.txt
+MEMORY/CREDENTIALS/supabase-credentials.md
 MEMORY/CREDENTIALS/keystore/
+MEMORY/CREDENTIALS/*.env
 *.keystore
 *.jks
 *.p12

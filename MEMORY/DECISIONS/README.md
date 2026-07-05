@@ -49,3 +49,7 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 - **Decision 32** — Onboarding = 6-step wizard; steps 3/4/5 required (storage, extension, design). — Accepted (Session 10).
 - **Decision 33** — Supabase project name = "anikuta", free tier; set up in Phase 2. — Accepted (Session 10).
 - **Decision 34** — Injekt backup plan = migrate to Koin (not Hilt) if Injekt fails; trigger conditions defined. — Accepted (Session 10).
+- **Decision 35** — Supabase project created: `anikuta` (Singapore, free tier, RLS + Data API). Credentials stored gitignored. — Accepted (Session 11).
+- **Decision 36** — Recommended extension repo: Confused-Creature-180/aniyomi-extensions (pre-added in onboarding). Recommended extension: AniKoto 180. — Accepted (Session 11).
+- **Decision 37** — Onboarding = 7 steps (added Backup restore as step 5). AniList login deferred to Settings → Trackers. — Accepted (Session 11).
+- **Decision 38** — Supabase = database + cache only (no Auth / user accounts for now). — Accepted (Session 11).

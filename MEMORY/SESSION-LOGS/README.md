@@ -37,3 +37,4 @@ One file per session, named `YYYY-MM-DD-SESSION-N.md`.
 - `Session 8` — Planning: D1/D2/D4 decided, D3 pending; created DOCS/PLAN/ (8 docs) + DOCS/APP/; built Plan subpage (visual dashboard).
 - `Session 9` — Caching analysis (aniwatch reference → CACHING-STRATEGY.md); D3 decided (keep Injekt); D1 refined (selective copy-paste); plan subpage updated (caching section, designs, onboarding).
 - `Session 10` — 4 designs documented (Material 3, Dark Neon, Neobrutalism, Coffee Notebook); onboarding (6-step wizard); Supabase setup guidance; Injekt backup plan (Koin).
+- `Session 11` — Supabase set up (creds stored gitignored, access verified); extension repo + APK recorded; onboarding updated (7 steps + backup restore); AniList login deferred.
