@@ -31,11 +31,11 @@ class AniListRepository(
     private val apiUrl = "https://graphql.anilist.co"
     private val jsonMime = "application/json; charset=utf-8".toMediaType()
 
-    private suspend fun <T> graphqlRequest(
+    private suspend fun graphqlRequest(
         query: String,
         variables: Map<String, Any?> = emptyMap(),
-        responseParser: (JsonObject) -> T,
-    ): T = withContext(Dispatchers.IO) {
+        responseParser: (JsonObject) -> List<AniListAnime>,
+    ): List<AniListAnime> = withContext(Dispatchers.IO) {
         val body = json.encodeToString(
             GraphQLRequest.serializer(),
             GraphQLRequest(query, variables),
@@ -56,7 +56,6 @@ class AniListRepository(
             val responseBody = it.body?.string()
                 ?: throw RuntimeException("Empty response from AniList")
             val jsonElement = json.parseToJsonElement(responseBody).jsonObject
-            // Check for GraphQL errors
             jsonElement["errors"]?.let { errors ->
                 val message = errors.jsonArray.firstOrNull()
                     ?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
@@ -67,53 +66,69 @@ class AniListRepository(
         }
     }
 
-    /** Fetch trending anime. */
+    private fun parseMediaList(root: JsonObject): List<AniListAnime> {
+        val mediaArray = root["data"]?.jsonObject?.get("Page")?.jsonObject?.get("media")?.jsonArray
+            ?: return emptyList()
+        return mediaArray.map { element ->
+            json.decodeFromJsonElement(AniListAnime.serializer(), element)
+        }
+    }
+
     suspend fun getTrending(page: Int = 1, perPage: Int = 20): List<AniListAnime> =
-        graphqlRequest(
-            AniListQueries.trending,
-            mapOf("page" to page, "perPage" to perPage),
-        ) { json.decodeFromJsonElement(AniListPage.serializer(), it).Page.media }
+        graphqlRequest(AniListQueries.trending, mapOf("page" to page, "perPage" to perPage)) { parseMediaList(it) }
 
-    /** Fetch popular anime. */
     suspend fun getPopular(page: Int = 1, perPage: Int = 20): List<AniListAnime> =
-        graphqlRequest(
-            AniListQueries.popular,
-            mapOf("page" to page, "perPage" to perPage),
-        ) { json.decodeFromJsonElement(AniListPage.serializer(), it).Page.media }
+        graphqlRequest(AniListQueries.popular, mapOf("page" to page, "perPage" to perPage)) { parseMediaList(it) }
 
-    /** Fetch freshly updated anime (currently airing). */
     suspend fun getFreshlyUpdated(page: Int = 1, perPage: Int = 20): List<AniListAnime> =
-        graphqlRequest(
-            AniListQueries.freshlyUpdated,
-            mapOf("page" to page, "perPage" to perPage),
-        ) { json.decodeFromJsonElement(AniListPage.serializer(), it).Page.media }
+        graphqlRequest(AniListQueries.freshlyUpdated, mapOf("page" to page, "perPage" to perPage)) { parseMediaList(it) }
 
-    /** Fetch all available genres. */
-    suspend fun getGenres(): List<String> =
-        graphqlRequest(AniListQueries.genres) {
-            it["data"]?.jsonObject?.get("GenreCollection")?.jsonArray
-                ?.map { g -> g.jsonPrimitive.content }
+    suspend fun getGenres(): List<String> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(
+            GraphQLRequest.serializer(),
+            GraphQLRequest(AniListQueries.genres),
+        ).toRequestBody(jsonMime)
+
+        val request = Request.Builder()
+            .url(apiUrl)
+            .post(body)
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@withContext emptyList()
+            val responseBody = response.body?.string() ?: return@withContext emptyList()
+            val root = json.parseToJsonElement(responseBody).jsonObject
+            root["data"]?.jsonObject?.get("GenreCollection")?.jsonArray
+                ?.map { it.jsonPrimitive.content }
                 ?: emptyList()
         }
+    }
 
-    /** Fetch anime by genre. */
     suspend fun browseByGenre(genre: String, page: Int = 1, perPage: Int = 20): List<AniListAnime> =
-        graphqlRequest(
-            AniListQueries.browseByGenre,
-            mapOf("genre" to genre, "page" to page, "perPage" to perPage),
-        ) { json.decodeFromJsonElement(AniListPage.serializer(), it).Page.media }
+        graphqlRequest(AniListQueries.browseByGenre, mapOf("genre" to genre, "page" to page, "perPage" to perPage)) { parseMediaList(it) }
 
-    /** Fetch airing schedule (for "Coming Up Next"). */
-    suspend fun getAiringSchedule(airingAt: Int): List<AniListAiringSchedule> =
-        graphqlRequest(
-            AniListQueries.airingSchedule,
-            mapOf("airingAt" to airingAt),
-        ) { json.decodeFromJsonElement(AniListAiringPage.serializer(), it).Page.airingSchedules }
+    suspend fun getAnimeDetails(id: Int): AniListAnime = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(
+            GraphQLRequest.serializer(),
+            GraphQLRequest(AniListQueries.animeDetails, mapOf("id" to id)),
+        ).toRequestBody(jsonMime)
 
-    /** Fetch anime details by AniList ID. */
-    suspend fun getAnimeDetails(id: Int): AniListAnime =
-        graphqlRequest(
-            AniListQueries.animeDetails,
-            mapOf("id" to id),
-        ) { json.decodeFromJsonElement(AniListMediaResponse.serializer(), it).data.Media }
+        val request = Request.Builder()
+            .url(apiUrl)
+            .post(body)
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw RuntimeException("AniList API error: ${response.code}")
+            val responseBody = response.body?.string() ?: throw RuntimeException("Empty response")
+            val root = json.parseToJsonElement(responseBody).jsonObject
+            val media = root["data"]?.jsonObject?.get("Media")?.jsonObject
+                ?: throw RuntimeException("Media not found in response")
+            json.decodeFromJsonElement(AniListAnime.serializer(), media)
+        }
+    }
 }

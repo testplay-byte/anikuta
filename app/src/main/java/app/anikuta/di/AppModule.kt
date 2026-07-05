@@ -8,6 +8,7 @@ import app.anikuta.core.preference.PreferenceStore
 import app.anikuta.data.AnimeDatabaseFactory
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
+import app.anikuta.data.anilist.repository.AniListRepository
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
 import app.anikuta.extension.anime.AnimeExtensionManager
 import app.anikuta.extension.anime.util.AnimeExtensionLoader
@@ -38,6 +39,6 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get(), get()) }
 
         // AniList client (ours — discovery layer)
-        addSingletonFactory { app.anikuta.data.anilist.repository.AniListRepository(get()) }
+        addSingletonFactory { AniListRepository(get()) }
     }
 }
