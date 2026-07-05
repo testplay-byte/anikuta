@@ -45,3 +45,7 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 - **Decision 28** — Extensions: user picks primary + secondary; setup wizard enforces selection on first boot. — Accepted (Session 9).
 - **Decision 29** — Search: AniList-first with extension fallback; user-selectable engine in settings. — Accepted (Session 9).
 - **Decision 30** — Onboarding/setup wizard is a required first-boot flow (Phase 1 of roadmap). — Accepted (Session 9).
+- **Decision 31** — 4 designs finalized: Material 3, Dark Neon, Neobrutalism, Coffee Notebook. All documented in DOCS/PLAN/DESIGNS/. — Accepted (Session 10).
+- **Decision 32** — Onboarding = 6-step wizard; steps 3/4/5 required (storage, extension, design). — Accepted (Session 10).
+- **Decision 33** — Supabase project name = "anikuta", free tier; set up in Phase 2. — Accepted (Session 10).
+- **Decision 34** — Injekt backup plan = migrate to Koin (not Hilt) if Injekt fails; trigger conditions defined. — Accepted (Session 10).
