@@ -28,3 +28,5 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 - **Decision 11** — DECISIONS-ANALYSIS.md is analysis-only; actual build decisions deferred to when we start building, per user. — Accepted (Session 4).
 - **Decision 12** — Subpage implementation = client-side view router within `/` (hash-synced), not separate routes (env forbids) nor overlay (user rejected canvas-takeover). — Accepted (Session 5).
 - **Decision 13** — Mind-map layout = horizontal tree, parent centered over children, SVG bezier connectors, collapsible, color-coded by 8 categories. — Accepted (Session 5).
+- **Decision 14** — Mind-map wheel = zoom-toward-cursor (plain wheel, no modifier); pan is drag-only. — Accepted (Session 6).
+- **Decision 15** — Mind-map canvas is controlled: zoom + showLegend in the view; pan + expanded in the canvas; fit() via ref. — Accepted (Session 6).
