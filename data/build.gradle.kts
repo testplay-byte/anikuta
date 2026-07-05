@@ -22,6 +22,8 @@ android {
     kotlinOptions {
         jvmTarget = "17"
         freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
+        // Enable Kotlin 2.2 context parameters (used by ReleaseServiceImpl)
+        freeCompilerArgs += "-Xcontext-parameters"
     }
 }
 

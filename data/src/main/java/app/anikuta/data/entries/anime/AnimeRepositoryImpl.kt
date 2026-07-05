@@ -1,6 +1,6 @@
 package app.anikuta.data.entries.anime
 
-import aniyomi.domain.anime.SeasonAnime
+import app.anikuta.domain.anime.SeasonAnime
 import kotlinx.coroutines.flow.Flow
 import logcat.LogPriority
 import app.anikuta.core.util.system.logcat

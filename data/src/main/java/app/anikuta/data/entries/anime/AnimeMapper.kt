@@ -1,6 +1,6 @@
 package app.anikuta.data.entries.anime
 
-import aniyomi.domain.anime.SeasonAnime
+import app.anikuta.domain.anime.SeasonAnime
 import app.anikuta.source.api.model.AnimeUpdateStrategy
 import app.anikuta.source.api.model.FetchType
 import app.anikuta.domain.entries.anime.model.Anime
