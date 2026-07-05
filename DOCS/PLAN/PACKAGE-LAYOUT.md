@@ -9,6 +9,20 @@
 
 ---
 
+## ⚠️ Incremental copy-paste (D44)
+
+We do **NOT** copy all of aniyomi's backend at once. We copy **what each phase
+needs**, along the way:
+- Understand the aniyomi code → analyze if we need it → copy + adapt → document.
+- First priority: **the extension system** (managing, communication, data
+  fetching, display) — needed for onboarding step 4 + the home page.
+- When aniyomi updates, we compare our copied files against the new version,
+  analyze the diff, and decide whether to adopt.
+
+See `PHASE-1-PLAN.md` for the step-by-step copy sequence.
+
+---
+
 ## The principle (D1)
 
 - We use our own `app.anikuta.*` packages throughout.

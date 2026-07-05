@@ -56,4 +56,8 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 - **Decision 39** — minSdk = 26 (Android 8.0). Higher-API features gated at runtime. — Accepted (Session 12).
 - **Decision 40** — Build environment = GitHub Actions (not sandbox). Single APK, arm64-v8a only. — Accepted (Session 12).
 - **Decision 41** — Material 3 is the fallback design; all designs fall back to it if a screen/element isn't available. — Accepted (Session 12).
-- **Decision 42 (proposed)** — Multi-module (5 modules: :app, :core, :data, :domain, :source-api). — PENDING user decision (Session 12).
+- **Decision 42 (proposed)** — Multi-module (5 modules: :app, :core, :data, :domain, :source-api). — Accepted (Session 13).
+- **Decision 43** — `:source-api` kept as a separate module (matches aniyomi; future 3rd-party extensions compile against just it). — Accepted (Session 13).
+- **Decision 44** — Incremental copy-paste: copy aniyomi parts as needed along the way (NOT all at once). First priority: extension system (managing, communication, data fetching, display). Document each copy; compare on upstream updates. — Accepted (Session 13).
+- **Decision 45** — A dedicated APK download page on the live preview (`/#apk`), linking to the GitHub Actions artifact. Built after Phase 1 produces a working APK. — Accepted (Session 13).
+- **Decision 46** — A dedicated build-progress page on the live preview (`/#build`), updated after each task. Shows what's done, current step, what's next, and how. — Accepted (Session 13).
