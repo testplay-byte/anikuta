@@ -6,16 +6,19 @@ aniyomi and what we can learn or reuse from each part.
 
 ## Status
 
-**TODO — not yet populated.** The aniyomi source has not yet been copied into
-`REFERENCE/` (the folder currently only holds a `.gitkeep`). The files in this
-subfolder are templates that will be filled in once the copy is made.
+**Partially populated.** aniyomi has been copied into `REFERENCE/`
+(snapshot: `main` @ `2f5cf77`, 2025-11-05). The top-level module map in
+`NAVIGATION-GUIDE.md` is filled from the actual snapshot. Deeper subsystem
+details (player, trackers, download manager, etc.) still need a code-reading
+pass and remain marked TODO.
 
 ## Files in this subfolder
 
 | File | Description |
 |------|-------------|
 | `README.md` | This file — overview of the reference-navigation subfolder. |
-| `NAVIGATION-GUIDE.md` | Template for the detailed aniyomi navigation guide. Filled in after aniyomi is copied into `REFERENCE/`. |
+| `NAVIGATION-GUIDE.md` | Detailed aniyomi navigation guide. Top-level module map filled; subsystem details still TODO. |
+| `SOURCE-SNAPSHOT.md` | Records exactly which aniyomi commit `REFERENCE/` is at, plus the refresh procedure. |
 
 ## How this subfolder is used
 
