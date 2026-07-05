@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -22,5 +23,27 @@ android {
 }
 
 dependencies {
+    // Network (from aniyomi core:common)
+    api(libs.okhttp.core)
+    api(libs.okhttp.logging)
+    api(libs.okhttp.brotli)
+    api(libs.okhttp.dnsoverhttps)
+    api(libs.okio)
+    api(libs.rxjava)
+    api(libs.logcat)
+
+    // Kotlin
+    api(libs.coroutines.core)
+    api(libs.coroutines.android)
+    api(libs.serialization.json)
+    api(libs.serialization.json.okio)
+
+    // Preferences
+    api(libs.preference.ktx)
+
+    // HTML parsing
+    implementation(libs.jsoup)
+
+    // Testing
     testImplementation(libs.junit)
 }
