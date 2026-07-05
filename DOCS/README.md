@@ -10,8 +10,7 @@ GitHub alongside `MEMORY/` as a backup so context survives sandbox resets.
 | `README.md` | This file — overview of the DOCS/ folder. |
 | `NAVIGATION-GUIDE.md` | Top-level map of every folder in the anikuta repo. Read this first. |
 | `ARCHITECTURE/README.md` | Architecture principles: UI/logic separation, feature folders, reference-folder strategy, modular-complexity rule. |
-| `REFERENCE-NAVIGATION/README.md` | Overview of the navigation guide for the `REFERENCE/` (aniyomi) source. |
-| `REFERENCE-NAVIGATION/NAVIGATION-GUIDE.md` | Template to be filled in once aniyomi is copied into `REFERENCE/`. |
+| `REFERENCE-DOCS/` | **All documentation for the `REFERENCE/` (aniyomi) folder.** Start at `REFERENCE-DOCS/README.md`, then `NAVIGATION-GUIDE.md` → `MODULES.md` / `APP-STRUCTURE.md` / `ARCHITECTURE.md`. |
 
 ## Rules
 

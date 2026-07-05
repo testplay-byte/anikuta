@@ -18,8 +18,8 @@ edits it, and where to go next.
 | `DOCS/` | All project documentation (this folder). | Any agent (per scope). | `DOCS/NAVIGATION-GUIDE.md` (this file). |
 | `SETUP/` | Environment setup guide for new contributors/sessions. | Documentation agents. | `SETUP/README.md`. |
 | `BUILD-APK/` | Where built APK outputs land (renamed with our naming convention). APKs themselves are gitignored; only the README is tracked. | Build/scripts. | `BUILD-APK/README.md`. |
-| `REFERENCE/` | Pristine, READ-ONLY copy of the aniyomi upstream source. **Never edited, never built from.** Only refreshed by replacing the whole copy. | Nobody edits it. The main agent replaces the whole copy when refreshing upstream. | `DOCS/REFERENCE-NAVIGATION/NAVIGATION-GUIDE.md` (template, to be filled). |
-| `REFERENCE-STAGING/` | Landing zone for a fresh copy of aniyomi when reviewing upstream updates. Diffed against `REFERENCE/`, then good changes get promoted into our working code (NOT into `REFERENCE/`). | Main agent during upstream review. | See "How to diff upstream updates" in `DOCS/REFERENCE-NAVIGATION/NAVIGATION-GUIDE.md`. |
+| `REFERENCE/` | Pristine, READ-ONLY copy of the aniyomi upstream source (1,988 files, commit `2f5cf77`). **Never edited, never built from.** Only refreshed by replacing the whole copy. | Nobody edits it. The main agent replaces the whole copy when refreshing upstream. | `DOCS/REFERENCE-DOCS/NAVIGATION-GUIDE.md` (orientation) → then `MODULES.md` / `APP-STRUCTURE.md` / `ARCHITECTURE.md`. |
+| `REFERENCE-STAGING/` | Landing zone for a fresh copy of aniyomi when reviewing upstream updates. Diffed against `REFERENCE/`, then good changes get promoted into our working code (NOT into `REFERENCE/`). | Main agent during upstream review. | See "How to diff upstream updates" in `DOCS/REFERENCE-DOCS/NAVIGATION-GUIDE.md`. |
 | `app/` (planned) | The Android app source — our actual working code. Added later when development begins. | All agents working on app code. | TODO — does not exist yet. |
 
 ## How to navigate as a newcomer
@@ -37,16 +37,17 @@ edits it, and where to go next.
 5. **Building an APK?**
    Go to `BUILD-APK/README.md`.
 6. **Understanding architecture?**
-   Go to `DOCS/ARCHITECTURE/README.md`.
+   Go to `DOCS/ARCHITECTURE/README.md` (our project's principles) and
+   `DOCS/REFERENCE-DOCS/ARCHITECTURE.md` (how aniyomi is architected).
 7. **Looking at aniyomi internals / planning reuse?**
-   Go to `DOCS/REFERENCE-NAVIGATION/NAVIGATION-GUIDE.md` (template for now;
-   filled in after the aniyomi source is copied into `REFERENCE/`).
+   Go to `DOCS/REFERENCE-DOCS/` — start at `NAVIGATION-GUIDE.md`, then drill
+   into `MODULES.md` / `APP-STRUCTURE.md` / `ARCHITECTURE.md`.
 
 ## Notes
 
 - The Android app source (`app/`) does not exist yet. It will be added when
   development begins.
-- `REFERENCE/` currently only holds a `.gitkeep`. The aniyomi source has not
-  been copied in yet — that step is TODO.
+- `REFERENCE/` holds the pristine aniyomi copy (commit `2f5cf77`, 1,988 files).
+  Its documentation lives in `DOCS/REFERENCE-DOCS/`.
 - `MEMORY/CREDENTIALS/` holds secrets (e.g. GitHub PAT). It is gitignored and
   must never be committed or touched by sub-agents.

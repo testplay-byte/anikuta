@@ -22,3 +22,5 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 - **Decision 5** — Force-add `.idea/icon.png` + `app/.idea/*` (part of aniyomi's committed snapshot) — Accepted (Session 2).
 - **Decision 6** — Defer APK signing until we build our own app — Accepted (Session 2).
 - **Decision 7 (deferred)** — On test-account migration, rewrite repo URLs in CORE-RULES §0, PROJECT-CONTEXT, CREDENTIALS/README, live-preview data.ts (projectStatus.repoUrl), and anikuta/.git/config remote. — Pending future migration.
+- **Decision 8** — REFERENCE-DOCS/ is flattened (no nested REFERENCE-NAVIGATION/ subfolder); old folder removed. — Accepted (Session 3).
+- **Decision 9** — Reference docs updated only when aniyomi changes (staging review) or on discovery — NOT regularly. — Accepted (Session 3).
