@@ -7,11 +7,11 @@ import app.anikuta.core.preference.AndroidPreferenceStore
 import app.anikuta.core.preference.PreferenceStore
 import app.anikuta.data.AnimeDatabase
 import app.anikuta.data.AnimeUpdateStrategyColumnAdapter
+import app.anikuta.data.Animehistory
+import app.anikuta.data.Animes
 import app.anikuta.data.DateColumnAdapter
 import app.anikuta.data.FetchTypeColumnAdapter
 import app.anikuta.data.StringListColumnAdapter
-import app.anikuta.data.animehistory.Animehistory
-import app.anikuta.data.animes.Animes
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
@@ -23,6 +23,7 @@ import uy.kohesive.injekt.api.InjektModule
 import uy.kohesive.injekt.api.InjektRegistrar
 import uy.kohesive.injekt.api.addSingleton
 import uy.kohesive.injekt.api.addSingletonFactory
+import uy.kohesive.injekt.api.get
 
 /**
  * Minimal AppModule — wires only what we have so far.
