@@ -30,3 +30,4 @@ One file per session, named `YYYY-MM-DD-SESSION-N.md`.
 - `Session 1` — Repo setup: all-caps folders, REFERENCE-STAGING, MEMORY/DOCS expansion, GitHub push.
 - `Session 2` — Copied aniyomi into REFERENCE/ (snapshot 2f5cf77); filled reference-navigation guide §1-2.
 - `Session 3` — Reference documentation: restructured to REFERENCE-DOCS/, wrote MODULES.md + APP-STRUCTURE.md + ARCHITECTURE.md.
+- `Session 4` — Deep reference docs: 8 subsystem deep-dives + dual-model coupling analysis + 4-decisions pros/cons.

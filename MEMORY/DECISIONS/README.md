@@ -24,3 +24,5 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 - **Decision 7 (deferred)** — On test-account migration, rewrite repo URLs in CORE-RULES §0, PROJECT-CONTEXT, CREDENTIALS/README, live-preview data.ts (projectStatus.repoUrl), and anikuta/.git/config remote. — Pending future migration.
 - **Decision 8** — REFERENCE-DOCS/ is flattened (no nested REFERENCE-NAVIGATION/ subfolder); old folder removed. — Accepted (Session 3).
 - **Decision 9** — Reference docs updated only when aniyomi changes (staging review) or on discovery — NOT regularly. — Accepted (Session 3).
+- **Decision 10** — Subsystem docs use a strict 10-section template (consistent across all 9 docs). — Accepted (Session 4).
+- **Decision 11** — DECISIONS-ANALYSIS.md is analysis-only; actual build decisions deferred to when we start building, per user. — Accepted (Session 4).

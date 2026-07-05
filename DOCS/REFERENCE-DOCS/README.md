@@ -12,14 +12,16 @@
 
 ## Status
 
-**Populated (Session 3).** aniyomi `main` @ `2f5cf77` (2025-11-05) is in
-`REFERENCE/`. The module map, app structure, and architecture are documented.
-Deeper subsystem details (player internals, tracker protocols, etc.) will be
-added as we need them.
+**Fully populated (Session 4).** aniyomi `main` @ `2f5cf77` (2025-11-05) is
+in `REFERENCE/`. Documented at three levels: orientation, architecture, and
+per-subsystem deep dives + cross-cutting analyses (dual-model coupling,
+decisions pros/cons).
 
 ---
 
 ## Files in this folder
+
+### Orientation & structure
 
 | File | What it covers | Read this when… |
 |------|----------------|-----------------|
@@ -30,13 +32,36 @@ added as we need them.
 | `APP-STRUCTURE.md` | The `app/` module's internal package tree (952 files) — every sub-package with its purpose. | You're looking for a specific screen, feature, or file inside the app. |
 | `ARCHITECTURE.md` | How the modules fit together — layering, the source/extension system, dual anime/manga model, request lifecycles, DI, persistence, UI architecture. | You want to understand the big picture / how data flows. |
 
+### Analysis
+
+| File | What it covers | Read this when… |
+|------|----------------|-----------------|
+| `ANALYSIS-DUAL-MODEL.md` | Are anime & manga linked? Can they be separated? The coupling analysis + the anime-only extraction procedure. | You're planning an anime-first build / deciding on manga. |
+| `DECISIONS-ANALYSIS.md` | Pros/cons of the 4 build decisions (package layout, anime-only, DI, persistence). **No decisions made — analysis only.** | You're weighing architectural options before building. |
+
+### Subsystem deep dives (`SUBSYSTEMS/`)
+
+| File | Subsystem | Anime-critical? |
+|------|-----------|----------------|
+| `SUBSYSTEMS/SOURCE-SYSTEM.md` | Source/extension plugin system (source-api + loaders + managers). | ✅ |
+| `SUBSYSTEMS/PLAYER.md` | Anime video player (MPV). | ✅ |
+| `SUBSYSTEMS/DATA-LAYER.md` | SQLDelight databases + repositories (dual DBs). | ✅ |
+| `SUBSYSTEMS/TRACKERS.md` | The 11 tracker integrations. | ✅ (subset) |
+| `SUBSYSTEMS/DOWNLOAD-MANAGER.md` | Episode/chapter download manager (WorkManager + FFmpeg). | ✅ |
+| `SUBSYSTEMS/BACKUP-RESTORE.md` | Backup/restore (gzipped protobuf `.tachibk`). | ✅ |
+| `SUBSYSTEMS/DI.md` | Dependency injection (Injekt). | ✅ (cross-cutting) |
+| `SUBSYSTEMS/UI-THEME.md` | UI architecture (Voyager + Compose) + theming (Material 3). | ✅ (cross-cutting) |
+| `SUBSYSTEMS/READER.md` | Manga reader (paged/webtoon). | ❌ manga-only (for later) |
+
 ### Recommended reading order
 
 1. `SOURCE-SNAPSHOT.md` — know what version you're reading.
 2. `NAVIGATION-GUIDE.md` — 5-minute orientation.
 3. `ARCHITECTURE.md` — the big picture (layers, data flow).
-4. `MODULES.md` — drill into a specific module.
-5. `APP-STRUCTURE.md` — drill into a specific feature inside `app/`.
+4. `ANALYSIS-DUAL-MODEL.md` — understand the anime/manga coupling (key for our anime-first plan).
+5. `MODULES.md` / `APP-STRUCTURE.md` — drill into a specific module/feature.
+6. `SUBSYSTEMS/<subsystem>.md` — drill into a specific subsystem.
+7. `DECISIONS-ANALYSIS.md` — when weighing build options.
 
 ---
 
