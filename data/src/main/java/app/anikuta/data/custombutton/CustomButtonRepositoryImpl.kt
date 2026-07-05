@@ -7,7 +7,7 @@ import app.anikuta.domain.custombuttons.exception.SaveCustomButtonException
 import app.anikuta.domain.custombuttons.model.CustomButton
 import app.anikuta.domain.custombuttons.model.CustomButtonUpdate
 import app.anikuta.domain.custombuttons.repository.CustomButtonRepository
-import app.anikuta.data.mihon.AnimeDatabase
+import app.anikuta.data.AnimeDatabase
 
 class CustomButtonRepositoryImpl(
     private val handler: AnimeDatabaseHandler,

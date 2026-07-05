@@ -5,7 +5,7 @@ import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.domain.category.anime.repository.AnimeCategoryRepository
 import app.anikuta.domain.category.model.Category
 import app.anikuta.domain.category.model.CategoryUpdate
-import app.anikuta.data.mihon.AnimeDatabase
+import app.anikuta.data.AnimeDatabase
 
 class AnimeCategoryRepositoryImpl(
     private val handler: AnimeDatabaseHandler,

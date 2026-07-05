@@ -4,7 +4,7 @@ import androidx.paging.PagingSource
 import app.cash.sqldelight.ExecutableQuery
 import app.cash.sqldelight.Query
 import kotlinx.coroutines.flow.Flow
-import app.anikuta.data.mihon.AnimeDatabase
+import app.anikuta.data.AnimeDatabase
 
 interface AnimeDatabaseHandler {
 

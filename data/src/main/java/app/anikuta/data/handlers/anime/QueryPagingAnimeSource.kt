@@ -3,7 +3,7 @@ package app.anikuta.data.handlers.anime
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import app.cash.sqldelight.Query
-import app.anikuta.data.mihon.AnimeDatabase
+import app.anikuta.data.AnimeDatabase
 import kotlin.properties.Delegates
 
 class QueryPagingAnimeSource<RowType : Any>(

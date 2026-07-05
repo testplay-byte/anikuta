@@ -12,7 +12,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
-import app.anikuta.data.mihon.AnimeDatabase
+import app.anikuta.data.AnimeDatabase
 
 class AndroidAnimeDatabaseHandler(
     val db: AnimeDatabase,
