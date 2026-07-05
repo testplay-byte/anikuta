@@ -35,3 +35,4 @@ One file per session, named `YYYY-MM-DD-SESSION-N.md`.
 - `Session 6` — Mind-map fixes: wheel=zoom, stable clicked node, controls in header, full descriptions.
 - `Session 7` — Mind-map v3: centered controls, smooth animations (Framer Motion + CSS), cascading close, comprehensive app-structure tree.
 - `Session 8` — Planning: D1/D2/D4 decided, D3 pending; created DOCS/PLAN/ (8 docs) + DOCS/APP/; built Plan subpage (visual dashboard).
+- `Session 9` — Caching analysis (aniwatch reference → CACHING-STRATEGY.md); D3 decided (keep Injekt); D1 refined (selective copy-paste); plan subpage updated (caching section, designs, onboarding).

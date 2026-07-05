@@ -9,30 +9,38 @@
 
 ---
 
-## D1 — Package layout: Hybrid
+## D1 — Package layout: Selective copy-paste (refined hybrid)
 
-**Decision:** Hybrid layout.
-- **Backend layer** (data, domain, source-api, core): mirror aniyomi's package
-  names (`eu.kanade.*`, `tachiyomi.*`) so we can copy code with minimal edits
-  and track upstream diffs easily.
-- **UI layer** (screens, components, theme): use our own `app.anikuta.*`
-  packages for a clean custom identity.
+**Decision:** Selective copy-paste with documentation.
+- We **do NOT mirror aniyomi's package structure** wholesale. Instead, we use
+  our own `app.anikuta.*` packages throughout.
+- We **copy the specific aniyomi parts we need** (source-api, player, download
+  manager, data layer, DI wiring) into our app, adapting them into our package
+  structure.
+- **Every copied part is documented** in `DOCS/APP/STRUCTURE/` — what we copied,
+  from which aniyomi commit, what we changed, and why — so we know exactly what's
+  ours vs. upstream.
 
 **Reasoning:**
-- Matches our UI/logic separation rule: the backend is the aniyomi-reusable
-  part (mirror it), the UI is our custom part (our own packages).
-- Keeps upstream adoption cheap (backend diffs map 1:1).
-- Keeps manga re-add cheap (anime backend stays close to aniyomi's structure).
-- Gives us a custom UI identity (`app.anikuta.ui.*`).
+- Gives us a clean, custom identity everywhere (`app.anikuta.*`).
+- We only pull in what we actually use (no dead manga code, no legacy UI).
+- Documentation of every adoption makes upstream tracking precise: when aniyomi
+  updates a file we copied, we know exactly where our version lives and what we
+  changed.
+- Matches the user's vision: "copy-pasting the parts which we need from aniyomi
+  and using it in our own application and documenting it along the way."
 
 **Trade-offs accepted:**
-- Slight inconsistency (two naming systems). Mitigated by the clear
-  backend/UI boundary.
-- The UI layer can't copy aniyomi UI code directly (it's a port). Accepted —
-  we're building our own 4 designs anyway.
+- Upstream adoption is a **port** (not a diff) — we read the aniyomi change,
+  decide if we want it, then adapt it into our structure. Slower than mirroring,
+  but cleaner.
+- Re-adding manga later is also a port. Accepted — the dual-model analysis shows
+  manga is a parallel stack, so the port is mechanical.
+- We must be disciplined about documenting every adoption, or upstream tracking
+  breaks down.
 
-**Linked decisions:** D2 (anime-only re-add depends on backend mirroring),
-D3 + D4 (mirroring backend favors keeping Injekt + SQLDelight).
+**Linked decisions:** D2 (anime-only), D3 (keep Injekt — we copy aniyomi's DI
+wiring into our structure), D4 (keep SQLDelight — we copy aniyomi's schemas).
 
 ---
 
@@ -58,20 +66,33 @@ backups survive a future manga re-add.
 
 ---
 
-## D3 — DI framework: [PENDING USER DECISION]
+## D3 — DI framework: Keep Injekt
 
-**Status:** Awaiting user's decision after DI explanation.
+**Decision:** Keep Injekt (aniyomi's choice). Copy aniyomi's DI wiring into our
+app structure, adapted to `app.anikuta.*`.
 
-**Options:**
-- **Keep Injekt** (recommended) — copy-friendly, works today, niche.
-- **Switch to Hilt** — industry standard, costly migration.
-- **Switch to Koin** — middle ground.
+**Reasoning:**
+- We're selectively copying aniyomi's backend (D1), including its DI wiring.
+  Keeping Injekt means we can copy the wiring near-verbatim.
+- Switching to Hilt/Koin = rewriting all DI wiring for no immediate benefit.
+- Injekt works. If it becomes a pain point, we can switch later.
 
-**Recommendation:** Keep Injekt. We're mirroring the backend (D1), so we can
-copy aniyomi's DI wiring directly. Switching DI = rewriting all wiring for no
-immediate benefit. If Injekt becomes a pain point, we can revisit later.
+**Known limitations of Injekt (flagged for awareness, accepted):**
+- **Niche / small community:** fewer tutorials and Stack Overflow answers than
+  Hilt/Koin. Mitigation: aniyomi's codebase IS the reference — we copy working
+  patterns.
+- **No compile-time DI graph verification:** errors surface at runtime, not at
+  build time (unlike Hilt). Mitigation: test early, test each binding as we wire it.
+- **Less IDE tooling:** Hilt has better Android Studio support (navigation,
+  find usages). Mitigation: disciplined naming + documentation.
+- **Not under active development:** Injekt is a Mihon fork (`com.github.mihonapp:injekt`).
+  It's stable but won't get new features. Mitigation: it does what we need; no
+  new features required.
+- **Verbose module syntax:** `addSingletonFactory` / `addFactory` calls are more
+  verbose than Hilt annotations. Mitigation: accepted — copy-paste from aniyomi.
 
-> See the chat message (Session 8) for the plain-language DI explanation.
+**When we'd reconsider:** if we hit a DI-related bug we can't debug, or if
+onboarding new contributors proves hard due to Injekt's obscurity.
 
 ---
 
@@ -115,4 +136,4 @@ These are made/recorded in `MEMORY/DECISIONS/` and detailed here as needed:
 
 ---
 
-_Last updated: Session 8. D3 pending; all others decided._
+_Last updated: Session 9. All 4 decisions decided (D1 selective copy-paste, D2 anime-only, D3 keep Injekt, D4 keep SQLDelight)._
