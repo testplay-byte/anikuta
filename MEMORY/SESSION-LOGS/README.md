@@ -33,3 +33,4 @@ One file per session, named `YYYY-MM-DD-SESSION-N.md`.
 - `Session 4` — Deep reference docs: 8 subsystem deep-dives + dual-model coupling analysis + 4-decisions pros/cons.
 - `Session 5` — REFERENCE-DOCS mind-map subpage (pan/zoom color-coded canvas, within / route).
 - `Session 6` — Mind-map fixes: wheel=zoom, stable clicked node, controls in header, full descriptions.
+- `Session 7` — Mind-map v3: centered controls, smooth animations (Framer Motion + CSS), cascading close, comprehensive app-structure tree.

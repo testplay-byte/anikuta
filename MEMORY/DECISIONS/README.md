@@ -30,3 +30,6 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 - **Decision 13** — Mind-map layout = horizontal tree, parent centered over children, SVG bezier connectors, collapsible, color-coded by 8 categories. — Accepted (Session 5).
 - **Decision 14** — Mind-map wheel = zoom-toward-cursor (plain wheel, no modifier); pan is drag-only. — Accepted (Session 6).
 - **Decision 15** — Mind-map canvas is controlled: zoom + showLegend in the view; pan + expanded in the canvas; fit() via ref. — Accepted (Session 6).
+- **Decision 16** — Mind-map position animation = CSS transition on left/top only; enter/exit = Framer Motion opacity+scale. — Accepted (Session 7).
+- **Decision 17** — Cascading close: deepest descendants collapse first (staggered), then clicked node; pan compensation per step; pending cascades cancelled on new interaction. — Accepted (Session 7).
+- **Decision 18** — Mind-map data covers the FULL project structure (repo → 13 modules → packages → sub-packages → key files), 7 color categories, every node documented. — Accepted (Session 7).
