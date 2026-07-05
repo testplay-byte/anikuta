@@ -13,29 +13,41 @@
 
 - [x] aniyomi copied into `REFERENCE/`.
 - [x] Reference docs complete (modules, app structure, architecture, 8 subsystems, dual-model analysis).
-- [x] 4 build decisions analyzed.
-- [ ] 4 build decisions **decided** (D1 hybrid, D2 anime-only confirmed; D3 pending user, D4 SQLDelight).
-- [ ] `DOCS/APP/` folder set up.
-- [ ] `DOCS/PLAN/` folder set up (this doc).
-- [ ] Plan subpage on the web (visual planning dashboard).
+- [x] 4 build decisions **decided** (D1 selective copy-paste, D2 anime-only, D3 keep Injekt, D4 keep SQLDelight).
+- [x] `DOCS/APP/` folder set up.
+- [x] `DOCS/PLAN/` folder set up (this doc + 8 planning docs).
+- [x] Plan subpage on the web (visual planning dashboard).
+- [x] Supabase project set up (creds stored gitignored).
+- [x] Extension repo + AniKoto 180 extension recorded.
+- [x] 4 designs documented (Material 3, Dark Neon, Neobrutalism, Coffee Notebook).
+- [x] Module structure + package layout + build environment planned.
+- [ ] minSdk (26), module structure (user to confirm), GitHub Actions workflow — final confirm.
 
 **Deliverable:** A documented, decided, planned foundation.
 
 ---
 
-## Phase 1 — Skeleton app (builds + runs)
+## Phase 1 — Skeleton app + onboarding (builds + runs)
 
-**Goal:** An empty Android app that builds and launches, with the backend
-layer wired up (Injekt DI, anime DB, source/extension system from aniyomi).
+**Goal:** An Android app that builds (via GitHub Actions), launches, runs the
+7-step onboarding wizard, and lands on an empty home screen. Backend wired.
+Material 3 design only (fallback for the other 3 designs later).
 
-- [ ] Create the working `app/` Gradle project (hybrid layout).
-- [ ] Wire Injekt DI (anime bindings only, from aniyomi's AppModule — pruned).
-- [ ] Wire the anime SQLDelight database (`AnimeDatabase`).
-- [ ] Wire `AnimeSourceManager` + `AnimeExtensionManager`.
-- [ ] App launches to a blank screen without crashing.
+**Build target:** ARM64-v8a debug APK, built on GitHub Actions. minSdk 26.
 
-**Deliverable:** An APK that installs and launches. Backend is live (DB + DI +
-extension system), no UI yet.
+- [ ] Create the Gradle project (5 modules: `:app`, `:core`, `:data`, `:domain`, `:source-api`).
+- [ ] Set up GitHub Actions workflow (`.github/workflows/build-apk.yml`).
+- [ ] Copy + adapt Injekt DI wiring (anime bindings only) → `:app` `app.anikuta.di`.
+- [ ] Copy + adapt anime SQLDelight DB → `:data` `app.anikuta.data.db`.
+- [ ] Copy + adapt `AnimeSourceManager` + `AnimeExtensionManager` → `:app`.
+- [ ] Material 3 theme scaffold → `:app` `app.anikuta.ui.theme.material3`.
+- [ ] 7-step onboarding wizard (Welcome, Permissions, Storage, Extension, Backup restore, Design, All set).
+- [ ] Navigation shell (bottom nav: Home, Library, History, Search, More).
+- [ ] App launches → onboarding (first boot) → empty home screen.
+- [ ] GitHub Actions builds a working ARM64-v8a debug APK.
+
+**Deliverable:** An APK the user can install, run onboarding, and land on an
+empty home. Backend (DI, DB, extension system) is live. No streaming yet.
 
 ---
 

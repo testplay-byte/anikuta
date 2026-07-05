@@ -53,3 +53,7 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 - **Decision 36** — Recommended extension repo: Confused-Creature-180/aniyomi-extensions (pre-added in onboarding). Recommended extension: AniKoto 180. — Accepted (Session 11).
 - **Decision 37** — Onboarding = 7 steps (added Backup restore as step 5). AniList login deferred to Settings → Trackers. — Accepted (Session 11).
 - **Decision 38** — Supabase = database + cache only (no Auth / user accounts for now). — Accepted (Session 11).
+- **Decision 39** — minSdk = 26 (Android 8.0). Higher-API features gated at runtime. — Accepted (Session 12).
+- **Decision 40** — Build environment = GitHub Actions (not sandbox). Single APK, arm64-v8a only. — Accepted (Session 12).
+- **Decision 41** — Material 3 is the fallback design; all designs fall back to it if a screen/element isn't available. — Accepted (Session 12).
+- **Decision 42 (proposed)** — Multi-module (5 modules: :app, :core, :data, :domain, :source-api). — PENDING user decision (Session 12).
