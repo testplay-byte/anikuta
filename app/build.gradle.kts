@@ -18,10 +18,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Only build arm64-v8a (per Decision 40 — single APK, modern ARM devices)
-    ndk {
-        abiFilters += "arm64-v8a"
-    }
+    // TODO (Phase 4): when we add MPV native lib, filter to arm64-v8a only:
+    //   ndk { abiFilters += "arm64-v8a" }
+    // For now (pure Compose, no native code), no ABI filter needed.
 
     buildTypes {
         debug {
