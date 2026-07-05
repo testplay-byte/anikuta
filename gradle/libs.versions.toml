@@ -16,6 +16,7 @@ preference-ktx = "1.2.1"
 coroutines = "1.10.1"
 serialization = "1.9.0"
 jsoup = "1.19.1"
+paging = "3.3.6"
 injekt = "91edab2317"
 
 [libraries]
@@ -50,6 +51,7 @@ serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serializ
 serialization-json-okio = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json-okio", version.ref = "serialization" }
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 injekt = { group = "com.github.mihonapp", name = "injekt", version.ref = "injekt" }
+paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
