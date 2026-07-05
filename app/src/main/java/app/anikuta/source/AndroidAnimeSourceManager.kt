@@ -32,7 +32,7 @@ class AndroidAnimeSourceManager(
     override fun get(sourceKey: Long): AnimeSource? = sourceMap[sourceKey]
 
     override fun getOrStub(sourceKey: Long): AnimeSource {
-        return get(sourceKey) ?: StubAnimeSource(sourceKey)
+        return get(sourceKey) ?: StubAnimeSource(sourceKey, "", "")
     }
 
     override fun getOnlineSources(): List<AnimeHttpSource> =
