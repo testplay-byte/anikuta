@@ -29,6 +29,6 @@ class AnimeExtensionLoader(
 
     fun loadExtension(packageInfo: PackageInfo): AnimeLoadResult {
         // TODO: full implementation
-        return AnimeLoadResult.Error("Not implemented yet")
+        return AnimeLoadResult.Error
     }
 }

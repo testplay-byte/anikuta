@@ -1,26 +1,20 @@
 package app.anikuta.source
 
 import android.content.Context
+import app.anikuta.domain.source.anime.model.StubAnimeSource
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
 import app.anikuta.extension.anime.AnimeExtensionManager
 import app.anikuta.source.api.AnimeCatalogueSource
 import app.anikuta.source.api.AnimeSource
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import app.anikuta.source.api.online.AnimeHttpSource
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * ANI-KUTA AndroidAnimeSourceManager — minimal stub.
- *
- * TODO (later steps): copy the full implementation from aniyomi once we have:
- * - AnimeDownloadManager (Phase 7)
- * - LocalAnimeSource (D44 — later)
- * - AnimeStubSourceRepository (data layer)
- *
- * For now, this stub manages sources in memory.
+ * TODO (later steps): full implementation with extension loading, stub sources, etc.
  */
 class AndroidAnimeSourceManager(
     private val context: Context,
@@ -28,28 +22,24 @@ class AndroidAnimeSourceManager(
 ) : AnimeSourceManager {
 
     private val sourceMap = ConcurrentHashMap<Long, AnimeSource>()
-    private val stubSourceMap = ConcurrentHashMap<Long, AnimeSource>()
 
-    private val _catalogueSources = MutableStateFlow(emptyMap<Long, AnimeCatalogueSource>())
-    override val catalogueSources: StateFlow<Map<Long, AnimeCatalogueSource>> =
-        _catalogueSources.asStateFlow()
+    private val _isInitialized = MutableStateFlow(false)
+    override val isInitialized = _isInitialized.asStateFlow()
 
-    override fun get(sourceKey: Long): AnimeSource? {
-        return sourceMap[sourceKey] ?: stubSourceMap[sourceKey]
-    }
+    private val _catalogueSources = MutableStateFlow(emptyList<AnimeCatalogueSource>())
+    override val catalogueSources: Flow<List<AnimeCatalogueSource>> = _catalogueSources
+
+    override fun get(sourceKey: Long): AnimeSource? = sourceMap[sourceKey]
 
     override fun getOrStub(sourceKey: Long): AnimeSource {
-        return get(sourceKey) ?: stubSourceMap.getOrPut(sourceKey) {
-            // TODO: create StubAnimeSource
-            throw NotImplementedError("StubAnimeSource not implemented yet")
-        }
+        return get(sourceKey) ?: StubAnimeSource(sourceKey)
     }
 
-    override fun getOnlineSources(): List<AnimeSource> {
-        return sourceMap.values.filterIsInstance<AnimeSource>()
-    }
+    override fun getOnlineSources(): List<AnimeHttpSource> =
+        sourceMap.values.filterIsInstance<AnimeHttpSource>()
 
-    override fun getCatalogueSources(): List<AnimeCatalogueSource> {
-        return sourceMap.values.filterIsInstance<AnimeCatalogueSource>()
-    }
+    override fun getCatalogueSources(): List<AnimeCatalogueSource> =
+        sourceMap.values.filterIsInstance<AnimeCatalogueSource>()
+
+    override fun getStubSources(): List<StubAnimeSource> = emptyList()
 }
