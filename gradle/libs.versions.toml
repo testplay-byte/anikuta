@@ -18,6 +18,7 @@ serialization = "1.9.0"
 jsoup = "1.19.1"
 paging = "3.3.6"
 injekt = "91edab2317"
+sqldelight = "2.0.2"
 
 [libraries]
 # AndroidX
@@ -51,6 +52,10 @@ serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serializ
 serialization-json-okio = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json-okio", version.ref = "serialization" }
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 injekt = { group = "com.github.mihonapp", name = "injekt", version.ref = "injekt" }
+sqldelight-android-driver = { group = "app.cash.sqldelight", name = "android-driver", version.ref = "sqldelight" }
+sqldelight-coroutines = { group = "app.cash.sqldelight", name = "coroutines-extensions-jvm", version.ref = "sqldelight" }
+sqldelight-android-paging = { group = "app.cash.sqldelight", name = "androidx-paging3-extensions", version.ref = "sqldelight" }
+sqldelight-dialects-sql = { group = "app.cash.sqldelight", name = "sqlite-3-38-dialect", version.ref = "sqldelight" }
 paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
 
 # Testing
@@ -62,3 +67,4 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
