@@ -5,28 +5,28 @@ import app.anikuta.core.network.NetworkHelper
 import app.anikuta.core.network.NetworkPreferences
 import app.anikuta.core.preference.AndroidPreferenceStore
 import app.anikuta.core.preference.PreferenceStore
+import app.anikuta.data.AnimeDatabase
+import app.anikuta.data.AnimeUpdateStrategyColumnAdapter
+import app.anikuta.data.DateColumnAdapter
+import app.anikuta.data.FetchTypeColumnAdapter
+import app.anikuta.data.StringListColumnAdapter
+import app.anikuta.data.animehistory.Animehistory
+import app.anikuta.data.animes.Animes
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
-import app.anikuta.extension.anime.AnimeExtensionManager
-import app.anikuta.source.AndroidAnimeSourceManager
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
+import app.anikuta.extension.anime.AnimeExtensionManager
+import app.anikuta.extension.anime.util.AnimeExtensionLoader
+import app.anikuta.source.AndroidAnimeSourceManager
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import uy.kohesive.injekt.api.InjektModule
 import uy.kohesive.injekt.api.InjektRegistrar
 import uy.kohesive.injekt.api.addSingleton
 import uy.kohesive.injekt.api.addSingletonFactory
-import uy.kohesive.injekt.api.get
-import app.anikuta.data.AnimeDatabase
 
 /**
- * Minimal AppModule — wires only what we have so far:
- * - Preferences
- * - Network
- * - Anime database (SQLDelight)
- * - Extension manager
- * - Source manager
- *
- * More bindings added as we copy more subsystems (download, backup, trackers, etc.)
+ * Minimal AppModule — wires only what we have so far.
+ * More bindings added as we copy more subsystems.
  */
 class AppModule(val app: Application) : InjektModule {
     override fun InjektRegistrar.registerInjectables() {
@@ -43,16 +43,21 @@ class AppModule(val app: Application) : InjektModule {
                 name = "tachiyomi.animedb",
             )
             AnimeDatabase(
-                driver,
-                app.anikuta.data.DateColumnAdapter,
-                app.anikuta.data.StringListColumnAdapter,
-                app.anikuta.data.AnimeUpdateStrategyColumnAdapter,
-                app.anikuta.data.FetchTypeColumnAdapter,
+                driver = driver,
+                animehistoryAdapter = Animehistory.Adapter(
+                    last_seenAdapter = DateColumnAdapter,
+                ),
+                animesAdapter = Animes.Adapter(
+                    genreAdapter = StringListColumnAdapter,
+                    update_strategyAdapter = AnimeUpdateStrategyColumnAdapter,
+                    fetch_typeAdapter = FetchTypeColumnAdapter,
+                ),
             )
         }
         addSingletonFactory<AnimeDatabaseHandler> { AndroidAnimeDatabaseHandler(get(), get()) }
 
         // Extension + source management
+        addSingletonFactory { AnimeExtensionLoader(get()) }
         addSingletonFactory { AnimeExtensionManager(get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get(), get()) }
     }

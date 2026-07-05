@@ -1,33 +1,6 @@
 package app.anikuta.source
 
-import android.graphics.drawable.Drawable
-import app.anikuta.domain.source.service.SourcePreferences
-import app.anikuta.source.api.AnimeSource
-import app.anikuta.extension.anime.AnimeExtensionManager
-import app.anikuta.domain.source.anime.model.StubAnimeSource
-import tachiyomi.source.local.entries.anime.isLocal
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-
-fun AnimeSource.icon(): Drawable? = Injekt.get<AnimeExtensionManager>().getAppIconForSource(this.id)
-
-fun AnimeSource.getPreferenceKey(): String = "source_$id"
-
-fun AnimeSource.toStubSource(): StubAnimeSource = StubAnimeSource(id = id, lang = lang, name = name)
-
-fun AnimeSource.getNameForAnimeInfo(): String {
-    val preferences = Injekt.get<SourcePreferences>()
-    val enabledLanguages = preferences.enabledLanguages().get()
-        .filterNot { it in listOf("all", "other") }
-    val hasOneActiveLanguages = enabledLanguages.size == 1
-    val isInEnabledLanguages = lang in enabledLanguages
-    return when {
-        // For edge cases where user disables a source they got manga of in their library.
-        hasOneActiveLanguages && !isInEnabledLanguages -> toString()
-        // Hide the language tag when only one language is used.
-        hasOneActiveLanguages && isInEnabledLanguages -> name
-        else -> toString()
-    }
-}
-
-fun AnimeSource.isLocalOrStub(): Boolean = isLocal() || this is StubAnimeSource
+/**
+ * ANI-KUTA AnimeSourceExtensions — minimal stub.
+ * TODO (later steps): copy the full implementation from aniyomi.
+ */
