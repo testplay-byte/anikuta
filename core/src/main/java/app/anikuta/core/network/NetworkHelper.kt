@@ -63,11 +63,8 @@ class NetworkHelper(
 
     val nonCloudflareClient = clientBuilder.build()
 
-    val client = clientBuilder
-        .addInterceptor(
-            // TODO (later): CloudflareInterceptor(context, cookieJar, ::defaultUserAgentProvider),
-        )
-        .build()
+    // TODO (later): re-add CloudflareInterceptor when WebView is wired
+    val client = clientBuilder.build()
 
     /**
      * @deprecated Since extension-lib 1.5

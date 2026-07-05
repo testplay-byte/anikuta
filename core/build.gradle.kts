@@ -19,6 +19,8 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+        // Enable Kotlin 2.2 context parameters (used by aniyomi's OkHttpExtensions)
+        freeCompilerArgs += "-Xcontext-parameters"
     }
 }
 
