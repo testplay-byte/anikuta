@@ -40,3 +40,4 @@ One file per session, named `YYYY-MM-DD-SESSION-N.md`.
 - `Session 11` — Supabase set up (creds stored gitignored, access verified); extension repo + APK recorded; onboarding updated (7 steps + backup restore); AniList login deferred.
 - `Session 12` — Module structure (single vs multi, pros/cons) + package layout (what we copy vs build) + build environment (GitHub Actions, arm64-v8a) planned. NO building.
 - `Session 13` — Phase 1 plan (15 sub-steps, incremental copy) + build-progress webpage (`/#build`) + APK download page planned. NO implementation — user verifies first.
+- `Session 14` — Step 1.1 (Gradle scaffold: 5 modules, Compose, Material 3) + Step 1.2 (GitHub Actions). BUILD SUCCEEDED (Run #3, 15.4 MB APK). APK downloadable.
