@@ -96,9 +96,8 @@ data class AniListMediaData(
     val Media: AniListAnime,
 )
 
-/** GraphQL request body. */
-@Serializable
+/** GraphQL request body — built manually (not @Serializable due to Any? type). */
 data class GraphQLRequest(
     val query: String,
-    val variables: Map<String, kotlin.Any?> = emptyMap(),
+    val variables: Map<String, Any?> = emptyMap(),
 )

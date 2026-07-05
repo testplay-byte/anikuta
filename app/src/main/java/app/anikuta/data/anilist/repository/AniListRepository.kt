@@ -11,6 +11,9 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -36,14 +39,25 @@ class AniListRepository(
         variables: Map<String, Any?> = emptyMap(),
         responseParser: (JsonObject) -> List<AniListAnime>,
     ): List<AniListAnime> = withContext(Dispatchers.IO) {
-        val body = json.encodeToString(
-            GraphQLRequest.serializer(),
-            GraphQLRequest(query, variables),
-        ).toRequestBody(jsonMime)
+        val jsonBody = buildJsonObject {
+            put("query", query)
+            if (variables.isNotEmpty()) {
+                putJsonObject("variables") {
+                    variables.forEach { (k, v) ->
+                        when (v) {
+                            is String -> put(k, v)
+                            is Number -> put(k, v)
+                            is Int -> put(k, v)
+                            else -> put(k, v.toString())
+                        }
+                    }
+                }
+            }
+        }.toString().toRequestBody(jsonMime)
 
         val request = Request.Builder()
             .url(apiUrl)
-            .post(body)
+            .post(jsonBody)
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .build()
@@ -84,14 +98,13 @@ class AniListRepository(
         graphqlRequest(AniListQueries.freshlyUpdated, mapOf("page" to page, "perPage" to perPage)) { parseMediaList(it) }
 
     suspend fun getGenres(): List<String> = withContext(Dispatchers.IO) {
-        val body = json.encodeToString(
-            GraphQLRequest.serializer(),
-            GraphQLRequest(AniListQueries.genres),
-        ).toRequestBody(jsonMime)
+        val jsonBody = buildJsonObject {
+            put("query", AniListQueries.genres)
+        }.toString().toRequestBody(jsonMime)
 
         val request = Request.Builder()
             .url(apiUrl)
-            .post(body)
+            .post(jsonBody)
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .build()
@@ -110,14 +123,14 @@ class AniListRepository(
         graphqlRequest(AniListQueries.browseByGenre, mapOf("genre" to genre, "page" to page, "perPage" to perPage)) { parseMediaList(it) }
 
     suspend fun getAnimeDetails(id: Int): AniListAnime = withContext(Dispatchers.IO) {
-        val body = json.encodeToString(
-            GraphQLRequest.serializer(),
-            GraphQLRequest(AniListQueries.animeDetails, mapOf("id" to id)),
-        ).toRequestBody(jsonMime)
+        val jsonBody = buildJsonObject {
+            put("query", AniListQueries.animeDetails)
+            putJsonObject("variables") { put("id", id) }
+        }.toString().toRequestBody(jsonMime)
 
         val request = Request.Builder()
             .url(apiUrl)
-            .post(body)
+            .post(jsonBody)
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .build()
