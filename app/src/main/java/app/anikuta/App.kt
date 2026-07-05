@@ -14,9 +14,7 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         val preferenceStore = AndroidPreferenceStore(this)
-        Injekt.import(
-            AppModule(this),
-            PreferenceModule(preferenceStore),
-        )
+        Injekt.importModule(PreferenceModule(preferenceStore))
+        Injekt.importModule(AppModule(this))
     }
 }

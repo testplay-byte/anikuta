@@ -12,6 +12,7 @@ import app.anikuta.source.AndroidAnimeSourceManager
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import uy.kohesive.injekt.api.InjektModule
+import uy.kohesive.injekt.api.InjektRegistrar
 import uy.kohesive.injekt.api.addSingleton
 import uy.kohesive.injekt.api.addSingletonFactory
 import uy.kohesive.injekt.api.get
@@ -28,8 +29,8 @@ import app.anikuta.data.AnimeDatabase
  * More bindings added as we copy more subsystems (download, backup, trackers, etc.)
  */
 class AppModule(val app: Application) : InjektModule {
-    override fun InjektRegistrar.registerImports() {
-        addSingletonFactory { app }
+    override fun InjektRegistrar.registerInjectables() {
+        addSingleton(app)
         addSingletonFactory { AndroidPreferenceStore(get()) as PreferenceStore }
         addSingletonFactory { NetworkPreferences(get()) }
         addSingletonFactory { NetworkHelper(get(), get()) }
@@ -37,9 +38,9 @@ class AppModule(val app: Application) : InjektModule {
         // Anime database (SQLDelight)
         addSingletonFactory {
             val driver = AndroidSqliteDriver(
-                get<Application>(),
-                "tachiyomi.animedb",
-                AnimeDatabase.Schema,
+                schema = AnimeDatabase.Schema,
+                context = app,
+                name = "tachiyomi.animedb",
             )
             AnimeDatabase(
                 driver,
@@ -49,10 +50,10 @@ class AppModule(val app: Application) : InjektModule {
                 app.anikuta.data.FetchTypeColumnAdapter,
             )
         }
-        addSingletonFactory { AndroidAnimeDatabaseHandler(get(), get()) as AnimeDatabaseHandler }
+        addSingletonFactory<AnimeDatabaseHandler> { AndroidAnimeDatabaseHandler(get(), get()) }
 
         // Extension + source management
         addSingletonFactory { AnimeExtensionManager(get(), get()) }
-        addSingletonFactory { AndroidAnimeSourceManager(get(), get()) as AnimeSourceManager }
+        addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get(), get()) }
     }
 }
