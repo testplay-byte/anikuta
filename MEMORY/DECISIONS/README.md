@@ -33,3 +33,10 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 - **Decision 16** — Mind-map position animation = CSS transition on left/top only; enter/exit = Framer Motion opacity+scale. — Accepted (Session 7).
 - **Decision 17** — Cascading close: deepest descendants collapse first (staggered), then clicked node; pan compensation per step; pending cascades cancelled on new interaction. — Accepted (Session 7).
 - **Decision 18** — Mind-map data covers the FULL project structure (repo → 13 modules → packages → sub-packages → key files), 7 color categories, every node documented. — Accepted (Session 7).
+- **Decision 19 (D1)** — Hybrid package layout: mirror aniyomi for backend (eu.kanade.*, tachiyomi.*), app.anikuta.* for UI. — Accepted (Session 8).
+- **Decision 20 (D2)** — Anime-only now; manga re-addable later as a parallel stack. — Accepted (Session 8).
+- **Decision 21 (D4)** — Keep SQLDelight (copy-friendly, no migration). — Accepted (Session 8).
+- **Decision 22** — AniList is the discovery layer (NOT aniyomi's model); aniyomi extensions for streaming only. — Accepted (Session 8).
+- **Decision 23** — Compose-first UI (no legacy Views). — Accepted (Session 8).
+- **Decision 24** — 4-design customization system planned from day one. — Accepted (Session 8).
+- **Decision 25** — Monthly upstream tracking (selective adoption). — Accepted (Session 8).
