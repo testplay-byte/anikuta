@@ -15,4 +15,6 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 
 ## Index
 
-_(none yet — Session 0 was pure setup)_
+- **Decision 1** — Two reference folders (REFERENCE/ + REFERENCE-STAGING/) — Accepted (Session 1).
+- **Decision 2** — GitHub token stored gitignored, never committed — Accepted (Session 1).
+- **Decision 3** — All-caps naming for top-level project folders — Accepted (Session 1).

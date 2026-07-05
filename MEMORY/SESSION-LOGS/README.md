@@ -1,6 +1,6 @@
 # Session Logs
 
-One file per session, named `YYYY-MM-DD-session-N.md`.
+One file per session, named `YYYY-MM-DD-SESSION-N.md`.
 
 ## Template
 
@@ -27,3 +27,4 @@ One file per session, named `YYYY-MM-DD-session-N.md`.
 ## Index
 
 - `Session 0` — Setup: rules, folder structure, live preview page.
+- `Session 1` — Repo setup: all-caps folders, REFERENCE-STAGING, MEMORY/DOCS expansion, GitHub push.
