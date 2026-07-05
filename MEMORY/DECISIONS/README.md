@@ -26,3 +26,5 @@ Record key decisions and **why** they were made, so we don't relitigate them.
 - **Decision 9** — Reference docs updated only when aniyomi changes (staging review) or on discovery — NOT regularly. — Accepted (Session 3).
 - **Decision 10** — Subsystem docs use a strict 10-section template (consistent across all 9 docs). — Accepted (Session 4).
 - **Decision 11** — DECISIONS-ANALYSIS.md is analysis-only; actual build decisions deferred to when we start building, per user. — Accepted (Session 4).
+- **Decision 12** — Subpage implementation = client-side view router within `/` (hash-synced), not separate routes (env forbids) nor overlay (user rejected canvas-takeover). — Accepted (Session 5).
+- **Decision 13** — Mind-map layout = horizontal tree, parent centered over children, SVG bezier connectors, collapsible, color-coded by 8 categories. — Accepted (Session 5).
