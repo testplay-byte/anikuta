@@ -50,6 +50,29 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Ensure FFmpeg + MPV native libraries are packaged into the APK and not
+    // stripped by AGP. aniyomi uses the same keepDebugSymbols list.
+    packaging {
+        jniLibs {
+            keepDebugSymbols += listOf(
+                "libavcodec",
+                "libavdevice",
+                "libavfilter",
+                "libavformat",
+                "libavutil",
+                "libc++_shared",
+                "libffmpegkit_abidetect",
+                "libffmpegkit",
+                "libmpv",
+                "libplayer",
+                "libpostproc",
+                "libswresample",
+                "libswscale",
+                "libxml2",
+            )
+        }
+    }
 }
 
 dependencies {
@@ -80,6 +103,11 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.mpv.lib)
+    // FFmpeg native libraries required by libmpv.so. libmpv.so is dynamically
+    // linked against libavcodec/libavformat/libavutil/etc.; without these the
+    // MPVLib static initializer crashes with UnsatisfiedLinkError. aniyomi
+    // declares the same dependency (gradle/aniyomi.versions.toml: ffmpeg-kit).
+    implementation(libs.ffmpeg.kit)
 
     // Testing
     testImplementation(libs.junit)

@@ -66,11 +66,15 @@ fun AnikutaNavGraph() {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
-                // M3 Expressive: floating pill nav — transparent background, no container behind it
+                // Full-width bottom nav. Removed the previous floating-pill
+                // treatment (horizontal = 48.dp + vertical = 8.dp) which made
+                // the bar too narrow AND too tall. Now it spans the full width
+                // and uses the standard M3 NavigationBar height (80dp). We
+                // still keep the transparent container + spring icon scale
+                // (M3 Expressive) but drop the extra container.
                 NavigationBar(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 48.dp, vertical = 8.dp)
                         .navigationBarsPadding(),
                     containerColor = androidx.compose.ui.graphics.Color.Transparent,
                     tonalElevation = 0.dp,
