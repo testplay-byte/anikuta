@@ -53,7 +53,24 @@ class LibraryViewModel : ViewModel() {
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     init {
-        load()
+        // Collect from LibraryStore.changes so the Library page updates in
+        // real time when the user saves/removes an anime on the detail page.
+        // Previously this loaded once in init and never re-checked, so saved
+        // anime only appeared after an app restart.
+        viewModelScope.launch {
+            val store = libraryStore
+            if (store == null) {
+                _state.value = LibraryState.Error("App not properly initialized")
+                return@launch
+            }
+            store.changes.collect { anime ->
+                _state.value = if (anime.isEmpty()) {
+                    LibraryState.Empty
+                } else {
+                    LibraryState.Success(sort(anime))
+                }
+            }
+        }
     }
 
     /** Reload the library from the store and re-apply the current sort. */
@@ -61,7 +78,12 @@ class LibraryViewModel : ViewModel() {
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                load()
+                // The changes flow already keeps us in sync; this is just for
+                // pull-to-refresh UX (shows the spinner briefly).
+                val store = libraryStore ?: return@launch
+                val all = store.getAll()
+                _state.value = if (all.isEmpty()) LibraryState.Empty
+                else LibraryState.Success(sort(all))
             } finally {
                 _isRefreshing.value = false
             }
@@ -77,24 +99,6 @@ class LibraryViewModel : ViewModel() {
         // re-read keeps the sort snappy).
         val current = (_state.value as? LibraryState.Success)?.anime ?: return
         _state.value = LibraryState.Success(sort(current))
-    }
-
-    private fun load() {
-        val store = libraryStore ?: run {
-            _state.value = LibraryState.Error("App not properly initialized")
-            return
-        }
-        try {
-            val all = store.getAll()
-            _state.value = if (all.isEmpty()) {
-                LibraryState.Empty
-            } else {
-                LibraryState.Success(sort(all))
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Library load failed", e)
-            _state.value = LibraryState.Error(e.message ?: "Failed to load library")
-        }
     }
 
     /**

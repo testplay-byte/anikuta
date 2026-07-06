@@ -3,6 +3,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Required to discover installed anime extensions on Android 11+ (API 30+).
+         Without this, PackageManager.getInstalledPackages() only returns packages
+         with a matching <queries> declaration, so installed extensions are invisible
+         and the source chain shows "zero sources available". aniyomi uses the same
+         permission. Safe for sideloaded apps; Google Play restricts it but we don't
+         distribute via Play. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
         android:name=".App"

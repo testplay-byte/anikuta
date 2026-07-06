@@ -131,7 +131,17 @@ fun DetailScreen(
                         coverColor = coverColor,
                         isSaved = isSaved,
                         onBack = onBack,
-                        onSave = { viewModel.toggleSaved() },
+                        onSave = {
+                            viewModel.toggleSaved()
+                            // Confirmation toast — the bookmark icon change is
+                            // subtle; this gives clear feedback (user request).
+                            android.widget.Toast.makeText(
+                                context,
+                                if (isSaved) "Removed from library"
+                                else "Saved to library",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        },
                         onShare = {
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"

@@ -168,6 +168,12 @@ class SearchViewModel : ViewModel() {
             } else if (data.isEmpty()) {
                 SearchState.Empty
             } else {
+                // Save the query to recent searches when we get real results.
+                // Previously this only happened in onAnimeClick (tapping a
+                // result), so a user who searched + pressed the keyboard
+                // search button without tapping a result never got the query
+                // saved — recent searches appeared empty.
+                saveRecent(q.trim())
                 SearchState.Success(data)
             }
         } catch (e: Exception) {
@@ -188,23 +194,42 @@ class SearchViewModel : ViewModel() {
         _query.value = term
     }
 
+    /**
+     * Called when the user presses the keyboard's search/submit button.
+     * Saves the query to recent searches immediately (even before results
+     * come back) so the user sees it in recent searches right away.
+     */
+    fun onSubmit() {
+        val term = _query.value.trim()
+        if (term.isNotBlank()) saveRecent(term)
+    }
+
     /** Wipe all recent searches. */
     fun clearRecent() {
         recentPref?.set(emptyList())
     }
 
     /**
-     * Called by the UI when the user taps an anime in the results grid.
-     * Saves the current query to recent searches (newest first, deduped,
-     * capped at [MAX_RECENT]) so the user can quickly re-run it later.
+     * Save a search term to recent searches (newest first, deduped, capped
+     * at [MAX_RECENT]).
      */
-    fun onAnimeClick(anilistId: Int) {
-        val term = _query.value.trim()
-        if (term.isBlank()) return
+    private fun saveRecent(term: String) {
         val pref = recentPref ?: return
         val current = pref.get()
+        if (current.firstOrNull() == term) return  // already newest — no-op
         val updated = (listOf(term) + current.filter { it != term }).take(MAX_RECENT)
         pref.set(updated)
+        Log.d(TAG, "Saved recent search: '$term' (total: ${updated.size})")
+    }
+
+    /**
+     * Called by the UI when the user taps an anime in the results grid.
+     * Saves the current query to recent searches (if not already saved by
+     * doSearch).
+     */
+    fun onAnimeClick(anilistId: Int) {
+        // doSearch already saves on success; this is a no-op fallback.
+        saveRecent(_query.value.trim())
     }
 }
 

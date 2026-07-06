@@ -1,7 +1,10 @@
 package app.anikuta.ui.library
 
+import android.util.Log
 import app.anikuta.core.preference.PreferenceStore
 import app.anikuta.data.anilist.model.AniListAnime
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -24,10 +27,18 @@ import kotlinx.serialization.json.Json
  *
  * Q3 decision (history retention): saved anime persist forever, OR until the
  * user removes them from the library. No automatic time-based cleanup.
+ *
+ * Reactive: [changes] exposes a Flow that emits the current saved-anime list
+ * whenever the underlying preference changes (save/remove). LibraryViewModel
+ * collects from it so the Library page updates in real time without a restart.
  */
 class LibraryStore(
     private val preferenceStore: PreferenceStore,
 ) {
+
+    companion object {
+        private const val TAG = "LibraryStore"
+    }
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -58,12 +69,24 @@ class LibraryStore(
         },
     )
 
+    /**
+     * Reactive stream of the saved-anime list. Emits on every save/remove.
+     * Used by LibraryViewModel so the Library page reflects changes without
+     * a manual refresh or app restart.
+     */
+    val changes: Flow<List<AniListAnime>> = savedPref.changes().map { map ->
+        map.values.mapNotNull { str ->
+            runCatching { json.decodeFromString(AniListAnime.serializer(), str) }.getOrNull()
+        }
+    }
+
     /** Returns true if the anime is in the library. */
     fun isSaved(anilistId: Int): Boolean =
         savedPref.get().containsKey(anilistId.toString())
 
     /** Save an anime to the library (idempotent — overwrites existing). */
     fun save(anime: AniListAnime) {
+        Log.d(TAG, "Saving anime: ${anime.title.preferred()} (id=${anime.id})")
         val map = savedPref.get().toMutableMap()
         map[anime.id.toString()] = json.encodeToString(AniListAnime.serializer(), anime)
         savedPref.set(map)
@@ -71,6 +94,7 @@ class LibraryStore(
 
     /** Remove an anime from the library. No-op if not saved. */
     fun remove(anilistId: Int) {
+        Log.d(TAG, "Removing anime id=$anilistId")
         val map = savedPref.get().toMutableMap()
         if (map.remove(anilistId.toString()) != null) {
             savedPref.set(map)
@@ -90,3 +114,4 @@ class LibraryStore(
         }
     }
 }
+
