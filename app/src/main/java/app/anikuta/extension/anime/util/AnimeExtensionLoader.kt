@@ -1,3 +1,4 @@
+import android.util.Log
 package app.anikuta.extension.anime.util
 
 import android.annotation.SuppressLint
@@ -72,18 +73,18 @@ internal object AnimeExtensionLoader {
             if (PackageInfoCompat.getLongVersionCode(extension) <
                 PackageInfoCompat.getLongVersionCode(currentExtension)
             ) {
-                logcat(LogPriority.ERROR) { "Installed extension version is higher. Downgrading is not allowed." }
+                Log.e("AnimeExtLoader", "Error") { "Installed extension version is higher. Downgrading is not allowed." }
                 return false
             }
 
             val extensionSignatures = getSignatures(extension)
             if (extensionSignatures.isNullOrEmpty()) {
-                logcat(LogPriority.ERROR) { "Extension to be installed is not signed." }
+                Log.e("AnimeExtLoader", "Error") { "Extension to be installed is not signed." }
                 return false
             }
 
             if (!extensionSignatures.containsAll(getSignatures(currentExtension)!!)) {
-                logcat(LogPriority.ERROR) { "Installed extension signature is not matched." }
+                Log.e("AnimeExtLoader", "Error") { "Installed extension signature is not matched." }
                 return false
             }
         }
@@ -180,7 +181,7 @@ internal object AnimeExtensionLoader {
     suspend fun loadExtensionFromPkgName(context: Context, pkgName: String): AnimeLoadResult {
         val extensionPackage = getAnimeExtensionInfoFromPkgName(context, pkgName)
         if (extensionPackage == null) {
-            logcat(LogPriority.ERROR) { "Extension package is not found ($pkgName)" }
+            Log.e("AnimeExtLoader", "Error") { "Extension package is not found ($pkgName)" }
             return AnimeLoadResult.Error
         }
         return loadExtension(context, extensionPackage)
@@ -246,14 +247,14 @@ internal object AnimeExtensionLoader {
         val versionCode = PackageInfoCompat.getLongVersionCode(pkgInfo)
 
         if (versionName.isNullOrEmpty()) {
-            logcat(LogPriority.WARN) { "Missing versionName for extension $extName" }
+            Log.w("AnimeExtLoader", "Warning") { "Missing versionName for extension $extName" }
             return AnimeLoadResult.Error
         }
 
         // Validate lib version
         val libVersion = versionName.substringBeforeLast('.').toDoubleOrNull()
         if (libVersion == null || libVersion < LIB_VERSION_MIN || libVersion > LIB_VERSION_MAX) {
-            logcat(LogPriority.WARN) {
+            Log.w("AnimeExtLoader", "Warning") {
                 "Lib version is $libVersion, while only versions " +
                     "$LIB_VERSION_MIN to $LIB_VERSION_MAX are allowed"
             }
@@ -262,7 +263,7 @@ internal object AnimeExtensionLoader {
 
         val signatures = getSignatures(pkgInfo)
         if (signatures.isNullOrEmpty()) {
-            logcat(LogPriority.WARN) { "Package $pkgName isn't signed" }
+            Log.w("AnimeExtLoader", "Warning") { "Package $pkgName isn't signed" }
             return AnimeLoadResult.Error
         } else if (!trustExtension.isTrusted(pkgInfo, signatures)) {
             val extension = AnimeExtension.Untrusted(
@@ -279,7 +280,7 @@ internal object AnimeExtensionLoader {
 
         val isNsfw = appInfo.metaData.getInt(METADATA_NSFW) == 1
         if (!loadNsfwSource && isNsfw) {
-            logcat(LogPriority.WARN) { "NSFW extension $pkgName not allowed" }
+            Log.w("AnimeExtLoader", "Warning") { "NSFW extension $pkgName not allowed" }
             return AnimeLoadResult.Error
         }
 

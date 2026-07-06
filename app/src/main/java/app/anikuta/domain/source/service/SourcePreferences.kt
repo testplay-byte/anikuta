@@ -22,3 +22,7 @@ class SourcePreferences(
     fun extensionUpdatesCount(): Preference<Int> =
         preferenceStore.getInt("extension_updates_count", 0)
 }
+
+    fun animeExtensionUpdatesCount(): app.anikuta.core.preference.Preference<Int> =
+        preferenceStore.getInt("anime_extension_updates_count", 0)
+

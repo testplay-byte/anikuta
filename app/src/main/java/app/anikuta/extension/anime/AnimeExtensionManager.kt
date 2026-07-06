@@ -1,3 +1,4 @@
+import android.util.Log
 package app.anikuta.extension.anime
 
 import android.content.Context

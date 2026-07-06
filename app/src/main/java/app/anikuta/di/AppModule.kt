@@ -47,7 +47,7 @@ class AppModule(val app: Application) : InjektModule {
 
         // Extension + source management
         addSingletonFactory { AnimeExtensionLoader(get<Context>()) }
-        addSingletonFactory { app.anikuta.domain.source.service.SourcePreferences(get<PreferenceStore>()) }
+        addSingletonFactory { import app.anikuta.domain.source.service.SourcePreferences(get<PreferenceStore>()) }
         addSingletonFactory { app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension() }
         addSingletonFactory { AnimeExtensionManager(get<Context>(), get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get<Context>(), get()) }
