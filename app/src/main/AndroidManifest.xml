@@ -11,6 +11,16 @@
          distribute via Play. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
+    <!-- Allow intent-based extension discovery on Android 11+ (package
+         visibility). The intent-based fallback in AnimeExtensionLoader uses
+         queryIntentActivities(Intent("tachiyomi.animeextension")). Without
+         this <queries> declaration, that query returns nothing on API 30+. -->
+    <queries>
+        <intent>
+            <action android:name="tachiyomi.animeextension" />
+        </intent>
+    </queries>
+
     <application
         android:name=".App"
         android:allowBackup="true"

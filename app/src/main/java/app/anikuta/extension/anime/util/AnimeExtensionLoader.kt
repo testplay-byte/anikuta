@@ -66,7 +66,17 @@ class AnimeExtensionLoader(
 
     /**
      * Finds all installed anime extensions on the device.
-     * Scans every installed package for the `tachiyomi.animeextension` feature.
+     *
+     * Uses three detection methods (belt + suspenders — if one fails on a
+     * specific device/Android version, the others catch it):
+     *  1. reqFeatures scan (aniyomi's primary method) — checks
+     *     `<uses-feature android:name="tachiyomi.animeextension" />`
+     *  2. metadata scan (fallback) — checks `<meta-data android:name=
+     *     "tachiyomi.animeextension.class" />`
+     *  3. intent query (fallback) — queries for packages that handle the
+     *     `tachiyomi.animeextension` intent action
+     *
+     * All three are logged so the Debug screen shows which method found what.
      */
     @SuppressLint("QueryAllPackagesPermission")
     fun loadAll(): List<AnimeLoadResult> {
@@ -76,12 +86,66 @@ class AnimeExtensionLoader(
         } else {
             pkgManager.getInstalledPackages(PACKAGE_FLAGS)
         }
-        Log.d(TAG, "Scanned ${packages.size} installed package(s) for anime extensions")
-        val extensions = packages
-            .filter { isPackageAnExtension(it) }
-            .also { Log.d(TAG, "Found ${it.size} anime extension(s): ${it.joinToString { p -> p.packageName }}") }
-            .map { loadExtension(it) }
-        return extensions
+        Log.d(TAG, "=== Extension scan started ===")
+        Log.d(TAG, "Scanned ${packages.size} installed package(s) with QUERY_ALL_PACKAGES")
+
+        // Method 1: reqFeatures
+        val byReqFeatures = packages.filter { isPackageAnExtensionByReqFeatures(it) }
+        Log.d(TAG, "Method 1 (reqFeatures): found ${byReqFeatures.size} → ${byReqFeatures.map { it.packageName }}")
+
+        // Method 2: metadata
+        val byMetadata = packages.filter { isPackageAnExtensionByMetadata(it) }
+        Log.d(TAG, "Method 2 (metadata): found ${byMetadata.size} → ${byMetadata.map { it.packageName }}")
+
+        // Method 3: intent query (doesn't need QUERY_ALL_PACKAGES on Android 11+)
+        val byIntent = findByIntent()
+        Log.d(TAG, "Method 3 (intent query): found ${byIntent.size} → ${byIntent.map { it.packageName }}")
+
+        // Union of all methods (dedup by packageName)
+        val allExtensionPkgs = (byReqFeatures + byMetadata + byIntent)
+            .distinctBy { it.packageName }
+        Log.d(TAG, "Union of all methods: ${allExtensionPkgs.size} unique extension(s): ${allExtensionPkgs.map { it.packageName }}")
+
+        return allExtensionPkgs.map { loadExtension(it) }
+    }
+
+    /**
+     * Intent-based fallback: query for packages that declare an intent filter
+     * with the extension action. This doesn't require QUERY_ALL_PACKAGES on
+     * Android 11+ (intent visibility rules allow this query if the extension
+     * declares the action in an intent-filter). aniyomi doesn't use this, but
+     * it's a robust fallback if the reqFeatures/metadata scans are filtered.
+     */
+    private fun findByIntent(): List<PackageInfo> {
+        return try {
+            // Some extensions declare an intent-filter with this action.
+            // queryIntentActivities respects <queries> on Android 11+ but also
+            // returns packages with matching intent-filters without needing
+            // QUERY_ALL_PACKAGES.
+            val intent = android.content.Intent(EXTENSION_FEATURE)
+            val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.queryIntentActivities(
+                    intent,
+                    PackageManager.ResolveInfoFlags.of(PACKAGE_FLAGS.toLong()),
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.queryIntentActivities(intent, PACKAGE_FLAGS)
+            }
+            resolveInfos.mapNotNull { ri ->
+                try {
+                    context.packageManager.getPackageInfo(
+                        ri.activityInfo.packageName,
+                        PACKAGE_FLAGS,
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Intent-based query failed", e)
+            emptyList()
+        }
     }
 
     /**
@@ -133,19 +197,22 @@ class AnimeExtensionLoader(
     }
 
     /**
-     * Detects whether a package is an anime extension by checking its
-     * `<uses-feature>` declarations for [EXTENSION_FEATURE].
-     *
-     * This is the SAME logic aniyomi uses:
-     *   pkgInfo.reqFeatures.orEmpty().any { it.name == EXTENSION_FEATURE }
-     *
-     * Previously this checked `applicationInfo.metaData` (metadata tags) which
-     * was wrong — the extension declares a `<uses-feature>`, not a `<meta-data>`,
-     * for identification. The source class name IS in metadata, but detection
-     * is via reqFeatures.
+     * Method 1: Detect via `<uses-feature>` declaration (aniyomi's primary method).
+     * Extensions declare `<uses-feature android:name="tachiyomi.animeextension" />`.
      */
-    private fun isPackageAnExtension(pkgInfo: PackageInfo): Boolean {
+    private fun isPackageAnExtensionByReqFeatures(pkgInfo: PackageInfo): Boolean {
         return pkgInfo.reqFeatures.orEmpty().any { it.name == EXTENSION_FEATURE }
+    }
+
+    /**
+     * Method 2: Detect via `<meta-data>` tag (fallback). Some extensions or
+     * older versions may not declare the uses-feature but still have the
+     * source-class metadata. We check for the source-class key.
+     */
+    private fun isPackageAnExtensionByMetadata(pkgInfo: PackageInfo): Boolean {
+        val metaData = pkgInfo.applicationInfo?.metaData ?: return false
+        return metaData.containsKey(METADATA_SOURCE_CLASS) ||
+            metaData.containsKey(METADATA_SOURCE_CLASS_FALLBACK)
     }
 
     /**

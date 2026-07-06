@@ -94,10 +94,21 @@ class DebugViewModel : ViewModel() {
      */
     fun reloadExtensions() {
         log("→ Reloading extensions…")
+        // Log the raw loader results for diagnosis.
+        val installed = extensionManager?.installedExtensions?.value ?: emptyList()
+        log("  Currently known installed extensions: ${installed.size}")
+        installed.forEach { ext ->
+            log("  • ${ext.name} (pkg=${ext.pkgName}, lang=${ext.lang}, sources=${ext.sources.size})")
+        }
         extensionManager?.reload()
         // Give the reload a moment to complete, then refresh.
         viewModelScope.launch {
-            kotlinx.coroutines.delay(500)
+            kotlinx.coroutines.delay(800)
+            val after = extensionManager?.installedExtensions?.value ?: emptyList()
+            log("  After reload: ${after.size} installed extension(s)")
+            after.forEach { ext ->
+                log("  • ${ext.name} (pkg=${ext.pkgName}, sources=${ext.sources.size})")
+            }
             refreshSources()
         }
     }
