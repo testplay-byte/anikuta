@@ -5,15 +5,23 @@ import android.util.Log
 import app.anikuta.core.preference.AndroidPreferenceStore
 import app.anikuta.di.AppModule
 import app.anikuta.di.PreferenceModule
+import app.anikuta.error.AnikutaCrashHandler
 import uy.kohesive.injekt.Injekt
 
 /**
  * ANI-KUTA Application class.
- * Wires Injekt DI on startup.
+ * Wires Injekt DI on startup + installs the global crash handler.
+ *
+ * The crash handler is installed FIRST, before DI, so if DI itself throws
+ * the user still gets the ErrorActivity instead of a silent crash.
  */
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
+        // Install the global crash handler first — before anything that
+        // might throw — so the user always gets the error screen.
+        Thread.setDefaultUncaughtExceptionHandler(AnikutaCrashHandler(this))
+
         Log.d("AnikutaApp", "=== App.onCreate started ===")
         try {
             val preferenceStore = AndroidPreferenceStore(this)
@@ -24,6 +32,8 @@ class App : Application() {
             Log.d("AnikutaApp", "AppModule imported — DI ready")
         } catch (e: Exception) {
             Log.e("AnikutaApp", "❌ DI setup FAILED", e)
+            // Re-throw so the crash handler catches it and shows ErrorActivity.
+            throw e
         }
         Log.d("AnikutaApp", "=== App.onCreate finished ===")
     }

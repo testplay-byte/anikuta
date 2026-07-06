@@ -29,6 +29,13 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|fontScale"
             android:screenOrientation="sensorLandscape"
             android:theme="@style/Theme.Anikuta" />
+
+        <!-- Global crash screen. Shown by AnikutaCrashHandler when the app crashes. -->
+        <activity
+            android:name=".error.ErrorActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Anikuta" />
     </application>
 
 </manifest>

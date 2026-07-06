@@ -24,11 +24,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import app.anikuta.R
 import app.anikuta.player.controls.PlayerControls
 import app.anikuta.ui.theme.AnikutaTheme
 import `is`.xyz.mpv.MPVLib
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 /**
  * ANI-KUTA PlayerActivity — hosts the MPV video player.
@@ -63,7 +62,6 @@ class PlayerActivity : ComponentActivity() {
             }
     }
 
-    private val playerPreferences: PlayerPreferences by lazy { Injekt.get() }
     private lateinit var observer: PlayerObserver
     private var viewModel: PlayerViewModel? = null
 
@@ -105,7 +103,6 @@ class PlayerActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
                     PlayerScreen(
                         viewModel = vm,
-                        playerPreferences = playerPreferences,
                         observer = observer,
                         onBack = { finish() },
                     )
@@ -183,7 +180,6 @@ class PlayerActivity : ComponentActivity() {
 @androidx.compose.runtime.Composable
 private fun PlayerScreen(
     viewModel: PlayerViewModel,
-    playerPreferences: PlayerPreferences,
     observer: PlayerObserver,
     onBack: () -> Unit,
 ) {
@@ -199,22 +195,29 @@ private fun PlayerScreen(
     ) {
         AndroidView(
             factory = { ctx ->
-                // BaseMPVView requires a non-null AttributeSet; an empty one is
-                // fine since we set all options programmatically in initOptions.
-                val attrs = android.util.Xml.asAttributeSet(android.util.Xml.newPullParser())
-                AnikutaMPVView(ctx, attrs, playerPreferences).also { view ->
-                    mpvView = view
-                    val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
-                    view.initialize(
-                        mpvDir.absolutePath,
-                        ctx.cacheDir.absolutePath,
-                        "warn",
-                    )
-                    MPVLib.addLogObserver(observer)
-                    MPVLib.addObserver(observer)
-                    Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
-                    MPVLib.command(arrayOf("loadfile", viewModel.videoUrl))
-                }
+                // Inflate from a real XML layout so the view gets a proper
+                // XmlBlock$Parser-backed AttributeSet. Constructing it with a
+                // fake AttributeSet (Xml.newPullParser()) crashes at runtime:
+                //   ClassCastException: XmlPullAttributes cannot be cast to
+                //   XmlBlock$Parser
+                // because Resources.obtainStyledAttributes requires a real
+                // resource parser. Inflation produces one naturally.
+                // PlayerPreferences is pulled via Injekt inside the view.
+                val view = android.view.LayoutInflater
+                    .from(ctx)
+                    .inflate(R.layout.mpv_view, null) as AnikutaMPVView
+                mpvView = view
+                val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
+                view.initialize(
+                    mpvDir.absolutePath,
+                    ctx.cacheDir.absolutePath,
+                    "warn",
+                )
+                MPVLib.addLogObserver(observer)
+                MPVLib.addObserver(observer)
+                Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
+                MPVLib.command(arrayOf("loadfile", viewModel.videoUrl))
+                view
             },
             modifier = Modifier.fillMaxSize(),
         )

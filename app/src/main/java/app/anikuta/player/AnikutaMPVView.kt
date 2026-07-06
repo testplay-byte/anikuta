@@ -5,6 +5,8 @@ import android.os.Build
 import android.util.AttributeSet
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPVLib
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * ANI-KUTA MPV view — thin wrapper over the aniyomi-mpv-lib `BaseMPVView`.
@@ -15,13 +17,28 @@ import `is`.xyz.mpv.MPVLib
  * later phase. This class depends ONLY on `PlayerPreferences`, so it has no
  * transitive deps that could break the build.
  *
+ * Constructor note: the 2-param `(Context, AttributeSet?)` form is REQUIRED so
+ * the view can be inflated from a real XML layout (see `res/layout/
+ * mpv_view.xml`). Compose's `AndroidView` factory gives us no XML, and the
+ * previous attempt to pass a fake `AttributeSet` built from `Xml.newPullParser()`
+ * crashed at runtime:
+ *
+ *   ClassCastException: XmlPullAttributes cannot be cast to XmlBlock$Parser
+ *
+ * because Android's `View`/`Resources.obtainStyledAttributes` requires a
+ * `XmlBlock$Parser` — the type you only get when inflating actual XML
+ * resources. Inflating from a real layout produces that parser naturally.
+ * `PlayerPreferences` is pulled via Injekt (same pattern aniyomi uses with
+ * `injectLazy()`).
+ *
  * Source: REFERENCE/app/.../ui/player/AniyomiMPVView.kt (reduced).
  */
 class AnikutaMPVView(
     context: Context,
-    attributes: AttributeSet,
-    private val playerPreferences: PlayerPreferences,
+    attributes: AttributeSet? = null,
 ) : BaseMPVView(context, attributes) {
+
+    private val playerPreferences: PlayerPreferences = Injekt.get()
 
     var isExiting = false
 
