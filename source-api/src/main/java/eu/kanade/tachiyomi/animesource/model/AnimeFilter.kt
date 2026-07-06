@@ -1,4 +1,4 @@
-package app.anikuta.source.api.model
+package eu.kanade.tachiyomi.animesource.model
 
 sealed class AnimeFilter<T>(val name: String, var state: T) {
     open class Header(name: String) : AnimeFilter<Any>(name, 0)

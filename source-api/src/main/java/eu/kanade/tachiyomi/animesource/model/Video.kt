@@ -1,4 +1,4 @@
-package app.anikuta.source.api.model
+package eu.kanade.tachiyomi.animesource.model
 
 import android.net.Uri
 import kotlinx.serialization.Serializable

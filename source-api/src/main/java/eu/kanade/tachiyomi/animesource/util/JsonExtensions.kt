@@ -1,4 +1,4 @@
-package app.anikuta.source.api.util
+package eu.kanade.tachiyomi.animesource.util
 
 import kotlinx.serialization.json.Json
 import uy.kohesive.injekt.Injekt

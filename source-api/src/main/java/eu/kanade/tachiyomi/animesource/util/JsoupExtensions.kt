@@ -1,4 +1,4 @@
-package app.anikuta.source.api.util
+package eu.kanade.tachiyomi.animesource.util
 
 import okhttp3.Response
 import org.jsoup.Jsoup

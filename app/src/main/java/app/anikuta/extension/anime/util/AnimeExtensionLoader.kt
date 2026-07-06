@@ -245,9 +245,20 @@ class AnimeExtensionLoader(
         val classLoader = createClassLoader(appInfo)
         val sources = mutableListOf<AnimeSource>()
 
-        sourceClass.split(";").forEach { className ->
+        // Source classes can be relative (".Anikoto") or absolute.
+        // Relative names must be prefixed with the package name (aniyomi does
+        // the same). Multiple classes are separated by ";".
+        sourceClass.split(";").forEach { rawClassName ->
+            val className = rawClassName.trim()
+            // Resolve relative class names: ".Anikoto" → "pkg.Anikoto"
+            val resolvedName = if (className.startsWith(".")) {
+                pkgInfo.packageName + className
+            } else {
+                className
+            }
+            Log.d(TAG, "  Resolved class: $className → $resolvedName")
             try {
-                val clazz = Class.forName(className.trim(), false, classLoader)
+                val clazz = Class.forName(resolvedName, false, classLoader)
                 val instance = clazz.getDeclaredConstructor().newInstance()
 
                 when (instance) {
@@ -262,8 +273,8 @@ class AnimeExtensionLoader(
                     }
                     else -> Log.w(TAG, "  ✗ Unknown source type: ${clazz.name}")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "  ✗ Failed to load source class: $className", e)
+            } catch (e: Throwable) {
+                Log.e(TAG, "  ✗ Failed to load source class: $resolvedName", e)
             }
         }
 

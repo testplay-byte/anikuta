@@ -1,4 +1,4 @@
-package app.anikuta.source.api
+package eu.kanade.tachiyomi.animesource
 
 /**
  * A factory for creating sources at runtime.

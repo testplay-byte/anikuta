@@ -1,4 +1,4 @@
-package app.anikuta.source.api.model
+package eu.kanade.tachiyomi.animesource.model
 
 /**
  * Define the update strategy for a single SAnime.

@@ -1,3 +1,3 @@
-package app.anikuta.source.api.model
+package eu.kanade.tachiyomi.animesource.model
 
 data class AnimesPage(val animes: List<SAnime>, val hasNextPage: Boolean)

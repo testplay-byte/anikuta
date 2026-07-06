@@ -1,3 +1,3 @@
-package app.anikuta.source.api
+package eu.kanade.tachiyomi.animesource
 
 typealias PreferenceScreen = androidx.preference.PreferenceScreen

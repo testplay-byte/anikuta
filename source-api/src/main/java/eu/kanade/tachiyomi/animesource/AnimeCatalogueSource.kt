@@ -1,7 +1,7 @@
-package app.anikuta.source.api
+package eu.kanade.tachiyomi.animesource
 
-import app.anikuta.source.api.model.AnimeFilterList
-import app.anikuta.source.api.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import rx.Observable
 import app.anikuta.core.util.lang.awaitSingle
 

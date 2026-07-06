@@ -1,12 +1,12 @@
-package app.anikuta.source.api.online
+package eu.kanade.tachiyomi.animesource.online
 
-import app.anikuta.source.api.AnimeCatalogueSource
-import app.anikuta.source.api.model.AnimeFilterList
-import app.anikuta.source.api.model.AnimesPage
-import app.anikuta.source.api.model.Hoster
-import app.anikuta.source.api.model.SAnime
-import app.anikuta.source.api.model.SEpisode
-import app.anikuta.source.api.model.Video
+import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.Video
 import app.anikuta.core.network.GET
 import app.anikuta.core.network.NetworkHelper
 import app.anikuta.core.network.ProgressListener

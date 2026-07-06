@@ -1,4 +1,4 @@
-package app.anikuta.source.api.util
+package eu.kanade.tachiyomi.animesource.util
 
 import rx.Observable
 import app.anikuta.core.util.lang.awaitSingle

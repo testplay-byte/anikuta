@@ -1,10 +1,10 @@
-package app.anikuta.source.api
+package eu.kanade.tachiyomi.animesource
 
-import app.anikuta.source.api.model.Hoster
-import app.anikuta.source.api.model.SAnime
-import app.anikuta.source.api.model.SEpisode
-import app.anikuta.source.api.model.Video
-import app.anikuta.source.api.util.awaitSingle
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.animesource.util.awaitSingle
 import rx.Observable
 
 /**

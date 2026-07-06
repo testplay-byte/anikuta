@@ -1,7 +1,7 @@
-package app.anikuta.source.api.model
+package eu.kanade.tachiyomi.animesource.model
 
-import app.anikuta.source.api.model.SerializableVideo.Companion.serialize
-import app.anikuta.source.api.model.SerializableVideo.Companion.toVideoList
+import eu.kanade.tachiyomi.animesource.model.SerializableVideo.Companion.serialize
+import eu.kanade.tachiyomi.animesource.model.SerializableVideo.Companion.toVideoList
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json

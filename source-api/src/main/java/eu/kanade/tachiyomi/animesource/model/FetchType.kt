@@ -1,4 +1,4 @@
-package app.anikuta.source.api.model
+package eu.kanade.tachiyomi.animesource.model
 
 /**
  * Define what type of content the anime should fetch.

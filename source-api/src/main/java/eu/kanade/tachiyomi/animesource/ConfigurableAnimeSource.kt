@@ -1,4 +1,4 @@
-package app.anikuta.source.api
+package eu.kanade.tachiyomi.animesource
 
 import android.app.Application
 import android.content.Context

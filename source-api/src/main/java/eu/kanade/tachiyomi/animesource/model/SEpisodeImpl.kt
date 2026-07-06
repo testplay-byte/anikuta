@@ -1,6 +1,6 @@
 @file:Suppress("PropertyName")
 
-package app.anikuta.source.api.model
+package eu.kanade.tachiyomi.animesource.model
 
 class SEpisodeImpl : SEpisode {
 

@@ -1,8 +1,8 @@
-package app.anikuta.source.api.online
+package eu.kanade.tachiyomi.animesource.online
 
-import app.anikuta.source.api.AnimeSource
-import app.anikuta.source.api.model.SAnime
-import app.anikuta.source.api.model.SEpisode
+import eu.kanade.tachiyomi.animesource.AnimeSource
+import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.SEpisode
 
 /**
  * A source that may handle opening an SAnime or SEpisode for a given URI.

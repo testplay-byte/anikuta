@@ -1,9 +1,9 @@
-package app.anikuta.source.api.utils
+package eu.kanade.tachiyomi.animesource.utils
 
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
-import app.anikuta.source.api.AnimeSource
+import eu.kanade.tachiyomi.animesource.AnimeSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
