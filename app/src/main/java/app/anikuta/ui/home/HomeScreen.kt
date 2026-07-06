@@ -1,7 +1,12 @@
 package app.anikuta.ui.home
 
-import android.util.Log
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -15,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -24,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import app.anikuta.data.anilist.model.AniListAnime
+import app.anikuta.ui.theme.AnikutaSprings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,16 +51,16 @@ fun HomeScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding(),  // Respect status bar but no extra gap
+                .statusBarsPadding(),
             contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // Compact floating top bar
+            // Floating top bar — expressive surface with containment
             item(key = "topbar") {
                 FloatingTopBar()
             }
 
-            // Hero — first trending anime
+            // Hero — first trending anime with deliberate surface
             item(key = "hero") {
                 HeroSection(trending)
             }
@@ -86,20 +93,20 @@ fun HomeScreen(
 
 @Composable
 private fun FloatingTopBar() {
-    // Compact floating top bar — rounded corners, search icon, app name
+    // M3 Expressive: deliberate surface containment with high-contrast container
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.9f),
-        tonalElevation = 2.dp,
-        shadowElevation = 4.dp,
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 3.dp,
+        shadowElevation = 6.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 20.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -109,15 +116,20 @@ private fun FloatingTopBar() {
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
-            IconButton(
-                onClick = { /* TODO: search (Phase 5) */ },
-                modifier = Modifier.size(36.dp),
+            // Expressive search icon — contained in a tonal circle
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .clickable { /* TODO: search */ },
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     Icons.Default.Search,
                     contentDescription = "Search",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -128,12 +140,13 @@ private fun FloatingTopBar() {
 private fun HeroSection(trending: HomeSectionState) {
     val heroAnime = (trending as? HomeSectionState.Success)?.anime?.firstOrNull()
 
+    // M3 Expressive: deliberate surface — highest elevation container for the hero
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(200.dp)
             .padding(horizontal = 12.dp)
-            .clip(RoundedCornerShape(20.dp)),
+            .clip(RoundedCornerShape(24.dp)),
     ) {
         if (heroAnime != null) {
             AsyncImage(
@@ -238,7 +251,7 @@ private fun AnimeSection(state: HomeSectionState, viewModel: HomeViewModel, onAn
                         key = { it.id },
                         contentType = { "anime_card" },
                     ) { anime ->
-                        AnimeCard(anime, onAnimeClick)
+                        ExpressiveAnimeCard(anime, onAnimeClick)
                     }
                 }
             }
@@ -257,17 +270,45 @@ private fun AnimeSection(state: HomeSectionState, viewModel: HomeViewModel, onAn
     }
 }
 
+/**
+ * M3 Expressive anime card — spring-based press feedback + shape morphing.
+ *
+ * On press: card scales to 0.96 + corner radius morphs from 16dp to 20dp.
+ * Uses spatial spring for scale, effects spring for shape.
+ */
 @Composable
-private fun AnimeCard(anime: AniListAnime, onAnimeClick: (Int) -> Unit) {
+private fun ExpressiveAnimeCard(anime: AniListAnime, onAnimeClick: (Int) -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    // Spring-based scale animation on press
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = AnikutaSprings.press,
+        label = "card_scale",
+    )
+
+    // Spring-based corner radius morph on press (16dp → 20dp)
+    val cornerRadius by animateFloatAsState(
+        targetValue = if (isPressed) 20f else 16f,
+        animationSpec = AnikutaSprings.effects,
+        label = "card_corner",
+    )
+
     Card(
         modifier = Modifier
             .width(140.dp)
-            .height(300.dp),
-        shape = RoundedCornerShape(16.dp),
+            .height(300.dp)
+            .scale(scale),
+        shape = RoundedCornerShape(cornerRadius.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp,
+            pressedElevation = 4.dp,
+        ),
+        interactionSource = interactionSource,
         onClick = { onAnimeClick(anime.id) },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -277,7 +318,7 @@ private fun AnimeCard(anime: AniListAnime, onAnimeClick: (Int) -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    .clip(RoundedCornerShape(topStart = cornerRadius.dp, topEnd = cornerRadius.dp)),
                 contentScale = ContentScale.Crop,
             )
             Column(
@@ -351,10 +392,15 @@ private fun GenreSection(state: HomeSectionState) {
                     key = { it },
                     contentType = { "genre_chip" },
                 ) { genre ->
+                    // Expressive chip — contained in secondaryContainer
                     AssistChip(
                         onClick = { /* TODO: browse by genre */ },
                         label = { Text(genre) },
                         shape = RoundedCornerShape(8.dp),
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        ),
                     )
                 }
             }

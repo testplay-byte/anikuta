@@ -85,6 +85,8 @@ fun AnikutaTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = AnikutaTypography,
+        shapes = AnikutaShapes,
         content = content,
     )
 }

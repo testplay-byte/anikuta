@@ -1,5 +1,8 @@
 package app.anikuta.navigation
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -17,7 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -63,14 +66,14 @@ fun AnikutaNavGraph() {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
-                // Modern floating bottom bar with rounded corners
+                // M3 Expressive: floating bottom bar with deliberate surface containment
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                         .navigationBarsPadding(),
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     tonalElevation = 3.dp,
                     shadowElevation = 8.dp,
                 ) {
@@ -81,19 +84,32 @@ fun AnikutaNavGraph() {
                     ) {
                         bottomNavScreens.forEach { screen ->
                             val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+
+                            // Spring-based icon scale — selected icon is slightly larger
+                            val iconScale by animateFloatAsState(
+                                targetValue = if (isSelected) 1.15f else 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium,
+                                ),
+                                label = "nav_icon_scale",
+                            )
+
                             NavigationBarItem(
                                 icon = {
                                     Icon(
                                         if (isSelected) screen.selectedIcon else screen.unselectedIcon,
                                         contentDescription = screen.label,
-                                        modifier = Modifier.size(22.dp),
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .scale(iconScale),
                                     )
                                 },
                                 label = {
                                     Text(
                                         screen.label,
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                     )
                                 },
                                 selected = isSelected,
@@ -147,4 +163,3 @@ fun AnikutaNavGraph() {
         }
     }
 }
-
