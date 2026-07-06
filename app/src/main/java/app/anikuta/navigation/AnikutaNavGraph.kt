@@ -66,72 +66,63 @@ fun AnikutaNavGraph() {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
-                // M3 Expressive: truly floating bottom bar — no background, just rounded pill
-                Surface(
+                // M3 Expressive: floating pill nav — transparent background, no container behind it
+                NavigationBar(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 48.dp, vertical = 8.dp)
                         .navigationBarsPadding(),
-                    shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 4.dp,
-                    shadowElevation = 12.dp,
+                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    tonalElevation = 0.dp,
+                    windowInsets = WindowInsets(0),
                 ) {
-                    NavigationBar(
-                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        tonalElevation = 0.dp,
-                        windowInsets = WindowInsets(0),
-                    ) {
-                        bottomNavScreens.forEach { screen ->
-                            val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                    bottomNavScreens.forEach { screen ->
+                        val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
 
-                            // Spring-based icon scale — selected icon is slightly larger
-                            val iconScale by animateFloatAsState(
-                                targetValue = if (isSelected) 1.2f else 1f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium,
-                                ),
-                                label = "nav_icon_scale",
-                            )
+                        val iconScale by animateFloatAsState(
+                            targetValue = if (isSelected) 1.2f else 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium,
+                            ),
+                            label = "nav_icon_scale",
+                        )
 
-                            NavigationBarItem(
-                                icon = {
-                                    Icon(
-                                        if (isSelected) screen.selectedIcon else screen.unselectedIcon,
-                                        contentDescription = screen.label,
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .scale(iconScale),
+                        NavigationBarItem(
+                            icon = {
+                                Icon(
+                                    if (isSelected) screen.selectedIcon else screen.unselectedIcon,
+                                    contentDescription = screen.label,
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .scale(iconScale),
+                                )
+                            },
+                            label = {
+                                if (isSelected) {
+                                    Text(
+                                        screen.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
                                     )
-                                },
-                                // Only show label for the SELECTED item — unselected items are icon-only
-                                label = {
-                                    if (isSelected) {
-                                        Text(
-                                            screen.label,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                    }
-                                },
-                                selected = isSelected,
-                                onClick = {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                ),
-                            )
-                        }
+                                }
+                            },
+                            selected = isSelected,
+                            onClick = {
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        )
                     }
                 }
             }
