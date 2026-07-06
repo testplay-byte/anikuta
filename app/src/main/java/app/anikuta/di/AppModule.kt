@@ -45,7 +45,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { AniListRepository(get()) }
 
         // 3-step cache: Local → Supabase → AniList
-        addSingletonFactory { LocalCache(get()) }
+        addSingletonFactory { LocalCache(get<app.anikuta.data.AnimeDatabase>()) }
         addSingletonFactory { SupabaseClient(get()) }
         addSingletonFactory { CacheManager(get(), get()) }
     }
