@@ -105,32 +105,67 @@ private fun AnimeSection(state: HomeSectionState, viewModel: HomeViewModel) {
 
 @Composable
 private fun AnimeCard(anime: AniListAnime) {
-    Card(modifier = Modifier.width(140.dp), onClick = { /* TODO: detail page (Phase 3) */ }) {
-        Column {
-            // Cover image via Coil
+    Card(
+        modifier = Modifier
+            .width(140.dp)
+            .height(300.dp),  // Fixed total height so all cards are the same
+        onClick = { /* TODO: detail page (Phase 3) */ },
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Cover image — fixed height, fills card width
             AsyncImage(
                 model = anime.coverImage.best(),
                 contentDescription = anime.title.preferred(),
-                modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
                 contentScale = ContentScale.Crop,
             )
-            Column(modifier = Modifier.padding(8.dp)) {
+            // Info section — fixed height, consistent padding
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)  // Fixed info height
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 Text(
                     text = anime.title.preferred(),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 2,
+                    minLines = 2,  // Always 2 lines so height is consistent
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (anime.averageScore != null) {
-                    Text("★ ${anime.averageScore}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (anime.averageScore != null) {
+                        Text(
+                            "★ ${anime.averageScore}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (anime.episodes != null) {
+                        Text(
+                            "· ${anime.episodes} eps",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-                if (anime.episodes != null) {
-                    Text("${anime.episodes} eps", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                // Show up to 2 genres
+                // Genres — single line, truncated
                 anime.genres?.take(2)?.let { genres ->
-                    Text(genres.joinToString(", "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        genres.joinToString(", "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -165,14 +200,13 @@ private fun GenreSection(state: HomeSectionState) {
 private fun SkeletonRow() {
     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(List(5) { it }) { _ ->
-            Card(modifier = Modifier.width(140.dp)) {
-                Column {
+            Card(modifier = Modifier.width(140.dp).height(300.dp)) {
+                Column(modifier = Modifier.fillMaxSize()) {
                     Surface(modifier = Modifier.fillMaxWidth().height(200.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
-                    Column(modifier = Modifier.padding(8.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().height(100.dp).padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Surface(modifier = Modifier.fillMaxWidth(0.8f).height(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Surface(modifier = Modifier.fillMaxWidth(0.5f).height(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(modifier = Modifier.fillMaxWidth(0.5f).height(10.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
+                        Surface(modifier = Modifier.fillMaxWidth(0.6f).height(10.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
                     }
                 }
             }
