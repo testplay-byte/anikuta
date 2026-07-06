@@ -9,19 +9,20 @@ import app.anikuta.extension.anime.util.AnimeExtensionLoader
 import app.anikuta.core.network.GET
 import app.anikuta.core.network.NetworkHelper
 import app.anikuta.core.network.awaitSuccess
-import app.anikuta.core.network.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import logcat.LogPriority
+import kotlinx.serialization.builtins.ListSerializer
+import android.util.Log
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.UpdateAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.model.ExtensionRepo
 import app.anikuta.core.preference.Preference
 import app.anikuta.core.preference.PreferenceStore
-import app.anikuta.core.util.lang.withIOContext
-import app.anikuta.core.util.system.logcat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+// removed logcat
 import uy.kohesive.injekt.injectLazy
 import java.time.Instant
 import kotlin.time.Duration.Companion.days
@@ -40,8 +41,8 @@ internal class AnimeExtensionApi {
     }
 
     suspend fun findExtensions(): List<AnimeExtension.Available> {
-        return withIOContext {
-            getExtensionRepo.getAll()
+        return withContext(Dispatchers.IO) {
+            getExtensionRepo.await()
                 .map { async { getExtensions(it) } }
                 .awaitAll()
                 .flatten()
@@ -55,13 +56,12 @@ internal class AnimeExtensionApi {
                 .newCall(GET("$repoBaseUrl/index.min.json"))
                 .awaitSuccess()
 
-            with(json) {
-                response
-                    .parseAs<List<AnimeExtensionJsonObject>>()
-                    .toExtensions(repoBaseUrl)
-            }
+            json.decodeFromString(
+                ListSerializer(AnimeExtensionJsonObject.serializer()),
+                response.body?.string() ?: "",
+            ).toExtensions(repoBaseUrl)
         } catch (e: Throwable) {
-            logcat(LogPriority.ERROR, e) { "Failed to get extensions from $repoBaseUrl" }
+            Log.e("AnimeExtApi", "Failed to get extensions from $repoBaseUrl", e)
             emptyList()
         }
     }
@@ -78,7 +78,7 @@ internal class AnimeExtensionApi {
         }
 
         // Update extension repo details
-        updateExtensionRepo.awaitAll()
+        { updateExtensionRepo.await("") }
 
         val extensions = if (fromAvailableExtensionList) {
             animeExtensionManager.availableExtensionsFlow.value
@@ -104,9 +104,9 @@ internal class AnimeExtensionApi {
         }
 
         if (extensionsWithUpdate.isNotEmpty()) {
-            ExtensionUpdateNotifier(context).promptUpdates(
-                names = extensionsWithUpdate.map { it.name },
-                anime = true,
+            xtensionUpdateNotifier(context).promptUpdates(0
+                
+                
             )
         }
 

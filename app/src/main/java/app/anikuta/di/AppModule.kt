@@ -50,9 +50,9 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { GetAnimeExtensionRepo() }
         addSingletonFactory { UpdateAnimeExtensionRepo() }
         addSingletonFactory { AnimeExtensionLoader(get<Context>()) }
-        addSingletonFactory { AnimeExtensionApi(get(), get(), get()) }
+        addSingletonFactory { AnimeExtensionApi() }
         addSingletonFactory { ExtensionUpdateNotifier(get<Context>()) }
-        addSingletonFactory { AnimeExtensionManager(get<Context>(), get(), get(), get()) }
+        addSingletonFactory { AnimeExtensionManager(get<Context>(), get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get<Context>(), get()) }
 
         // AniList client

@@ -1,5 +1,6 @@
-import android.util.Log
 package app.anikuta.extension.anime.util
+
+import android.util.Log
 
 import android.annotation.SuppressLint
 import android.content.Context

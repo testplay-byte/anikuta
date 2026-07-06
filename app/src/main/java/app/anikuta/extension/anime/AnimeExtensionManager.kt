@@ -1,5 +1,6 @@
-import android.util.Log
 package app.anikuta.extension.anime
+
+import android.util.Log
 
 import android.content.Context
 import android.graphics.drawable.Drawable
@@ -10,8 +11,6 @@ import app.anikuta.extension.InstallStep
 import app.anikuta.extension.anime.api.AnimeExtensionApi
 import app.anikuta.extension.anime.model.AnimeExtension
 import app.anikuta.extension.anime.model.AnimeLoadResult
-import app.anikuta.extension.anime.util.AnimeExtensionInstallReceiver
-import app.anikuta.extension.anime.util.AnimeExtensionInstaller
 import app.anikuta.extension.anime.util.AnimeExtensionLoader
 // TODO: toast
 import kotlinx.coroutines.CoroutineScope
