@@ -38,8 +38,8 @@ class AppModule(val app: Application) : InjektModule {
 
         // Preferences
         addSingletonFactory { AndroidPreferenceStore(get<Context>()) as PreferenceStore }
-        addSingletonFactory { NetworkPreferences(get<Context>()) }
-        addSingletonFactory { NetworkHelper(get<Context>(), get()) }
+        addSingletonFactory { NetworkPreferences(get<PreferenceStore>()) }
+        addSingletonFactory { NetworkHelper(get<Context>(), get<NetworkPreferences>()) }
 
         // Anime database (SQLDelight)
         addSingletonFactory { AnimeDatabaseFactory.create(app) }
