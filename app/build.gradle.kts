@@ -17,11 +17,11 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
 
-    // MPV native lib — only build arm64-v8a
-    ndk {
-        abiFilters += "arm64-v8a"
+        // MPV native lib — only build arm64-v8a
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     buildTypes {
