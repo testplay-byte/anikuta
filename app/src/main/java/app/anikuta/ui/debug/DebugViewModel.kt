@@ -40,6 +40,11 @@ class DebugViewModel : ViewModel() {
         Log.e(TAG, "SourceManager not available", e); null
     }
 
+    private val extensionManager: app.anikuta.extension.anime.AnimeExtensionManager? =
+        try { Injekt.get() } catch (e: Exception) {
+            Log.e(TAG, "ExtensionManager not available", e); null
+        }
+
     private val _sources = MutableStateFlow<List<AnimeCatalogueSource>>(emptyList())
     val sources: StateFlow<List<AnimeCatalogueSource>> = _sources.asStateFlow()
 
@@ -62,14 +67,39 @@ class DebugViewModel : ViewModel() {
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
     init {
+        // Reload extensions first, then refresh the source list.
+        // The reload is async (scope.launch) but we also do an immediate
+        // refreshSources() so the UI doesn't start empty.
+        extensionManager?.reload()
         refreshSources()
     }
 
     fun refreshSources() {
-        val mgr = sourceManager ?: return
+        val mgr = sourceManager ?: run {
+            log("❌ SourceManager not available", error = true); return
+        }
         val all = mgr.getCatalogueSources()
         _sources.value = all
-        log("Found ${all.size} catalogue source(s): ${all.joinToString { "${it.name} (id=${it.id})" }}")
+        if (all.isEmpty()) {
+            log("No catalogue sources found. Extensions installed: ${extensionManager?.installedExtensions?.value?.size ?: 0}")
+            log("If you just installed an extension, tap Refresh to re-scan.")
+        } else {
+            log("Found ${all.size} catalogue source(s): ${all.joinToString { "${it.name} (id=${it.id})" }}")
+        }
+    }
+
+    /**
+     * Force a full re-scan of installed extensions, then refresh the source list.
+     * Called by the Debug screen's Refresh button.
+     */
+    fun reloadExtensions() {
+        log("→ Reloading extensions…")
+        extensionManager?.reload()
+        // Give the reload a moment to complete, then refresh.
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(500)
+            refreshSources()
+        }
     }
 
     fun selectSource(source: AnimeCatalogueSource) {

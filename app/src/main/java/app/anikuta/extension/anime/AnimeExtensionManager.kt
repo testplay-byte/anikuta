@@ -59,6 +59,17 @@ class AnimeExtensionManager(
         }
     }
 
+    /**
+     * Re-scan installed extensions. Called when the user installs/uninstalls an
+     * extension while the app is running, or from the Debug screen's Refresh
+     * button. Safe to call multiple times.
+     */
+    fun reload() {
+        scope.launch {
+            loadExtensions()
+        }
+    }
+
     private fun loadExtensions() {
         val results = loader.loadAll()
         val installed = mutableListOf<AnimeExtension.Installed>()

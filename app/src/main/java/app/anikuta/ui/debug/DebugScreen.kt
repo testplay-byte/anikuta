@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -117,10 +118,11 @@ fun DebugScreen(onBack: () -> Unit) {
                     SectionCard("1. Sources (${sources.size})") {
                         if (sources.isEmpty()) {
                             Text(
-                                "No catalogue sources registered. Install an extension.",
+                                "No catalogue sources registered. Install an extension, then tap Refresh.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
                         } else {
                             sources.forEach { source ->
                                 SourceRow(
@@ -129,6 +131,19 @@ fun DebugScreen(onBack: () -> Unit) {
                                     onClick = { viewModel.selectSource(source) },
                                 )
                             }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { viewModel.reloadExtensions() },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Re-scan installed extensions")
                         }
                     }
                 }
