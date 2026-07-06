@@ -76,11 +76,14 @@ fun DetailScreen(
         is DetailState.Success -> {
             val anime = (detailState as DetailState.Success).anime
             // Parse the cover color from AniList (format: "#RRGGBB")
-            val coverColor = try {
-                anime.coverImage.color?.let { Color(android.graphics.Color.parseColor(it)) }
-                    ?: MaterialTheme.colorScheme.primary
-            } catch (e: Exception) {
-                MaterialTheme.colorScheme.primary
+            val fallbackColor = MaterialTheme.colorScheme.primary
+            val coverColor = remember(anime.coverImage.color, fallbackColor) {
+                try {
+                    anime.coverImage.color?.let { Color(android.graphics.Color.parseColor(it)) }
+                        ?: fallbackColor
+                } catch (e: Exception) {
+                    fallbackColor
+                }
             }
 
             LazyColumn(
