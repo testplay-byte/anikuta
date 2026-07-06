@@ -35,7 +35,7 @@ import uy.kohesive.injekt.api.get
  */
 class AnikutaMPVView(
     context: Context,
-    attributes: AttributeSet? = null,
+    attributes: AttributeSet,
 ) : BaseMPVView(context, attributes) {
 
     private val playerPreferences: PlayerPreferences = Injekt.get()
