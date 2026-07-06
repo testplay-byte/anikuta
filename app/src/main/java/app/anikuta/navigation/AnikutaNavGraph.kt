@@ -66,16 +66,16 @@ fun AnikutaNavGraph() {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
-                // M3 Expressive: floating bottom bar with deliberate surface containment
+                // M3 Expressive: truly floating bottom bar — no background, just rounded pill
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .padding(horizontal = 48.dp, vertical = 8.dp)
                         .navigationBarsPadding(),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(28.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 3.dp,
-                    shadowElevation = 8.dp,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 12.dp,
                 ) {
                     NavigationBar(
                         containerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -87,7 +87,7 @@ fun AnikutaNavGraph() {
 
                             // Spring-based icon scale — selected icon is slightly larger
                             val iconScale by animateFloatAsState(
-                                targetValue = if (isSelected) 1.15f else 1f,
+                                targetValue = if (isSelected) 1.2f else 1f,
                                 animationSpec = spring(
                                     dampingRatio = Spring.DampingRatioMediumBouncy,
                                     stiffness = Spring.StiffnessMedium,
@@ -101,16 +101,19 @@ fun AnikutaNavGraph() {
                                         if (isSelected) screen.selectedIcon else screen.unselectedIcon,
                                         contentDescription = screen.label,
                                         modifier = Modifier
-                                            .size(22.dp)
+                                            .size(24.dp)
                                             .scale(iconScale),
                                     )
                                 },
+                                // Only show label for the SELECTED item — unselected items are icon-only
                                 label = {
-                                    Text(
-                                        screen.label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    )
+                                    if (isSelected) {
+                                        Text(
+                                            screen.label,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
                                 },
                                 selected = isSelected,
                                 onClick = {
