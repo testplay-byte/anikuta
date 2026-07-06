@@ -69,8 +69,11 @@ class HomeViewModel : ViewModel() {
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true
-            loadAll()
-            _isRefreshing.value = false
+            try {
+                loadAll()
+            } finally {
+                _isRefreshing.value = false
+            }
         }
     }
 
