@@ -20,9 +20,7 @@ import app.anikuta.domain.mihon.extensionrepo.anime.interactor.UpdateAnimeExtens
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
 import app.anikuta.domain.source.service.SourcePreferences
 import app.anikuta.extension.anime.AnimeExtensionManager
-import app.anikuta.extension.anime.api.AnimeExtensionApi
 import app.anikuta.extension.anime.util.AnimeExtensionLoader
-import app.anikuta.extension.ExtensionUpdateNotifier
 import app.anikuta.source.AndroidAnimeSourceManager
 import uy.kohesive.injekt.api.InjektModule
 import uy.kohesive.injekt.api.InjektRegistrar
@@ -40,7 +38,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { NetworkPreferences(get<PreferenceStore>()) }
         addSingletonFactory { NetworkHelper(get<Context>(), get<NetworkPreferences>()) }
 
-        // Anime database (SQLDelight)
+        // Anime database
         addSingletonFactory { AnimeDatabaseFactory.create(app) }
         addSingletonFactory<AnimeDatabaseHandler> { AndroidAnimeDatabaseHandler(get(), get()) }
 
@@ -50,8 +48,6 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { GetAnimeExtensionRepo() }
         addSingletonFactory { UpdateAnimeExtensionRepo() }
         addSingletonFactory { AnimeExtensionLoader(get<Context>()) }
-        addSingletonFactory { AnimeExtensionApi() }
-        addSingletonFactory { ExtensionUpdateNotifier(get<Context>()) }
         addSingletonFactory { AnimeExtensionManager(get<Context>(), get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get<Context>(), get()) }
 

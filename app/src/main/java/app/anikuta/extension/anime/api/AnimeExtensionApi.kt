@@ -1,139 +1,96 @@
 package app.anikuta.extension.anime.api
 
 import android.content.Context
-import app.anikuta.extension.EextensionUpdateNotifier
-import app.anikuta.extension.anime.AnimeExtensionManager
-import app.anikuta.extension.anime.model.AnimeExtension
-import app.anikuta.extension.anime.model.AnimeLoadResult
-import app.anikuta.extension.anime.util.AnimeExtensionLoader
+import android.util.Log
 import app.anikuta.core.network.GET
 import app.anikuta.core.network.NetworkHelper
-import app.anikuta.core.network.awaitSuccess
+import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
+import app.anikuta.domain.mihon.extensionrepo.model.ExtensionRepo
+import app.anikuta.extension.ExtensionUpdateNotifier
+import app.anikuta.extension.anime.AnimeExtensionManager
+import app.anikuta.extension.anime.model.AnimeExtension
+import app.anikuta.extension.anime.util.AnimeExtensionLoader
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.builtins.ListSerializer
-import android.util.Log
-import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
-import app.anikuta.domain.mihon.extensionrepo.anime.interactor.UpdateAnimeExtensionRepo
-import app.anikuta.domain.mihon.extensionrepo.model.ExtensionRepo
-import app.anikuta.core.preference.Preference
-import app.anikuta.core.preference.PreferenceStore
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-// removed logcat
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import uy.kohesive.injekt.injectLazy
-import java.time.Instant
-import kotlin.time.Duration.Companion.days
 
+/**
+ * Fetches extension listings from extension repos.
+ * Clean rewrite based on aniyomi's AnimeExtensionApi.
+ */
 internal class AnimeExtensionApi {
 
     private val networkService: NetworkHelper by injectLazy()
-    private val preferenceStore: PreferenceStore by injectLazy()
     private val getExtensionRepo: GetAnimeExtensionRepo by injectLazy()
-    private val updateExtensionRepo: UpdateAnimeExtensionRepo by injectLazy()
-    private val animeExtensionManager: AnimeExtensionManager by injectLazy()
-    private val json: Json by injectLazy()
+    private val json = Json { ignoreUnknownKeys = true }
 
-    private val lastExtCheck: Preference<Long> by lazy {
-        preferenceStore.getLong("last_ext_check", 0)
-    }
-
-    suspend fun findExtensions(): List<AnimeExtension.Available> {
-        return withContext(Dispatchers.IO) {
-            getExtensionRepo.await()
-                .map { async { getExtensions(it) } }
-                .awaitAll()
-                .flatten()
-        }
-    }
-
-    private suspend fun getExtensions(extRepo: ExtensionRepo): List<AnimeExtension.Available> {
-        val repoBaseUrl = extRepo.baseUrl
-        return try {
-            val response = networkService.client
-                .newCall(GET("$repoBaseUrl/index.min.json"))
-                .awaitSuccess()
-
-            json.decodeFromString(
-                ListSerializer(AnimeExtensionJsonObject.serializer()),
-                response.body?.string() ?: "",
-            ).toExtensions(repoBaseUrl)
-        } catch (e: Throwable) {
-            Log.e("AnimeExtApi", "Failed to get extensions from $repoBaseUrl", e)
+    suspend fun findExtensions(): List<AnimeExtension.Available> = withContext(Dispatchers.IO) {
+        try {
+            val repos = getExtensionRepo.await()
+            repos.map { repo ->
+                async { getExtensionsFromRepo(repo) }
+            }.awaitAll().flatten()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to find extensions", e)
             emptyList()
         }
     }
 
-    suspend fun checkForUpdates(
-        context: Context,
-        fromAvailableExtensionList: Boolean = false,
-    ): List<AnimeExtension.Installed>? {
-        // Limit checks to once a day at most
-        if (fromAvailableExtensionList &&
-            Instant.now().toEpochMilli() < lastExtCheck.get() + 1.days.inWholeMilliseconds
-        ) {
-            return null
-        }
+    private suspend fun getExtensionsFromRepo(repo: ExtensionRepo): List<AnimeExtension.Available> {
+        val repoBaseUrl = repo.baseUrl
+        return try {
+            val response = networkService.client
+                .newCall(GET("$repoBaseUrl/index.min.json"))
+                .execute()
 
-        // Update extension repo details
-        updateExtensionRepo.await("")
-
-        val extensions = if (fromAvailableExtensionList) {
-            animeExtensionManager.availableExtensionsFlow.value
-        } else {
-            findExtensions().also { lastExtCheck.set(Instant.now().toEpochMilli()) }
-        }
-
-        val installedExtensions = AnimeExtensionLoader.loadExtensions(context)
-            .filterIsInstance<AnimeLoadResult.Success>()
-            .map { it.extension }
-
-        val extensionsWithUpdate = mutableListOf<AnimeExtension.Installed>()
-        for (installedExt in installedExtensions) {
-            val pkgName = installedExt.pkgName
-            val availableExt = extensions.find { it.pkgName == pkgName } ?: continue
-
-            val hasUpdatedVer = availableExt.versionCode > installedExt.versionCode
-            val hasUpdatedLib = availableExt.libVersion > installedExt.libVersion
-            val hasUpdate = hasUpdatedVer || hasUpdatedLib
-            if (hasUpdate) {
-                extensionsWithUpdate.add(installedExt)
+            if (!response.isSuccessful) {
+                Log.w(TAG, "Failed to fetch extensions from $repoBaseUrl: ${response.code}")
+                return emptyList()
             }
-        }
 
-        if (extensionsWithUpdate.isNotEmpty()) {
-            extensionUpdateNotifier(context).promptUpdates(0
-                
-                
+            val body = response.body?.string() ?: return emptyList()
+            val extensions = json.decodeFromString(
+                ListSerializer(AnimeExtensionJsonObject.serializer()),
+                body,
             )
+
+            extensions
+                .filter {
+                    val libVersion = it.extractLibVersion()
+                    libVersion >= AnimeExtensionLoader.LIB_VERSION_MIN &&
+                    libVersion <= AnimeExtensionLoader.LIB_VERSION_MAX
+                }
+                .map {
+                    AnimeExtension.Available(
+                        name = it.name.substringAfter("Aniyomi: "),
+                        pkgName = it.pkg,
+                        versionName = it.version,
+                        versionCode = it.code,
+                        libVersion = it.extractLibVersion(),
+                        lang = it.lang,
+                        isNsfw = it.nsfw == 1,
+                        sources = it.sources?.map { src ->
+                            AnimeExtension.Available.AnimeSource(
+                                id = src.id,
+                                lang = src.lang,
+                                name = src.name,
+                                baseUrl = src.baseUrl,
+                            )
+                        } ?: emptyList(),
+                        apkName = it.apk,
+                        iconUrl = "$repoBaseUrl/icon/${it.pkg}.png",
+                        repoUrl = repoBaseUrl,
+                    )
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get extensions from $repoBaseUrl", e)
+            emptyList()
         }
-
-        return extensionsWithUpdate
-    }
-
-    private fun List<AnimeExtensionJsonObject>.toExtensions(repoUrl: String): List<AnimeExtension.Available> {
-        return this
-            .filter {
-                val libVersion = it.extractLibVersion()
-                libVersion >= AnimeExtensionLoader.LIB_VERSION_MIN && libVersion <= AnimeExtensionLoader.LIB_VERSION_MAX
-            }
-            .map {
-                AnimeExtension.Available(
-                    name = it.name.substringAfter("Aniyomi: "),
-                    pkgName = it.pkg,
-                    versionName = it.version,
-                    versionCode = it.code,
-                    libVersion = it.extractLibVersion(),
-                    lang = it.lang,
-                    isNsfw = it.nsfw == 1,
-                    sources = it.sources?.map(extensionAnimeSourceMapper).orEmpty(),
-                    apkName = it.apk,
-                    iconUrl = "$repoUrl/icon/${it.pkg}.png",
-                    repoUrl = repoUrl,
-                )
-            }
     }
 
     fun getApkUrl(extension: AnimeExtension.Available): String {
@@ -141,7 +98,15 @@ internal class AnimeExtensionApi {
     }
 
     private fun AnimeExtensionJsonObject.extractLibVersion(): Double {
-        return version.substringBeforeLast('.').toDouble()
+        return try {
+            version.substringBeforeLast('.').toDouble()
+        } catch (e: Exception) {
+            0.0
+        }
+    }
+
+    companion object {
+        private const val TAG = "AnimeExtApi"
     }
 }
 
@@ -164,12 +129,3 @@ private data class AnimeExtensionSourceJsonObject(
     val name: String,
     val baseUrl: String,
 )
-
-private val extensionAnimeSourceMapper: (AnimeExtensionSourceJsonObject) -> AnimeExtension.Available.AnimeSource = {
-    AnimeExtension.Available.AnimeSource(
-        id = it.id,
-        lang = it.lang,
-        name = it.name,
-        baseUrl = it.baseUrl,
-    )
-}
