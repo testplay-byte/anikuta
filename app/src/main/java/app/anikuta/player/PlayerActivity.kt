@@ -28,6 +28,7 @@ import app.anikuta.R
 import app.anikuta.player.controls.PlayerControls
 import app.anikuta.ui.theme.AnikutaTheme
 import `is`.xyz.mpv.MPVLib
+import uy.kohesive.injekt.api.get
 
 /**
  * ANI-KUTA PlayerActivity — hosts the MPV video player.

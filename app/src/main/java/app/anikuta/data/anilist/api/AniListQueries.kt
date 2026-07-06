@@ -137,4 +137,31 @@ object AniListQueries {
           }
         }
     """.trimIndent()
+
+    /**
+     * Phase 5 (Q5 decision: AniList-only for Phase 5; extension search in Phase 7).
+     * Search query against AniList using SEARCH_MATCH sort — produces results
+     * ranked by title similarity to the search term. Returns the same Media
+     * field selection as trending/popular so [AniListRepository.parseMediaList]
+     * works unchanged.
+     */
+    val searchAnime = """
+        query SearchAnime(${'$'}search: String!, ${'$'}page: Int = 1, ${'$'}perPage: Int = 25) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            media(type: ANIME, search: ${'$'}search, sort: SEARCH_MATCH) {
+              id
+              title { romaji english native }
+              coverImage { extraLarge large medium color }
+              bannerImage
+              averageScore
+              episodes
+              genres
+              season
+              seasonYear
+              format
+              status
+            }
+          }
+        }
+    """.trimIndent()
 }

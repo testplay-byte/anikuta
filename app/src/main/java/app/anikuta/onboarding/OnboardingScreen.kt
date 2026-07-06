@@ -1,8 +1,12 @@
 package app.anikuta.onboarding
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
@@ -28,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import app.anikuta.ui.theme.AnikutaSprings
 
 @Composable
@@ -246,19 +251,105 @@ private fun ExpressiveWelcomeStep() {
 
 @Composable
 private fun ExpressivePermissionsStep() {
+    val context = LocalContext.current
+
+    // ---- Notification permission (Android 13+ / API 33+) ----
+    // Pre-API 33: POST_NOTIFICATIONS doesn't exist as a runtime permission —
+    // notifications are granted at install time, so we hide the switch and
+    // show a "Granted" badge instead.
+    val isApi33Plus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    val initialNotifGranted = if (isApi33Plus) {
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+    } else {
+        true
+    }
+    var notifGranted by remember { mutableStateOf(initialNotifGranted) }
+    var notifAsked by remember { mutableStateOf(false) }
+
+    // Launcher that actually requests POST_NOTIFICATIONS at runtime.
+    // Per task 5.15: the Permissions step must REQUEST permissions, not just
+    // show text. Graceful degradation: denial still lets the user proceed.
+    val notifLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        notifGranted = granted
+        notifAsked = true
+    }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Permissions", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "ANI-KUTA needs a few permissions to work properly:",
+            "ANI-KUTA needs a few permissions to work properly. " +
+                "You can skip these and grant them later in Settings.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(20.dp))
-        // Expressive permission cards — contained surfaces
-        PermissionCard("Notifications", "For download + schedule updates", Icons.Default.Notifications)
+
+        // ---- Notifications card with a working toggle ----
+        PermissionCard(
+            name = "Notifications",
+            desc = when {
+                notifGranted -> "Granted — download + schedule updates"
+                notifAsked -> "Denied — notifications won't be shown"
+                else -> "For download + schedule updates"
+            },
+            icon = Icons.Default.Notifications,
+            trailing = {
+                if (isApi33Plus) {
+                    Switch(
+                        checked = notifGranted,
+                        onCheckedChange = { wantsEnabled ->
+                            if (wantsEnabled && !notifGranted) {
+                                // Trigger the actual system permission dialog
+                                notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else if (!wantsEnabled && notifGranted) {
+                                // Apps can't revoke a granted runtime permission
+                                // themselves — bounce the user to system settings.
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                runCatching { context.startActivity(intent) }
+                            }
+                        },
+                    )
+                } else {
+                    StatusBadge("Granted", granted = true)
+                }
+            },
+        )
+
+        // Inline deny hint — M3 Expressive tertiary/error tint
+        if (notifAsked && !notifGranted && isApi33Plus) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                "Denied — notifications won't be shown. You can still continue.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
-        PermissionCard("Storage", "For downloaded episodes", Icons.Default.Storage)
+
+        // ---- Storage card — folder selection handled in step 3 via
+        // OpenDocumentTree, so we just show a status indicator here.
+        // Per task 5.15 option (b): status indicator only.
+        PermissionCard(
+            name = "Storage",
+            desc = "Folder selection happens in the next step",
+            icon = Icons.Default.Storage,
+            trailing = {
+                StatusBadge("Next step", granted = false)
+            },
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             "You can grant these later in Settings.",
@@ -268,8 +359,32 @@ private fun ExpressivePermissionsStep() {
     }
 }
 
+/** Small tonal status chip used as the trailing element of a permission card. */
 @Composable
-private fun PermissionCard(name: String, desc: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+private fun StatusBadge(text: String, granted: Boolean) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (granted) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = if (granted) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun PermissionCard(
+    name: String,
+    desc: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    trailing: @Composable (() -> Unit)? = null,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -290,9 +405,13 @@ private fun PermissionCard(name: String, desc: String, icon: androidx.compose.ui
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (trailing != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                trailing()
             }
         }
     }

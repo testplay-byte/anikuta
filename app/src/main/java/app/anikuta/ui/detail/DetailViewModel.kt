@@ -12,6 +12,7 @@ import app.anikuta.source.api.AnimeCatalogueSource
 import app.anikuta.source.api.model.SAnime
 import app.anikuta.source.api.model.SEpisode
 import app.anikuta.source.api.model.Video
+import app.anikuta.ui.library.LibraryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -50,12 +51,15 @@ class DetailViewModel(
     private val anilistRepo: AniListRepository? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
     private val cacheManager: CacheManager? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
     private val sourceBridge: AniyomiSourceBridge? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
+    private val libraryStore: LibraryStore? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
     private val json = Json { ignoreUnknownKeys = true }
 
     private val _anime = MutableStateFlow<DetailState>(DetailState.Loading)
     val anime: StateFlow<DetailState> = _anime.asStateFlow()
 
-    private val _isSaved = MutableStateFlow(false)
+    // Initial value read from the LibraryStore so the bookmark icon reflects
+    // the persisted state immediately on screen entry (Phase 5 task 5.6).
+    private val _isSaved = MutableStateFlow(libraryStore?.isSaved(anilistId) ?: false)
     val isSaved: StateFlow<Boolean> = _isSaved.asStateFlow()
 
     private val _episodes = MutableStateFlow<EpisodeState>(EpisodeState.Idle)
@@ -210,10 +214,33 @@ class DetailViewModel(
         _playRequest.value = null
     }
 
+    /**
+     * Toggle the saved state for this anime.
+     *
+     * Phase 5 task 5.6: persists to [LibraryStore] (PreferenceStore-backed
+     * map of AniList ID → AniListAnime JSON). When saving, we need the full
+     * AniListAnime object — fetched from the current [DetailState.Success].
+     * If details haven't loaded yet, the toggle is a no-op (the UI button
+     * is only visible after details load, so this shouldn't happen in
+     * practice, but we guard anyway).
+     */
     fun toggleSaved() {
-        _isSaved.value = !_isSaved.value
-        Log.d(TAG, "Save toggled: ${_isSaved.value}")
-        // TODO (task 5.6): persist to local DB via AnimeRepository
+        val store = libraryStore ?: run {
+            Log.w(TAG, "LibraryStore unavailable — toggle is no-op")
+            return
+        }
+        val anime = (_anime.value as? DetailState.Success)?.anime ?: run {
+            Log.w(TAG, "Anime not loaded yet — cannot save")
+            return
+        }
+        val nowSaved = !_isSaved.value
+        if (nowSaved) {
+            store.save(anime)
+        } else {
+            store.remove(anilistId)
+        }
+        _isSaved.value = nowSaved
+        Log.d(TAG, "Save toggled: $nowSaved (anilistId=$anilistId)")
     }
 
     fun refresh() {

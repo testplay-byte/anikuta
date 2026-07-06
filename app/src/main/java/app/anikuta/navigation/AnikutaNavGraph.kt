@@ -145,10 +145,34 @@ fun AnikutaNavGraph() {
                     },
                 )
             }
-            composable(Screen.Library.route) { LibraryScreen() }
-            composable(Screen.History.route) { HistoryScreen() }
-            composable(Screen.Search.route) { SearchScreen() }
-            composable(Screen.More.route) { MoreScreen() }
+            composable(Screen.Library.route) {
+                LibraryScreen(
+                    onAnimeClick = { anilistId ->
+                        navController.navigate("detail/$anilistId")
+                    },
+                )
+            }
+            composable(Screen.History.route) {
+                HistoryScreen(
+                    onResume = { anilistId, _, _ ->
+                        // Navigate to detail — the player will resume from the
+                        // saved position when the user taps the episode.
+                        navController.navigate("detail/$anilistId")
+                    },
+                )
+            }
+            composable(Screen.Search.route) {
+                SearchScreen(
+                    onAnimeClick = { anilistId ->
+                        navController.navigate("detail/$anilistId")
+                    },
+                )
+            }
+            composable(Screen.More.route) {
+                MoreScreen(
+                    onOpenDebug = { navController.navigate("debug") },
+                )
+            }
             composable(
                 route = "detail/{anilistId}",
                 arguments = listOf(navArgument("anilistId") { type = NavType.IntType }),

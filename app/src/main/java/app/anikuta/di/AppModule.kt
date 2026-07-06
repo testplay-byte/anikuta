@@ -15,6 +15,8 @@ import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
 import app.anikuta.data.supabase.SupabaseClient
 import app.anikuta.player.PlayerPreferences
+import app.anikuta.player.WatchProgressStore
+import app.anikuta.ui.library.LibraryStore
 import app.anikuta.source.bridge.AniyomiSourceBridge
 import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
@@ -42,7 +44,10 @@ class AppModule(val app: Application) : InjektModule {
 
         // Player preferences + MPV player surface
         addSingletonFactory { PlayerPreferences(get<PreferenceStore>()) }
-        addSingletonFactory { app.anikuta.player.WatchProgressStore(get<PreferenceStore>()) }
+        addSingletonFactory { WatchProgressStore(get<PreferenceStore>()) }
+
+        // Phase 5 task 5.6 — Library persistence (saved AniList IDs + cached JSON)
+        addSingletonFactory { LibraryStore(get<PreferenceStore>()) }
 
         // Anime database
         addSingletonFactory { AnimeDatabaseFactory.create(app) }

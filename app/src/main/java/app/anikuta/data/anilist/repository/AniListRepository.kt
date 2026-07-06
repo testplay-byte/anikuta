@@ -122,6 +122,18 @@ class AniListRepository(
     suspend fun browseByGenre(genre: String, page: Int = 1, perPage: Int = 20): List<AniListAnime> =
         graphqlRequest(AniListQueries.browseByGenre, mapOf("genre" to genre, "page" to page, "perPage" to perPage)) { parseMediaList(it) }
 
+    /**
+     * Phase 5 task 5.11 — AniList search (Q5 decision: AniList-only for Phase 5;
+     * extension search deferred to Phase 7).
+     *
+     * Issues a GraphQL `Page(search: $search, sort: SEARCH_MATCH, perPage: 25)`
+     * request and parses it via [parseMediaList] (same Media field selection as
+     * trending/popular). Throws on network/GraphQL errors so the caller (the
+     * SearchViewModel) can surface them in the Error state.
+     */
+    suspend fun searchAnime(query: String, page: Int = 1, perPage: Int = 25): List<AniListAnime> =
+        graphqlRequest(AniListQueries.searchAnime, mapOf("search" to query, "page" to page, "perPage" to perPage)) { parseMediaList(it) }
+
     suspend fun getAnimeDetails(id: Int): AniListAnime = withContext(Dispatchers.IO) {
         val jsonBody = buildJsonObject {
             put("query", AniListQueries.animeDetails)
