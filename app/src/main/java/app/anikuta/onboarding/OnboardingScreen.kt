@@ -1,5 +1,10 @@
 package app.anikuta.onboarding
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,7 +32,9 @@ fun OnboardingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .statusBarsPadding()  // Fix: respect status bar (notification bar)
+            .navigationBarsPadding()  // Respect nav bar too
+            .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // Progress indicator
@@ -67,6 +75,7 @@ fun OnboardingScreen(
                 )
                 4 -> BackupRestoreStep(
                     onBackupSelected = { uri -> state = state.copy(backupFileUri = uri) },
+                    onSkip = { state = state.copy(backupFileUri = null) },
                     selectedUri = state.backupFileUri,
                 )
                 5 -> DesignStep(
@@ -144,12 +153,22 @@ private fun PermissionItem(name: String, desc: String) {
 
 @Composable
 private fun StorageStep(onFolderSelected: (String) -> Unit, selectedUri: String?) {
+    // Auto-select default folder on first display
+    LaunchedEffect(Unit) {
+        if (selectedUri == null) {
+            onFolderSelected("default://Android/data/app.anikuta/files/")
+        }
+    }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Storage Folder", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
         Text("Pick where ANI-KUTA stores downloads and cache.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
         Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = { onFolderSelected("content://com.android.externalstorage.documents/tree/primary%3AANIKUTA") }) {
+        Button(onClick = {
+            // TODO (later): use SAF document picker for custom folder
+            onFolderSelected("default://Android/data/app.anikuta/files/")
+        }) {
             Text(if (selectedUri != null) "Folder Selected ✓" else "Select Folder")
         }
         if (selectedUri != null) {
@@ -183,19 +202,44 @@ private fun ExtensionStep(onPrimarySelected: (String) -> Unit, onSecondarySelect
 }
 
 @Composable
-private fun BackupRestoreStep(onBackupSelected: (String) -> Unit, selectedUri: String?) {
+private fun BackupRestoreStep(
+    onBackupSelected: (String) -> Unit,
+    onSkip: () -> Unit,
+    selectedUri: String?,
+) {
+    val context = LocalContext.current
+
+    // SAF file picker for backup files
+    val filePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onBackupSelected(uri.toString())
+        }
+    }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Backup Restore", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
         Text("Have a backup file from a previous install?", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
         Spacer(modifier = Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = { onBackupSelected("backup.tachibk") }) { Text("Select Backup") }
-            TextButton(onClick = { /* skip */ }) { Text("Skip — fresh start") }
+            OutlinedButton(onClick = {
+                // Open the system file picker for backup files
+                filePicker.launch(arrayOf("*/*"))
+            }) {
+                Text("Select Backup")
+            }
+            TextButton(onClick = { onSkip() }) {
+                Text("Skip — fresh start")
+            }
         }
         if (selectedUri != null) {
             Spacer(modifier = Modifier.height(8.dp))
             Text("Backup selected: $selectedUri", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        } else {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("No backup selected — fresh start", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
