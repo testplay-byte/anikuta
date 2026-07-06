@@ -220,7 +220,8 @@ may need a migration.
 | 5.13 | SearchScreen UI (search bar + results grid) | 5.12 | Medium |
 | 5.14 | SearchViewModel (debounced) | 5.12 | Low |
 | 5.15 | MoreScreen (clear cache, player defaults, about) | — | Low |
-| 5.16 | Phase 5 verification (end-to-end test) | all | — |
+| 5.16 | Onboarding permissions (request notifications + storage) | — | Low |
+| 5.17 | Phase 5 verification (end-to-end test) | all | — |
 
 **Suggested execution order:** 5.1 → 5.2 → 5.3 → 5.4 → 5.5 (source + player
 chain first — the riskiest part), then 5.6 → 5.7 → 5.8 (library), then
@@ -229,56 +230,71 @@ chain first — the riskiest part), then 5.6 → 5.7 → 5.8 (library), then
 
 ---
 
-## 6. Open questions for the user
+## 6. Decisions (user-confirmed, Session 18)
 
-These need your input before implementation starts. (Also shown on the live
-preview's Phase 5 section.)
+**Q1 — Debug screen:** ✅ **YES — implement it, but make it easily removable.**
+(Clarification: the global crash handler from Phase 4 already shows an error
+screen instead of silently closing — that's separate and already done. This
+Q1 is about a hidden "Extension test" debug screen accessible via long-press
+on the version number in Settings. It lets us manually trigger an extension's
+search → episode list → video list and log every step, to diagnose the AniKoto
+180 extension chain before wiring it into the UI. Build it behind a flag so we
+can remove it cleanly for release.)
 
-**Q1 — Extension verification:** Do you want me to add a hidden "Debug /
-Extension test" screen (accessible from Settings → long-press version) that
-lets us manually trigger an extension's search + episode list + video list
-and log every step? This would make diagnosing the AniKoto 180 extension
-chain much easier. (Recommended: yes.)
+**Q2 — AniList ↔ extension matching:** ✅ **Smart fuzzy matching (≥80% similarity).**
+- **No match found:** Show "Not available" + display any known release date /
+  airing schedule info from AniList (e.g., "Expected to air in Q3 2026").
+- **Anime not yet aired:** Show "This anime hasn't been released yet. It will
+  be available to stream after it airs."
+- **Single match (≥80% similar):** Auto-select silently. Show a small "Matched
+  from [source name]" badge. No user action needed.
+- **Multiple matches:** Auto-select the **most probable** one (highest
+  similarity score). Show a small badge. (User can manually change via a
+  "Wrong anime?" link if needed — but the default is auto-pick the best.)
+- Matching is **fuzzy, not exact** — title strings may differ slightly in
+  wording/punctuation but should match at ≥80% similarity. Use a normalized
+  comparison (lowercase, strip punctuation, strip "Season N"/"(TV)" suffixes)
+  + Levenshtein or Jaro-Winkler ratio.
 
-**Q2 — AniList ↔ extension matching UI:** When you open an anime's detail
-page and we search the extension for it, what should happen if (a) there's
-exactly one match, (b) there are multiple matches, (c) there are no matches?
-My proposal: (a) auto-select + show a small "matched from [source]" badge,
-(b) show a "Select the correct anime" bottom sheet with covers, (c) show
-"Not available on installed extensions" + a button to install more. Agree?
+**Q3 — History retention:** ✅ **Forever, OR until the user removes the anime
+from their library.**
+- Watch history persists indefinitely.
+- If the user removes an anime from their Library, its history is also removed
+  (history is tied to library membership).
+- Standalone history (anime not in library but was watched) stays until the
+  user manually clears it via the "Clear history" overflow button.
+- No automatic time-based cleanup.
 
-**Q3 — History retention:** How long should we keep watch history? Options:
-(a) forever, (b) last 100 items, (c) last 30 days, (d) user-configurable in
-settings. My proposal: (a) forever, with a "Clear history" button in the
-overflow menu. Agree?
+**Q4 — Library sort/filter scope:** ✅ **Minimal — as proposed.**
+- Sort by: Title / Last watched / Unread episodes.
+- No filters in Phase 5 (filters come in a later phase).
 
-**Q4 — Library sort + filter scope for Phase 5:** aniyomi's library has
-~10 sort modes + many filters (by source, status, genre, tracking, etc.).
-For Phase 5 I propose a minimal set: sort by (Title, Last watched, Unread
-episodes) + no filters (filters come in a later phase). Or do you want more
-upfront?
+**Q5 — Search behavior:** ✅ **AniList-only for Phase 5.**
+- Search AniList by title, show results, tap → detail page.
+- Extension search comes in Phase 7.
 
-**Q5 — Search behavior:** Should search be (a) AniList-only (search AniList,
-show results, tap → detail), or (b) AniList-first with an extension fallback
-tab (if AniList has no results, search installed extensions)? My proposal:
-(a) AniList-only for Phase 5 (simpler, faster), extension search comes in
-Phase 7. Agree?
+**Q6 — Settings scope:** ✅ **As proposed.**
+- Clear cache, Player defaults (speed/hwdec/audio lang), About.
+- AniList login, Design picker, Extension management → "Coming soon" badges.
 
-**Q6 — Settings scope for Phase 5:** Confirm the MoreScreen should have
-just: Clear cache, Player defaults (speed/hwdec/audio lang), About. AniList
-login, design picker, and extension management show "Coming soon" badges.
-Agree, or do you want something added/removed?
+**Q7 — Onboarding permissions:** ✅ **Yes — fix in Phase 5.**
+- Actually request POST_NOTIFICATIONS (Android 13+) and storage access in the
+  onboarding Permissions step. Handle deny gracefully (app still works, feature
+  degrades).
 
-**Q7 — Onboarding permissions:** You mentioned the onboarding permissions
-step (notifications + storage) doesn't actually request permissions yet.
-Should I fix that as part of Phase 5 (it's a small task), or leave it for a
-dedicated polish phase?
+**Q8 — Player gestures:** ✅ **Defer to a later phase.**
+- Swipe-for-volume/brightness/seek + double-tap seek come in a later
+  player-polish phase. Phase 5 is already large; gestures are isolated work.
 
-**Q8 — Player gestures:** You mentioned swipe-for-volume/brightness is
-missing. Should I add basic gestures (vertical swipe left = brightness,
-vertical swipe right = volume, horizontal swipe = seek) as part of Phase 5,
-or defer to a later player-polish phase? My proposal: defer — Phase 5 is
-already large and gestures are isolated work.
+---
+
+## 6a. Open questions (roadmap-level — not blocking Phase 5)
+
+These remain open from the original ROADMAP and don't block Phase 5:
+- Is the phase order right? (e.g., should downloads come before the 4 designs?)
+- Phase 6 (4 designs): build all 4 at once, or 1 per phase?
+- Should we do a "design preview" subpage on the web to mock the 4 designs
+  before building?
 
 ---
 
