@@ -91,31 +91,25 @@ class AnikutaMPVView(
     }
 
     override fun observeProperties() {
-        for ((name, format) in observedProps) MPVLib.observeProperty(name, format)
+        // Minimal set: time, duration, volume, pause, buffering, eof, tracks.
+        // aniyomi observes ~30 properties (incl. user-data/aniyomi/* scripts);
+        // we add those when the corresponding features land.
+        MPVLib.observeProperty("time-pos", MPVLib.mpvFormat.MPV_FORMAT_INT64)
+        MPVLib.observeProperty("demuxer-cache-time", MPVLib.mpvFormat.MPV_FORMAT_INT64)
+        MPVLib.observeProperty("duration", MPVLib.mpvFormat.MPV_FORMAT_INT64)
+        MPVLib.observeProperty("volume", MPVLib.mpvFormat.MPV_FORMAT_INT64)
+        MPVLib.observeProperty("volume-max", MPVLib.mpvFormat.MPV_FORMAT_INT64)
+        MPVLib.observeProperty("track-list", MPVLib.mpvFormat.MPV_FORMAT_NONE)
+        MPVLib.observeProperty("speed", MPVLib.mpvFormat.MPV_FORMAT_DOUBLE)
+        MPVLib.observeProperty("pause", MPVLib.mpvFormat.MPV_FORMAT_FLAG)
+        MPVLib.observeProperty("paused-for-cache", MPVLib.mpvFormat.MPV_FORMAT_FLAG)
+        MPVLib.observeProperty("seeking", MPVLib.mpvFormat.MPV_FORMAT_FLAG)
+        MPVLib.observeProperty("eof-reached", MPVLib.mpvFormat.MPV_FORMAT_FLAG)
+        MPVLib.observeProperty("hwdec-current", MPVLib.mpvFormat.MPV_FORMAT_STRING)
     }
 
     override fun postInitOptions() {
         // No-op for the minimal player. aniyomi toggles a stats overlay here;
         // we defer player-statistics page selection to a later phase.
     }
-
-    /**
-     * Properties the [PlayerObserver] cares about. Kept minimal: time, duration,
-     * pause, volume, eof, cache, track list, seek state. aniyomi observes ~30
-     * user-data/aniyomi/* props for its extension scripts; we add those later.
-     */
-    private val observedProps = mapOf(
-        "time-pos" to MPVLib.mpvFormat.MPV_FORMAT_INT64,
-        "demuxer-cache-time" to MPVLib.mpvFormat.MPV_FORMAT_INT64,
-        "duration" to MPVLib.mpvFormat.MPV_FORMAT_INT64,
-        "volume" to MPVLib.mpvFormat.MPV_FORMAT_INT64,
-        "volume-max" to MPVLib.mpvFormat.MPV_FORMAT_INT64,
-        "track-list" to MPVLib.mpvFormat.MPV_FORMAT_NONE,
-        "speed" to MPVLib.mpvFormat.MPV_FORMAT_DOUBLE,
-        "pause" to MPVLib.mpvFormat.MPV_FORMAT_FLAG,
-        "paused-for-cache" to MPVLib.mpvFormat.MPV_FORMAT_FLAG,
-        "seeking" to MPVLib.mpvFormat.MPV_FORMAT_FLAG,
-        "eof-reached" to MPVLib.mpvFormat.MPV_FORMAT_FLAG,
-        "hwdec-current" to MPVLib.mpvFormat.MPV_FORMAT_STRING,
-    )
 }
