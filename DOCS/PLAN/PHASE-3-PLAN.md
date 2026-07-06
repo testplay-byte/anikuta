@@ -76,9 +76,23 @@
 
 ---
 
-## Open questions (ask the user)
-1. **Episode list layout** — vertical list (like aniyomi) or horizontal carousel? (I lean: vertical list with thumbnails.)
-2. **Multiple seasons** — separate detail pages per season, or one page with season tabs? (AniList has season data.)
-3. **Sources selector** — where in the UI? A dropdown in the header, or a section below episodes? (I lean: section below episodes.)
-4. **Empty extension state** — if no extension is loaded, what should the detail page show? Just AniList data + "Install an extension to stream"?
-5. **Back navigation** — should the back button always go to home, or remember where the user came from (search, library, etc.)?
+## Open questions (CONFIRMED by user)
+
+1. **Episode list layout** — THREE options: list, grid, + one more. User can configure:
+   - Layout type (list / grid / compact)
+   - Whether to show thumbnails
+   - Whether to show descriptions
+   - Properly handles missing descriptions (graceful fallback)
+
+2. **Multiple seasons** — separate detail pages per season, linked together.
+   Other seasons + related content shown on the detail page. Layout details
+   refined after implementation.
+
+3. **Sources selector** — section below episodes (current approach). User wants
+   customizability to pick other options later.
+
+4. **Empty extension state** — show just AniList data + "Install an extension
+   to stream" message. Confirmed.
+
+5. **Back navigation** — remembers where the user came from (home/search/library).
+   Not always home. Confirmed.
