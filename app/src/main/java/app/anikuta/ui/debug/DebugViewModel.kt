@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
 import app.anikuta.source.api.AnimeCatalogueSource
-import app.anikuta.source.api.AnimeSource
 import app.anikuta.source.api.model.AnimeFilterList
 import app.anikuta.source.api.model.SAnime
 import app.anikuta.source.api.model.SEpisode
@@ -41,8 +40,8 @@ class DebugViewModel : ViewModel() {
         Log.e(TAG, "SourceManager not available", e); null
     }
 
-    private val _sources = MutableStateFlow<List<AnimeSource>>(emptyList())
-    val sources: StateFlow<List<AnimeSource>> = _sources.asStateFlow()
+    private val _sources = MutableStateFlow<List<AnimeCatalogueSource>>(emptyList())
+    val sources: StateFlow<List<AnimeCatalogueSource>> = _sources.asStateFlow()
 
     private val _selectedSource = MutableStateFlow<AnimeCatalogueSource?>(null)
     val selectedSource: StateFlow<AnimeCatalogueSource?> = _selectedSource.asStateFlow()
