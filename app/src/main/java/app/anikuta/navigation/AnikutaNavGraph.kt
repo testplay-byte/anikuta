@@ -137,7 +137,8 @@ fun AnikutaNavGraph() {
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
-            modifier = Modifier.padding(innerPadding),
+            // Only apply bottom padding (for nav bar height) — NOT top, so home + detail can be edge-to-edge
+            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
         ) {
             composable(Screen.Home.route) {
                 HomeScreen(

@@ -50,8 +50,7 @@ fun HomeScreen(
     ) {
         LazyColumn(
             modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding(),
+                .fillMaxSize(),
             contentPadding = PaddingValues(top = 0.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -94,10 +93,12 @@ fun HomeScreen(
 @Composable
 private fun FloatingTopBar() {
     // M3 Expressive: deliberate surface containment with high-contrast container
+    // statusBarsPadding() here — the ONLY place that handles the status bar gap
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 0.dp),
+            .statusBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 3.dp,
@@ -140,61 +141,77 @@ private fun FloatingTopBar() {
 private fun HeroSection(trending: HomeSectionState) {
     val heroAnime = (trending as? HomeSectionState.Success)?.anime?.firstOrNull()
 
-    // M3 Expressive: deliberate surface — highest elevation container for the hero
-    Box(
+    // M3 Expressive: deliberate surface — highest elevation container with shadow
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp)
             .padding(horizontal = 12.dp)
-            .clip(RoundedCornerShape(24.dp)),
+            .height(200.dp),
+        shape = RoundedCornerShape(24.dp),
+        tonalElevation = 4.dp,
+        shadowElevation = 8.dp,
     ) {
-        if (heroAnime != null) {
-            AsyncImage(
-                model = heroAnime.coverImage.best(),
-                contentDescription = heroAnime.title.preferred(),
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.3f),
-                                Color.Black.copy(alpha = 0.85f),
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (heroAnime != null) {
+                AsyncImage(
+                    model = heroAnime.coverImage.best(),
+                    contentDescription = heroAnime.title.preferred(),
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.1f),
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.3f),
+                                    Color.Black.copy(alpha = 0.85f),
+                                ),
                             ),
                         ),
-                    ),
-            )
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(20.dp),
-            ) {
-                Text(
-                    heroAnime.title.preferred(),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
-                if (heroAnime.averageScore != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                // "Trending #1" badge — expressive contained chip
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                ) {
                     Text(
-                        "★ ${heroAnime.averageScore}  ·  ${heroAnime.episodes ?: "?"} episodes",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.85f),
+                        "★ Trending #1",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
-            }
-        } else {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(20.dp),
+                ) {
+                    Text(
+                        heroAnime.title.preferred(),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (heroAnime.averageScore != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "★ ${heroAnime.averageScore}  ·  ${heroAnime.episodes ?: "?"} episodes",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.85f),
+                        )
+                    }
+                }
+            } else {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                     verticalArrangement = Arrangement.Center,
@@ -218,13 +235,27 @@ private fun HeroSection(trending: HomeSectionState) {
 
 @Composable
 private fun HomeSection(title: String, content: @Composable () -> Unit) {
+    // M3 Expressive: section header with a tonal accent bar
     Column {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        )
+        ) {
+            // Tonal accent bar — expressive visual marker
+            Surface(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(20.dp),
+                shape = RoundedCornerShape(2.dp),
+                color = MaterialTheme.colorScheme.primary,
+            ) {}
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
         content()
     }
 }

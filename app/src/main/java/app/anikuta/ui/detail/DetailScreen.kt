@@ -219,14 +219,14 @@ private fun DetailHeader(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(radius = 12.dp),
+                    .blur(radius = 8.dp),  // Very subtle blur — just enough to make text readable
                 contentScale = ContentScale.Crop,
             )
-            // Theme color tint overlay (from AniList cover color) — subtle
+            // Theme color tint overlay — very subtle
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(coverColor.copy(alpha = 0.3f)),
+                    .background(coverColor.copy(alpha = 0.2f)),
             )
             // Gradient overlay for text readability (bottom fade to background)
             Box(
