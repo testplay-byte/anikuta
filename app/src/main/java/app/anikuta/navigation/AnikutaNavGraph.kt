@@ -1,6 +1,7 @@
 package app.anikuta.navigation
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
@@ -16,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -49,29 +51,32 @@ sealed class Screen(
 
 private val bottomNavScreens = listOf(Screen.Home, Screen.Library, Screen.History, Screen.Search, Screen.More)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnikutaNavGraph() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
-
-    // Show bottom bar only on main tabs (not on detail page)
     val showBottomBar = currentDestination?.route in bottomNavScreens.map { it.route }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
+                // Modern floating bottom bar with rounded corners
                 Surface(
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .navigationBarsPadding(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
                     tonalElevation = 3.dp,
                     shadowElevation = 8.dp,
                 ) {
                     NavigationBar(
                         containerColor = androidx.compose.ui.graphics.Color.Transparent,
                         tonalElevation = 0.dp,
-                        windowInsets = WindowInsets.navigationBars,
+                        windowInsets = WindowInsets(0),
                     ) {
                         bottomNavScreens.forEach { screen ->
                             val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
@@ -80,9 +85,16 @@ fun AnikutaNavGraph() {
                                     Icon(
                                         if (isSelected) screen.selectedIcon else screen.unselectedIcon,
                                         contentDescription = screen.label,
+                                        modifier = Modifier.size(22.dp),
                                     )
                                 },
-                                label = { Text(screen.label, style = MaterialTheme.typography.labelSmall) },
+                                label = {
+                                    Text(
+                                        screen.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                                    )
+                                },
                                 selected = isSelected,
                                 onClick = {
                                     navController.navigate(screen.route) {
@@ -134,3 +146,4 @@ fun AnikutaNavGraph() {
         }
     }
 }
+

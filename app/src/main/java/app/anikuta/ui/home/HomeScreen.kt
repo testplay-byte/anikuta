@@ -1,5 +1,6 @@
 package app.anikuta.ui.home
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,27 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
-import coil3.request.crossfade
 import app.anikuta.data.anilist.model.AniListAnime
 
-/**
- * Home screen — modern Material 3 design.
- *
- * M3 patterns used:
- * - TopAppBar (floating, rounded) with search icon
- * - Card with tonalElevation + proper M3 shape
- * - Surface with gradient overlay on hero
- * - NavigationBarItem with selected/unselected icon variants
- * - MaterialTheme.colorScheme throughout (dynamic color on API 31+)
- * - proper contentType + key on all lazy items for performance
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -48,73 +36,48 @@ fun HomeScreen(
     val fresh by viewModel.fresh.collectAsState()
     val genres by viewModel.genres.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            // Modern floating top app bar with rounded corners
-            TopAppBar(
-                title = {
-                    Text(
-                        "ANI-KUTA",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                },
-                actions = {
-                    IconButton(onClick = { /* TODO: search (Phase 5) */ }) {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
-                ),
-                scrollBehavior = scrollBehavior,
-            )
-        },
-    ) { innerPadding ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            modifier = Modifier.padding(innerPadding),
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { viewModel.refresh() },
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),  // Respect status bar but no extra gap
+            contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                item(key = "hero") {
-                    HeroSection(trending)
-                }
+            // Compact floating top bar
+            item(key = "topbar") {
+                FloatingTopBar()
+            }
 
-                item(key = "trending", contentType = "anime_section") {
-                    HomeSection("Trending Now") { AnimeSection(trending, viewModel, onAnimeClick) }
-                }
-                item(key = "fresh", contentType = "anime_section") {
-                    HomeSection("Freshly Updated") { AnimeSection(fresh, viewModel, onAnimeClick) }
-                }
-                item(key = "genres", contentType = "genre_section") {
-                    HomeSection("Browse by Genre") { GenreSection(genres) }
-                }
-                item(key = "popular", contentType = "anime_section") {
-                    HomeSection("Most Popular") { AnimeSection(popular, viewModel, onAnimeClick) }
-                }
-                item(key = "schedule", contentType = "text_section") {
-                    HomeSection("Coming Up Next") {
-                        Text(
-                            "Schedule coming in a later phase",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
+            // Hero — first trending anime
+            item(key = "hero") {
+                HeroSection(trending)
+            }
+
+            item(key = "trending", contentType = "anime_section") {
+                HomeSection("Trending Now") { AnimeSection(trending, viewModel, onAnimeClick) }
+            }
+            item(key = "fresh", contentType = "anime_section") {
+                HomeSection("Freshly Updated") { AnimeSection(fresh, viewModel, onAnimeClick) }
+            }
+            item(key = "genres", contentType = "genre_section") {
+                HomeSection("Browse by Genre") { GenreSection(genres) }
+            }
+            item(key = "popular", contentType = "anime_section") {
+                HomeSection("Most Popular") { AnimeSection(popular, viewModel, onAnimeClick) }
+            }
+            item(key = "schedule", contentType = "text_section") {
+                HomeSection("Coming Up Next") {
+                    Text(
+                        "Schedule coming in a later phase",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
                 }
             }
         }
@@ -122,26 +85,63 @@ fun HomeScreen(
 }
 
 @Composable
+private fun FloatingTopBar() {
+    // Compact floating top bar — rounded corners, search icon, app name
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.9f),
+        tonalElevation = 2.dp,
+        shadowElevation = 4.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                "ANI-KUTA",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            IconButton(
+                onClick = { /* TODO: search (Phase 5) */ },
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = "Search",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun HeroSection(trending: HomeSectionState) {
-    // Show the first trending anime as a hero banner with gradient overlay
     val heroAnime = (trending as? HomeSectionState.Success)?.anime?.firstOrNull()
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(220.dp)
-            .padding(horizontal = 16.dp)
+            .height(200.dp)
+            .padding(horizontal = 12.dp)
             .clip(RoundedCornerShape(20.dp)),
     ) {
         if (heroAnime != null) {
-            // Background cover image
             AsyncImage(
                 model = heroAnime.coverImage.best(),
                 contentDescription = heroAnime.title.preferred(),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
-            // Gradient overlay for text readability
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -150,12 +150,11 @@ private fun HeroSection(trending: HomeSectionState) {
                             colors = listOf(
                                 Color.Transparent,
                                 Color.Black.copy(alpha = 0.3f),
-                                Color.Black.copy(alpha = 0.8f),
+                                Color.Black.copy(alpha = 0.85f),
                             ),
                         ),
                     ),
             )
-            // Text overlay
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -174,12 +173,11 @@ private fun HeroSection(trending: HomeSectionState) {
                     Text(
                         "★ ${heroAnime.averageScore}  ·  ${heroAnime.episodes ?: "?"} episodes",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = Color.White.copy(alpha = 0.85f),
                     )
                 }
             }
         } else {
-            // Loading state — gradient placeholder
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.primaryContainer,
