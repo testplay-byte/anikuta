@@ -40,30 +40,30 @@ enum class ArtType {
 
 enum class PlayerOrientation(val titleRes: StringResource) {
     Free("TODO"),
-    Video(AY"TODO"),
+    Video("TODO"),
     Portrait("TODO"),
     ReversePortrait("TODO"),
-    SensorPortrait(AY"TODO"),
+    SensorPortrait("TODO"),
     Landscape("TODO"),
-    ReverseLandscape(AY"TODO"),
-    SensorLandscape(AY"TODO"),
+    ReverseLandscape("TODO"),
+    SensorLandscape("TODO"),
 }
 
 enum class VideoAspect(val titleRes: StringResource) {
-    Crop(AY"TODO"),
-    Fit(AY"TODO"),
-    Stretch(AY"TODO"),
+    Crop("TODO"),
+    Fit("TODO"),
+    Stretch("TODO"),
 }
 
 /**
  * Action performed by a button, like double tap or media controls
  */
 enum class SingleActionGesture(val stringRes: StringResource) {
-    None(stringRes = AY"TODO"),
-    Seek(stringRes = AY"TODO"),
-    PlayPause(stringRes = AY"TODO"),
-    Switch(stringRes = AY"TODO"),
-    Custom(stringRes = AY"TODO"),
+    None(stringRes = "TODO"),
+    Seek(stringRes = "TODO"),
+    PlayPause(stringRes = "TODO"),
+    Switch(stringRes = "TODO"),
+    Custom(stringRes = "TODO"),
 }
 
 /**
@@ -144,27 +144,27 @@ enum class VideoFilters(
     val mpvProperty: String,
 ) {
     BRIGHTNESS(
-        AY"TODO",
+        "TODO",
         { it.brightnessFilter() },
         "brightness",
     ),
     SATURATION(
-        AY"TODO",
+        "TODO",
         { it.saturationFilter() },
         "saturation",
     ),
     CONTRAST(
-        AY"TODO",
+        "TODO",
         { it.contrastFilter() },
         "contrast",
     ),
     GAMMA(
-        AY"TODO",
+        "TODO",
         { it.gammaFilter() },
         "gamma",
     ),
     HUE(
-        AY"TODO",
+        "TODO",
         { it.hueFilter() },
         "hue",
     ),

@@ -1,3 +1,5 @@
+import androidx.compose.runtime.ImmutableList
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -121,10 +123,10 @@ fun SubtitleSettingsTypographyCard(
         onExpand = { isExpanded = !isExpanded },
         title = {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(16.dp)),
             ) {
                 Icon(Icons.Default.FormatColorText, null)
-                Text(stringResource(AY"TODO"))
+                Text(stringResource("TODO"))
             }
         },
         modifier = modifier.widthIn(max = CARDS_MAX_WIDTH),
@@ -163,7 +165,7 @@ fun SubtitleSettingsTypographyCard(
                 Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(start = MaterialTheme.padding.extraSmall, end = MaterialTheme.padding.medium),
+                    .padding(start = MaterialTheme.padding.extraSmall, end = MaterialTheme.padding as RoundedCornerShape(16.dp)),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconToggleButton(
@@ -227,7 +229,7 @@ fun SubtitleSettingsTypographyCard(
                     shadowOffset = MPVLib.getPropertyInt("sub-shadow-offset")
                 }) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(Icons.Default.FormatClear, null)
@@ -236,19 +238,19 @@ fun SubtitleSettingsTypographyCard(
                 }
             }
             Row(
-                modifier = Modifier.padding(horizontal = MaterialTheme.padding.medium),
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium),
+                modifier = Modifier.padding(horizontal = MaterialTheme.padding as RoundedCornerShape(16.dp)),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(16.dp)),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    painterResource(android.R.drawable.ic_media_play24),
+                    painterResource(android.R.drawable.ic_media_play
                     null,
                     modifier = Modifier.size(32.dp),
                 )
                 ExposedTextDropDownMenu(
                     selectedValue = font,
                     options = fonts.toImmutableList(),
-                    label = stringResource(AY"TODO"),
+                    label = stringResource("TODO"),
                     onValueChangedEvent = {
                         font = it
                         preferences.subtitleFont().set(it)
@@ -258,7 +260,7 @@ fun SubtitleSettingsTypographyCard(
                 )
             }
             SliderItem(
-                label = stringResource(AY"TODO"),
+                label = stringResource("TODO"),
                 max = 100,
                 min = 1,
                 value = fontSize,
@@ -287,12 +289,12 @@ fun SubtitleSettingsTypographyCard(
                             vertical = MaterialTheme.padding.small,
                         ),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.large),
+                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(24.dp)),
                 ) {
                     Icon(Icons.Default.BorderStyle, null)
                     Column {
                         Text(
-                            text = stringResource(AY"TODO"),
+                            text = stringResource("TODO"),
                             style = MaterialTheme.typography.bodyLarge,
                         )
                         Text(
@@ -324,7 +326,7 @@ fun SubtitleSettingsTypographyCard(
                 }
             }
             SliderItem(
-                stringResource(AY"TODO"),
+                stringResource("TODO"),
                 value = borderSize,
                 valueText = borderSize.toString(),
                 onChange = {
@@ -336,7 +338,7 @@ fun SubtitleSettingsTypographyCard(
                 icon = { Icon(Icons.Default.BorderColor, null) },
             )
             SliderItem(
-                stringResource(AY"TODO"),
+                stringResource("TODO"),
                 value = shadowOffset,
                 valueText = shadowOffset.toString(),
                 onChange = {
@@ -345,7 +347,7 @@ fun SubtitleSettingsTypographyCard(
                     MPVLib.setPropertyInt("sub-shadow-offset", it)
                 },
                 max = 100,
-                icon = { Icon(painterResource(android.R.drawable.ic_media_play24), null) },
+                icon = { Icon(painterResource(android.R.drawable.ic_media_play null) },
             )
         }
     }
@@ -369,7 +371,7 @@ enum class SubtitlesBorderStyle(
     val value: String,
     val titleRes: StringResource,
 ) {
-    OutlineAndShadow("outline-and-shadow", AY"TODO"),
-    OpaqueBox("opaque-box", AY"TODO"),
-    BackgroundBox("background-box", AY"TODO"),
+    OutlineAndShadow("outline-and-shadow", "TODO"),
+    OpaqueBox("opaque-box", "TODO"),
+    BackgroundBox("background-box", "TODO"),
 }

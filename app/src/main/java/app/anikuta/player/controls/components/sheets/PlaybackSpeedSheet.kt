@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -71,12 +72,12 @@ fun PlaybackSpeedSheet(
         Column(
             modifier
                 .verticalScroll(rememberScrollState())
-                .padding(vertical = MaterialTheme.padding.medium),
+                .padding(vertical = MaterialTheme.padding as RoundedCornerShape(16.dp)),
         ) {
             SliderItem(
-                label = stringResource(AY"TODO"),
+                label = stringResource("TODO"),
                 value = speed,
-                valueText = stringResource(AY"TODO", speed),
+                valueText = stringResource("TODO", speed),
                 onChange = onSpeedChange,
                 max = 6f,
                 min = 0.01f,
@@ -85,9 +86,9 @@ fun PlaybackSpeedSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = MaterialTheme.padding.medium),
+                    .padding(horizontal = MaterialTheme.padding as RoundedCornerShape(16.dp)),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(16.dp)),
             ) {
                 FilledTonalIconButton(onClick = {
                     preferences.speedPresets().delete()
@@ -97,7 +98,7 @@ fun PlaybackSpeedSheet(
                 LazyRow(
                     modifier = Modifier
                         .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
                 ) {
                     items(
                         playbackSpeedPresets.map { it.toFloat() }.sorted(),
@@ -106,7 +107,7 @@ fun PlaybackSpeedSheet(
                         InputChip(
                             selected = speed == it,
                             onClick = { onSpeedChange(it) },
-                            label = { Text(stringResource(AY"TODO", it)) },
+                            label = { Text(stringResource("TODO", it)) },
                             modifier = Modifier
                                 .animateItem(),
                             trailingIcon = {
@@ -143,9 +144,9 @@ fun PlaybackSpeedSheet(
                     Column(
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(text = stringResource(AY"TODO"))
+                        Text(text = stringResource("TODO"))
                         Text(
-                            text = stringResource(AY"TODO"),
+                            text = stringResource("TODO"),
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
@@ -153,14 +154,14 @@ fun PlaybackSpeedSheet(
             )
             Row(
                 modifier = Modifier
-                    .padding(horizontal = MaterialTheme.padding.medium),
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                    .padding(horizontal = MaterialTheme.padding as RoundedCornerShape(16.dp)),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
             ) {
                 Button(
                     modifier = Modifier.weight(1f),
                     onClick = { preferences.playerSpeed().set(speed) },
                 ) {
-                    Text(text = stringResource(AY"TODO"))
+                    Text(text = stringResource("TODO"))
                 }
                 FilledIconButton(
                     onClick = {

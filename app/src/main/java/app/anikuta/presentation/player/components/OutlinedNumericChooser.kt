@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -55,7 +56,7 @@ fun OutlinedNumericChooser(
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
     ) {
         RepeatingIconButton(onClick = { onChange(value - step) }) {
             Icon(Icons.Filled.RemoveCircle, null)
@@ -81,8 +82,8 @@ fun OutlinedNumericChooser(
             },
             isError = value > max || value < min,
             supportingText = {
-                if (value > max) Text(stringResource(AY"TODO"))
-                if (value < min) Text(stringResource(AY"TODO"))
+                if (value > max) Text(stringResource("TODO"))
+                if (value < min) Text(stringResource("TODO"))
             },
             suffix = suffix,
             modifier = Modifier.weight(1f),
@@ -109,7 +110,7 @@ fun OutlinedNumericChooser(
     Row(
         modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
     ) {
         RepeatingIconButton(onClick = { onChange(value - step) }) {
             Icon(Icons.Filled.RemoveCircle, null)
@@ -136,8 +137,8 @@ fun OutlinedNumericChooser(
             },
             isError = value > max || value < min,
             supportingText = {
-                if (value > max) Text(stringResource(AY"TODO"))
-                if (value < min) Text(stringResource(AY"TODO"))
+                if (value > max) Text(stringResource("TODO"))
+                if (value < min) Text(stringResource("TODO"))
             },
             modifier = Modifier.weight(1f),
             maxLines = 1,

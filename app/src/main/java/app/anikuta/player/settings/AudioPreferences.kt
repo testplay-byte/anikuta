@@ -19,9 +19,9 @@ class AudioPreferences(
 }
 
 enum class AudioChannels(val titleRes: StringResource, val property: String, val value: String) {
-    Auto(AY"TODO", "audio-channels", "auto-safe"),
-    AutoSafe(AY"TODO", "audio-channels", "auto"),
-    Mono(AY"TODO", "audio-channels", "mono"),
-    Stereo(AY"TODO", "audio-channels", "stereo"),
-    ReverseStereo(AY"TODO", "af", "pan=[stereo|c0=c1|c1=c0]"),
+    Auto("TODO", "audio-channels", "auto-safe"),
+    AutoSafe("TODO", "audio-channels", "auto"),
+    Mono("TODO", "audio-channels", "mono"),
+    Stereo("TODO", "audio-channels", "stereo"),
+    ReverseStereo("TODO", "af", "pan=[stereo|c0=c1|c1=c0]"),
 }

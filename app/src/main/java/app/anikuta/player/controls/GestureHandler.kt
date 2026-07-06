@@ -1,3 +1,4 @@
+import androidx.lifecycle.viewmodel.compose.viewModel
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -331,7 +332,7 @@ fun DoubleTapToSeekOvals(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         DoubleTapSeekTriangles(isForward = amount > 0)
                         Text(
-                            text = text ?: pluralStringResource(AYMR.plurals.seconds, amount, amount),
+                            text = text ?: pluralStringResource("seconds", amount, amount),
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center,
                             color = Color.White,

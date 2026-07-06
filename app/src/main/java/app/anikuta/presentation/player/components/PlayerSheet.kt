@@ -1,3 +1,4 @@
+import androidx.compose.foundation.shape.RoundedCornerShape
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -174,7 +175,7 @@ fun PlayerSheet(
                     WindowInsets.systemBars
                         .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
                 ),
-            shape = MaterialTheme.shapes.extraLarge.copy(bottomEnd = ZeroCornerSize, bottomStart = ZeroCornerSize),
+            shape = RoundedCornerShape(32.dp).copy(bottomEnd = ZeroCornerSize, bottomStart = ZeroCornerSize),
             tonalElevation = tonalElevation,
             content = {
                 BackHandler(

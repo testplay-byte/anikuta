@@ -1,3 +1,5 @@
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -1007,7 +1009,7 @@ class PlayerActivity : BaseActivity() {
             when (switchMethod) {
                 null -> {
                     if (viewModel.currentAnime.value != null && !autoPlay) {
-                        launchUI { toast(AY"TODO") }
+                        launchUI { toast("TODO") }
                     }
                     viewModel.isLoading.update { _ -> false }
                 }
@@ -1018,7 +1020,7 @@ class PlayerActivity : BaseActivity() {
                             switchMethod.hosterList.isEmpty() -> setInitialEpisodeError(
                                 PlayerViewModel.ExceptionWithStringResource(
                                     "Hoster list is empty",
-                                    AY"TODO",
+                                    "TODO",
                                 ),
                             )
                             else -> {
@@ -1137,7 +1139,7 @@ class PlayerActivity : BaseActivity() {
 
         val intent = uri.toShareIntent(
             context = applicationContext,
-            message = stringResource(AY"TODO", anime.title, episode.name, seconds),
+            message = stringResource("TODO", anime.title, episode.name, seconds),
         )
         startActivity(Intent.createChooser(intent, stringResource("TODO")))
     }
@@ -1167,8 +1169,8 @@ class PlayerActivity : BaseActivity() {
                 SetAsArt.Success ->
                     when (artType) {
                         ArtType.Cover -> "TODO"
-                        ArtType.Background -> AY"TODO"
-                        ArtType.Thumbnail -> AY"TODO"
+                        ArtType.Background -> "TODO"
+                        ArtType.Thumbnail -> "TODO"
                     }
                 SetAsArt.AddToLibraryFirst -> "TODO"
                 SetAsArt.Error -> "TODO"
@@ -1301,7 +1303,7 @@ class PlayerActivity : BaseActivity() {
         }.toString().padStart(2, '0')
 
         val title = stringResource(
-            AY"TODO",
+            "TODO",
             anime.title,
             epNumber,
             episode.name,

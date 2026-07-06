@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -61,9 +62,9 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
     ExpandableCard(
         isExpanded,
         title = {
-            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(16.dp))) {
                 Icon(Icons.Default.Tune, null)
-                Text(stringResource(AY"TODO"))
+                Text(stringResource("TODO"))
             }
         },
         onExpand = { isExpanded = !isExpanded },
@@ -81,7 +82,7 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
                     preferences.overrideSubsASS().set(it)
                     MPVLib.setPropertyString("sub-ass-override", if (it) "force" else "scale")
                 },
-                content = { Text(stringResource(AY"TODO")) },
+                content = { Text(stringResource("TODO")) },
                 modifier = Modifier
                     .fillMaxWidth(),
             )
@@ -92,7 +93,7 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
                 mutableStateOf(MPVLib.getPropertyInt("sub-pos"))
             }
             SliderItem(
-                label = stringResource(AY"TODO"),
+                label = stringResource("TODO"),
                 value = subScale,
                 valueText = subScale.toFixed(2).toString(),
                 onChange = {
@@ -109,7 +110,7 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
                 },
             )
             SliderItem(
-                label = stringResource(AY"TODO"),
+                label = stringResource("TODO"),
                 value = subPos,
                 valueText = subPos.toString(),
                 onChange = {
@@ -128,7 +129,7 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(end = MaterialTheme.padding.medium, bottom = MaterialTheme.padding.medium),
+                    .padding(end = MaterialTheme.padding.medium, bottom = MaterialTheme.padding as RoundedCornerShape(16.dp)),
                 horizontalArrangement = Arrangement.End,
             ) {
                 TextButton(

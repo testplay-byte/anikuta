@@ -1,3 +1,5 @@
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.res.stringResource
 package app.anikuta.player.controls.components.dialogs
 
 import androidx.compose.foundation.layout.Arrangement
@@ -41,7 +43,7 @@ fun PlayerDialog(
         ),
     ) {
         Surface(
-            shape = MaterialTheme.shapes.large,
+            shape = RoundedCornerShape(24.dp),
             modifier = Modifier.fillMaxWidth(),
             tonalElevation = 1.dp,
         ) {

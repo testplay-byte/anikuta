@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -64,7 +65,7 @@ fun VideoFiltersPanel(
     ConstraintLayout(
         modifier = modifier
             .fillMaxSize()
-            .padding(MaterialTheme.padding.medium),
+            .padding(MaterialTheme.padding as RoundedCornerShape(16.dp)),
     ) {
         val filtersCard = createRef()
 
@@ -92,17 +93,17 @@ fun FiltersCard(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(start = MaterialTheme.padding.medium),
+                .padding(start = MaterialTheme.padding as RoundedCornerShape(16.dp)),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                stringResource(AY"TODO"),
+                stringResource("TODO"),
                 style = MaterialTheme.typography.headlineMedium,
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
             ) {
                 TextButton(
                     onClick = {
@@ -135,13 +136,13 @@ fun FiltersCard(
                 if (decoderPreferences.gpuNext().get()) return@item
                 Column(
                     modifier = Modifier
-                        .padding(MaterialTheme.padding.medium)
+                        .padding(MaterialTheme.padding as RoundedCornerShape(16.dp))
                         .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium),
+                    verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(16.dp)),
                     horizontalAlignment = Alignment.Start,
                 ) {
                     Icon(Icons.Outlined.Info, null)
-                    Text(stringResource(AY"TODO"))
+                    Text(stringResource("TODO"))
                 }
             }
         }

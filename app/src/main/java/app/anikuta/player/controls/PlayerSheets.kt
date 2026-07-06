@@ -1,3 +1,4 @@
+import androidx.compose.runtime.ImmutableList
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -21,7 +22,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
-import dev.vivvvek.seeker.Segment
+import dev.vivvvek.seeker.// TODO: Segment
 import app.anikuta.player.ArtType
 import app.anikuta.player.Decoder
 import app.anikuta.player.Panels
@@ -66,8 +67,8 @@ fun PlayerSheets(
     displayHosters: Pair<Boolean, Boolean>,
 
     // chapters sheet
-    chapter: Segment?,
-    chapters: ImmutableList<Segment>,
+    chapter: // TODO: Segment?,
+    chapters: ImmutableList<// TODO: Segment>,
     onSeekToChapter: (Int) -> Unit,
 
     // Decoders sheet

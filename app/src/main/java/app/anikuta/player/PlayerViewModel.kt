@@ -1,3 +1,6 @@
+import androidx.compose.runtime.ImmutableList
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -67,7 +70,7 @@ import app.anikuta.data.saver.Location
 import app.anikuta.data.track.TrackerManager
 import app.anikuta.data.track.anilist.Anilist
 import app.anikuta.data.track.myanimelist.MyAnimeList
-import app.anikuta.player.controls.components.IndexedSegment
+import app.anikuta.player.controls.components.Indexed// TODO: Segment
 import app.anikuta.player.controls.components.sheets.HosterState
 import app.anikuta.player.controls.components.sheets.getChangedAt
 import app.anikuta.player.loader.EpisodeLoader
@@ -231,9 +234,9 @@ class PlayerViewModel @JvmOverloads constructor(
     private val _currentVideo = MutableStateFlow<Video?>(null)
     val currentVideo = _currentVideo.asStateFlow()
 
-    private val _chapters = MutableStateFlow<List<IndexedSegment>>(emptyList())
+    private val _chapters = MutableStateFlow<List<Indexed// TODO: Segment>>(emptyList())
     val chapters = _chapters.asStateFlow()
-    private val _currentChapter = MutableStateFlow<IndexedSegment?>(null)
+    private val _currentChapter = MutableStateFlow<Indexed// TODO: Segment?>(null)
     val currentChapter = _currentChapter.asStateFlow()
     private val _skipIntroText = MutableStateFlow<String?>(null)
     val skipIntroText = _skipIntroText.asStateFlow()
@@ -339,7 +342,7 @@ class PlayerViewModel @JvmOverloads constructor(
                 delay(1000)
             }
             pause()
-            withContext(Dispatchers.Main) { Injekt.get<Application>().toast(AY"TODO") }
+            withContext(Dispatchers.Main) { Injekt.get<Application>().toast("TODO") }
         }
     }
 
@@ -457,13 +460,13 @@ class PlayerViewModel @JvmOverloads constructor(
     )
 
     fun loadChapters() {
-        val chapters = mutableListOf<IndexedSegment>()
+        val chapters = mutableListOf<Indexed// TODO: Segment>()
         val count = MPVLib.getPropertyInt("chapter-list/count")!!
         for (i in 0 until count) {
             val title = MPVLib.getPropertyString("chapter-list/$i/title")
             val time = MPVLib.getPropertyInt("chapter-list/$i/time")!!
             chapters.add(
-                IndexedSegment(
+                Indexed// TODO: Segment(
                     name = title,
                     start = time.toFloat(),
                     index = 0,
@@ -473,7 +476,7 @@ class PlayerViewModel @JvmOverloads constructor(
         updateChapters(chapters.sortedBy { it.start })
     }
 
-    fun updateChapters(chapters: List<IndexedSegment>) {
+    fun updateChapters(chapters: List<Indexed// TODO: Segment>) {
         _chapters.update { _ -> chapters }
     }
 
@@ -731,9 +734,9 @@ class PlayerViewModel @JvmOverloads constructor(
 
     fun setAutoPlay(value: Boolean) {
         val textRes = if (value) {
-            AY"TODO"
+            "TODO"
         } else {
-            AY"TODO"
+            "TODO"
         }
         playerUpdate.update { PlayerUpdates.ShowTextResource(textRes) }
         playerPreferences.autoplayEnabled().set(value)
@@ -957,12 +960,12 @@ class PlayerViewModel @JvmOverloads constructor(
 
     fun changeEpisode(previous: Boolean, autoPlay: Boolean = false) {
         if (previous && !hasPreviousEpisode.value) {
-            activity.showToast(activity.stringResource(AY"TODO"))
+            activity.showToast(activity.stringResource("TODO"))
             return
         }
 
         if (!previous && !hasNextEpisode.value) {
-            activity.showToast(activity.stringResource(AY"TODO"))
+            activity.showToast(activity.stringResource("TODO"))
             return
         }
 
@@ -1216,13 +1219,13 @@ class PlayerViewModel @JvmOverloads constructor(
                 )
 
                 val currentEp = currentEpisode.value
-                    ?: throw ExceptionWithStringResource("No episode loaded", AY"TODO")
+                    ?: throw ExceptionWithStringResource("No episode loaded", "TODO")
                 if (hostList.isNotBlank()) {
                     currentHosterList = hostList.toHosterList().ifEmpty {
                         currentHosterList = null
                         throw ExceptionWithStringResource(
                             "Hoster selected from empty list",
-                            AY"TODO",
+                            "TODO",
                         )
                     }
                     qualityIndex = Pair(hostIndex, vidIndex)
@@ -1232,7 +1235,7 @@ class PlayerViewModel @JvmOverloads constructor(
                         ?.also { currentHosterList = it }
                         ?: run {
                             currentHosterList = null
-                            throw ExceptionWithStringResource("Hoster list is empty", AY"TODO")
+                            throw ExceptionWithStringResource("Hoster list is empty", "TODO")
                         }
                 }
 
@@ -1357,7 +1360,7 @@ class PlayerViewModel @JvmOverloads constructor(
                     if (hasFoundPreferredVideo.compareAndSet(false, true)) {
                         val (hosterIdx, videoIdx) = HosterLoader.selectBestVideo(hosterState.value)
                         if (hosterIdx == -1) {
-                            throw ExceptionWithStringResource("No available videos", AY"TODO")
+                            throw ExceptionWithStringResource("No available videos", "TODO")
                         }
 
                         val video = (hosterState.value[hosterIdx] as HosterState.Ready).videoList[videoIdx]
@@ -1410,7 +1413,7 @@ class PlayerViewModel @JvmOverloads constructor(
                         _selectedHosterVideoIndex.update { _ -> Pair(-1, -1) }
                         return false
                     } else {
-                        throw ExceptionWithStringResource("No available videos", AY"TODO")
+                        throw ExceptionWithStringResource("No available videos", "TODO")
                     }
                 }
 
@@ -1515,7 +1518,7 @@ class PlayerViewModel @JvmOverloads constructor(
             try {
                 val currentEpisode =
                     currentEpisode.value
-                        ?: throw ExceptionWithStringResource("No episode loaded", AY"TODO")
+                        ?: throw ExceptionWithStringResource("No episode loaded", "TODO")
                 currentHosterList = EpisodeLoader.getHosters(
                     currentEpisode.toDomainEpisode()!!,
                     anime,
@@ -1964,7 +1967,7 @@ class PlayerViewModel @JvmOverloads constructor(
                     if (waitingSkipIntro == defaultWaitingTime) {
                         activity.showToast(
                             "Skip Intro: ${activity.stringResource(
-                                AY"TODO",
+                                "TODO",
                                 chapter.name,
                                 waitingSkipIntro,
                             )}",
@@ -1975,7 +1978,7 @@ class PlayerViewModel @JvmOverloads constructor(
                 } else if (autoSkip) {
                     seekToWithText(
                         seekValue = nextChapterPos.toInt(),
-                        text = activity.stringResource(AY"TODO", chapter.name),
+                        text = activity.stringResource("TODO", chapter.name),
                     )
                 } else {
                     updateSkipIntroButton(chapter.chapterType)
@@ -1990,21 +1993,21 @@ class PlayerViewModel @JvmOverloads constructor(
         _skipIntroText.update { _ ->
             skipButtonString?.let {
                 activity.stringResource(
-                    AY"TODO",
+                    "TODO",
                     activity.stringResource(skipButtonString),
                 )
             }
         }
     }
 
-    private fun showSkipIntroButton(chapter: IndexedSegment, nextChapterPos: Float, waitingTime: Int) {
+    private fun showSkipIntroButton(chapter: Indexed// TODO: Segment, nextChapterPos: Float, waitingTime: Int) {
         if (waitingTime > -1) {
             if (waitingTime > 0) {
-                _skipIntroText.update { _ -> activity.stringResource(AY"TODO") }
+                _skipIntroText.update { _ -> activity.stringResource("TODO") }
             } else {
                 seekToWithText(
                     seekValue = nextChapterPos.toInt(),
-                    text = activity.stringResource(AY"TODO", chapter.name),
+                    text = activity.stringResource("TODO", chapter.name),
                 )
             }
         } else {
@@ -2025,12 +2028,12 @@ class PlayerViewModel @JvmOverloads constructor(
 
             seekToWithText(
                 seekValue = nextChapterPos.toInt(),
-                text = activity.stringResource(AY"TODO", chapter.name),
+                text = activity.stringResource("TODO", chapter.name),
             )
         }
     }
 
-    private fun getCurrentChapter(position: Float? = null): IndexedValue<IndexedSegment>? {
+    private fun getCurrentChapter(position: Float? = null): IndexedValue<Indexed// TODO: Segment>? {
         return chapters.value.withIndex()
             .filter { it.value.start <= (position ?: pos.value) }
             .maxByOrNull { it.value.start }

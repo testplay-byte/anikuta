@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 package app.anikuta.player.controls.components.sheets
 
 import androidx.compose.foundation.layout.Arrangement
@@ -52,8 +53,8 @@ fun ScreenshotSheet(
     ) {
         Column {
             Row(
-                modifier = Modifier.padding(top = MaterialTheme.padding.medium),
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                modifier = Modifier.padding(top = MaterialTheme.padding as RoundedCornerShape(16.dp)),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
             ) {
                 ActionButton(
                     modifier = Modifier.weight(1f),
@@ -63,14 +64,14 @@ fun ScreenshotSheet(
                 )
                 ActionButton(
                     modifier = Modifier.weight(1f),
-                    title = stringResource(AY"TODO"),
+                    title = stringResource("TODO"),
                     icon = Icons.Outlined.Photo,
                     onClick = { setArtTypeAs = ArtType.Background },
                 )
                 if (isLocalSource) {
                     ActionButton(
                         modifier = Modifier.weight(1f),
-                        title = stringResource(AY"TODO"),
+                        title = stringResource("TODO"),
                         icon = Icons.Outlined.Photo,
                         onClick = { setArtTypeAs = ArtType.Thumbnail },
                     )
@@ -97,10 +98,10 @@ fun ScreenshotSheet(
                 SwitchPreference(
                     value = showSubtitles,
                     onValueChange = onToggleShowSubtitles,
-                    modifier = Modifier.padding(bottom = MaterialTheme.padding.medium),
+                    modifier = Modifier.padding(bottom = MaterialTheme.padding as RoundedCornerShape(16.dp)),
                     content = {
                         Text(
-                            text = stringResource(AY"TODO"),
+                            text = stringResource("TODO"),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -113,7 +114,7 @@ fun ScreenshotSheet(
     if (setArtTypeAs != null) {
         PlayerDialog(
             title = stringResource("TODO"),
-            modifier = Modifier.fillMaxWidth(fraction = 0.6F).padding(MaterialTheme.padding.medium),
+            modifier = Modifier.fillMaxWidth(fraction = 0.6F).padding(MaterialTheme.padding as RoundedCornerShape(16.dp)),
             onConfirmRequest = {
                 onSetAsArt(setArtTypeAs!!) {
                     takeScreenshot(

@@ -146,7 +146,7 @@ fun BrightnessSlider(
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
     ) {
         Text(
             text = (brightness * 100).toInt().toString(),
@@ -185,7 +185,7 @@ fun VolumeSlider(
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
     ) {
         val boostVolume = mpvVolume - 100
         val (deviceVolumeString, boostVolumeString) = getVolumeSliderText(

@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -78,10 +79,10 @@ fun SubtitleSettingsColorsCard(
         onExpand = { isExpanded = !isExpanded },
         title = {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(16.dp)),
             ) {
                 Icon(Icons.Default.Palette, null)
-                Text(stringResource(AY"TODO"))
+                Text(stringResource("TODO"))
             }
         },
         modifier = modifier.widthIn(max = CARDS_MAX_WIDTH),
@@ -99,7 +100,7 @@ fun SubtitleSettingsColorsCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(start = MaterialTheme.padding.extraSmall, end = MaterialTheme.padding.medium),
+                    .padding(start = MaterialTheme.padding.extraSmall, end = MaterialTheme.padding as RoundedCornerShape(16.dp)),
             ) {
                 SubColorType.entries.forEach { type ->
                     IconToggleButton(
@@ -125,7 +126,7 @@ fun SubtitleSettingsColorsCard(
                     },
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(Icons.Default.FormatColorReset, null)
@@ -161,17 +162,17 @@ enum class SubColorType(
     val preference: (SubtitlePreferences) -> Preference<Int>,
 ) {
     Text(
-        AY"TODO",
+        "TODO",
         "sub-color",
         preference = SubtitlePreferences::textColorSubtitles,
     ),
     Border(
-        AY"TODO",
+        "TODO",
         "sub-border-color",
         preference = SubtitlePreferences::borderColorSubtitles,
     ),
     Background(
-        AY"TODO",
+        "TODO",
         "sub-back-color",
         preference = SubtitlePreferences::backgroundColorSubtitles,
     ),
@@ -213,7 +214,7 @@ fun SubtitlesColorPicker(
 ) {
     Column(modifier) {
         TintedSliderItem(
-            stringResource(AY"TODO"),
+            stringResource("TODO"),
             color.red,
             color.red.toString(),
             onChange = { onColorChange(color.copyAsArgb(red = it)) },
@@ -222,7 +223,7 @@ fun SubtitlesColorPicker(
         )
 
         TintedSliderItem(
-            stringResource(AY"TODO"),
+            stringResource("TODO"),
             color.green,
             color.green.toString(),
             onChange = { onColorChange(color.copyAsArgb(green = it)) },
@@ -231,7 +232,7 @@ fun SubtitlesColorPicker(
         )
 
         TintedSliderItem(
-            stringResource(AY"TODO"),
+            stringResource("TODO"),
             color.blue,
             color.blue.toString(),
             onChange = { onColorChange(color.copyAsArgb(blue = it)) },
@@ -240,7 +241,7 @@ fun SubtitlesColorPicker(
         )
 
         TintedSliderItem(
-            stringResource(AY"TODO"),
+            stringResource("TODO"),
             color.alpha,
             color.alpha.toString(),
             onChange = { onColorChange(color.copyAsArgb(alpha = it)) },

@@ -62,7 +62,7 @@ fun SliderItem(
                 vertical = MaterialTheme.padding.small,
             ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.large),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(24.dp)),
     ) {
         icon()
         Column(modifier = Modifier.weight(0.5f)) {
@@ -111,7 +111,7 @@ fun SliderItem(
                 vertical = MaterialTheme.padding.small,
             ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.large),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(24.dp)),
     ) {
         icon()
         Column(modifier = Modifier.weight(0.5f)) {
@@ -158,7 +158,7 @@ fun VerticalSliderItem(
                 horizontal = MaterialTheme.padding.medium,
                 vertical = MaterialTheme.padding.small,
             ),
-        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraLarge),
+        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(32.dp)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         icon()

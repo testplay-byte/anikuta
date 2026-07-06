@@ -61,7 +61,7 @@ fun TintedSliderItem(
                 vertical = MaterialTheme.padding.small,
             ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.large),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(24.dp)),
     ) {
         icon()
         Column(modifier = Modifier.weight(0.5f)) {

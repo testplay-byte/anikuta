@@ -45,13 +45,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.vivvvek.seeker.Segment
+import dev.vivvvek.seeker.// TODO: Segment
 import `is`.xyz.mpv.Utils
 import tachiyomi.presentation.core.components.material.padding
 
 @Composable
 fun CurrentChapter(
-    chapter: Segment,
+    chapter: // TODO: Segment,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
 ) {
@@ -60,7 +60,7 @@ fun CurrentChapter(
             .clip(RoundedCornerShape(25))
             .background(MaterialTheme.colorScheme.background.copy(alpha = 0.6F))
             .clickable(onClick = onClick)
-            .padding(horizontal = MaterialTheme.padding.mediumSmall, vertical = MaterialTheme.padding.small),
+            .padding(horizontal = MaterialTheme.padding.mediumSmall, vertical = MaterialTheme.padding as RoundedCornerShape(8.dp)),
     ) {
         AnimatedContent(
             targetState = chapter,
@@ -79,13 +79,13 @@ fun CurrentChapter(
         ) { currentChapter ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
             ) {
                 Icon(
                     imageVector = Icons.Default.Bookmarks,
                     contentDescription = null,
                     modifier = Modifier
-                        .padding(end = MaterialTheme.padding.extraSmall)
+                        .padding(end = MaterialTheme.padding as RoundedCornerShape(4.dp))
                         .size(16.dp),
                     tint = MaterialTheme.colorScheme.onBackground,
                 )

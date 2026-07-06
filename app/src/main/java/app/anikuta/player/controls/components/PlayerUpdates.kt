@@ -41,7 +41,7 @@ fun PlayerUpdate(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(Color.Black.copy(0.4f))
-            .padding(vertical = MaterialTheme.padding.small, horizontal = MaterialTheme.padding.medium)
+            .padding(vertical = MaterialTheme.padding.small, horizontal = MaterialTheme.padding as RoundedCornerShape(16.dp))
             .animateContentSize(),
         contentAlignment = Alignment.Center,
     ) { content() }

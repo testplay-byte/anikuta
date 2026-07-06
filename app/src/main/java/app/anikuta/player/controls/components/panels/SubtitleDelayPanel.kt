@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -81,7 +82,7 @@ fun SubtitleDelayPanel(
     ConstraintLayout(
         modifier = modifier
             .fillMaxSize()
-            .padding(MaterialTheme.padding.medium),
+            .padding(MaterialTheme.padding as RoundedCornerShape(16.dp)),
     ) {
         val delayControlCard = createRef()
 
@@ -173,7 +174,7 @@ fun SubtitleDelayCard(
             when (affectedSubtitle) {
                 SubtitleDelayType.Primary -> {
                     OutlinedNumericChooser(
-                        label = { Text(stringResource(AY"TODO")) },
+                        label = { Text(stringResource("TODO")) },
                         value = speed,
                         onChange = onSpeedChange,
                         max = 10f,
@@ -193,9 +194,9 @@ fun SubtitleDelayCard(
 enum class SubtitleDelayType(
     val title: StringResource,
 ) {
-    Primary(AY"TODO"),
-    Secondary(AY"TODO"),
-    Both(AY"TODO"),
+    Primary("TODO"),
+    Secondary("TODO"),
+    Both("TODO"),
 }
 
 @Suppress("LambdaParameterInRestartableEffect") // Intentional
@@ -223,17 +224,17 @@ fun DelayCard(
                     horizontal = MaterialTheme.padding.medium,
                     vertical = MaterialTheme.padding.small,
                 ),
-            verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+            verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
         ) {
             title()
             OutlinedNumericChooser(
-                label = { Text(stringResource(AY"TODO")) },
+                label = { Text(stringResource("TODO")) },
                 value = delay,
                 onChange = onDelayChange,
                 step = 50,
                 min = Int.MIN_VALUE,
                 max = Int.MAX_VALUE,
-                suffix = { Text(stringResource(AY"TODO")) },
+                suffix = { Text(stringResource("TODO")) },
             )
             Column(
                 modifier = Modifier.animateContentSize(),
@@ -241,7 +242,7 @@ fun DelayCard(
             // true (heard -> spotted), false (spotted -> heard)
             var isDirectionPositive by remember { mutableStateOf<Boolean?>(null) }
             Row(
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
             ) {
                 var timerStart by remember { mutableStateOf<Long?>(null) }
                 var finalDelay by remember { mutableIntStateOf(delay) }
@@ -270,9 +271,9 @@ fun DelayCard(
                     Text(
                         stringResource(
                             if (delayType == DelayType.Audio) {
-                                AY"TODO"
+                                "TODO"
                             } else {
-                                AY"TODO"
+                                "TODO"
                             },
                         ),
                     )
@@ -287,23 +288,23 @@ fun DelayCard(
                     Text(
                         stringResource(
                             if (delayType == DelayType.Audio) {
-                                AY"TODO"
+                                "TODO"
                             } else {
-                                AY"TODO"
+                                "TODO"
                             },
                         ),
                     )
                 }
             }
             Row(
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
             ) {
                 Button(
                     onClick = onApply,
                     modifier = Modifier.weight(1f),
                     enabled = isDirectionPositive == null,
                 ) {
-                    Text(stringResource(AY"TODO"))
+                    Text(stringResource("TODO"))
                 }
                 FilledIconButton(
                     onClick = onReset,
@@ -325,11 +326,11 @@ fun SubtitleDelayTitle(
 ) {
     Row(
         verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
         modifier = modifier.fillMaxWidth(),
     ) {
         Text(
-            stringResource(AY"TODO"),
+            stringResource("TODO"),
             style = MaterialTheme.typography.headlineMedium,
         )
         var showDropDownMenu by remember { mutableStateOf(false) }

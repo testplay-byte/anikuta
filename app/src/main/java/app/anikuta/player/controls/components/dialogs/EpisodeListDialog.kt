@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 package app.anikuta.player.controls.components.dialogs
 
 import androidx.compose.foundation.clickable
@@ -65,7 +66,7 @@ fun EpisodeListDialog(
     val episodeListState = rememberLazyListState(initialFirstVisibleItemIndex = itemScrollIndex)
 
     PlayerDialog(
-        title = stringResource(AY"TODO"),
+        title = stringResource("TODO"),
         modifier = Modifier.fillMaxHeight(fraction = 0.8F).fillMaxWidth(fraction = 0.8F),
         onDismissRequest = onDismissRequest,
     ) {
@@ -86,7 +87,7 @@ fun EpisodeListDialog(
 
                     val title = if (displayMode == Anime.EPISODE_DISPLAY_NUMBER) {
                         stringResource(
-                            AY"TODO",
+                            "TODO",
                             formatEpisodeNumber(episode.episode_number.toDouble()),
                         )
                     } else {
@@ -167,7 +168,7 @@ private fun EpisodeListItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = { onEpisodeClicked(episode.id) })
-            .padding(vertical = MaterialTheme.padding.extraSmall),
+            .padding(vertical = MaterialTheme.padding as RoundedCornerShape(4.dp)),
     ) {
         IconButton(onClick = { clickBookmark(!isBookmarked) }) {
             Icon(

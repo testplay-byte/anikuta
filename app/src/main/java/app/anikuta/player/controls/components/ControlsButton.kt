@@ -119,7 +119,7 @@ fun ControlsButton(
                 interactionSource,
                 ripple(),
             )
-            .padding(MaterialTheme.padding.medium),
+            .padding(MaterialTheme.padding as RoundedCornerShape(16.dp)),
     ) {
         Text(
             text,
@@ -140,7 +140,7 @@ fun FilledControlsButton(
     val clickEvent = LocalPlayerButtonsClickEvent.current
 
     Box(
-        modifier = modifier.padding(end = MaterialTheme.padding.small),
+        modifier = modifier.padding(end = MaterialTheme.padding as RoundedCornerShape(8.dp)),
     ) {
         Button(onClick = {}) {
             Text(text = text)

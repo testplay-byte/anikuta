@@ -54,7 +54,7 @@ fun TopLeftPlayerControls(
             onClick = onBackClick,
         )
         Column(
-            verticalArrangement = Arrangement.spacedBy(-MaterialTheme.padding.extraSmall),
+            verticalArrangement = Arrangement.spacedBy(-MaterialTheme.padding as RoundedCornerShape(4.dp)),
             modifier = Modifier
                 .clickable(onClick = onTitleClick),
         ) {

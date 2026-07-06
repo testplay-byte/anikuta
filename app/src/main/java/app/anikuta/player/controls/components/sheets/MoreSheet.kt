@@ -1,3 +1,6 @@
+import androidx.compose.runtime.ImmutableList
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -103,9 +106,9 @@ fun MoreSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(MaterialTheme.padding.medium)
+                .padding(MaterialTheme.padding as RoundedCornerShape(16.dp))
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+            verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -113,27 +116,27 @@ fun MoreSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = stringResource(AY"TODO"),
+                    text = stringResource("TODO"),
                     style = MaterialTheme.typography.headlineMedium,
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
                 ) {
                     var isSleepTimerDialogShown by remember { mutableStateOf(false) }
                     TextButton(onClick = { isSleepTimerDialogShown = true }) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
                         ) {
                             Icon(imageVector = Icons.Outlined.Timer, contentDescription = null)
                             Text(
                                 text =
                                 if (remainingTime == 0) {
-                                    stringResource(AY"TODO")
+                                    stringResource("TODO")
                                 } else {
                                     stringResource(
-                                        AY"TODO",
+                                        "TODO",
                                         DateUtils.formatElapsedTime(remainingTime.toLong()),
                                     )
                                 },
@@ -150,18 +153,18 @@ fun MoreSheet(
                     TextButton(onClick = onEnterFiltersPanel) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
                         ) {
                             Icon(imageVector = Icons.Default.Tune, contentDescription = null)
-                            Text(text = stringResource(AY"TODO"))
+                            Text(text = stringResource("TODO"))
                         }
                     }
                 }
             }
 
-            Text(stringResource(AY"TODO"))
+            Text(stringResource("TODO"))
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
             ) {
                 items(Decoder.entries.minus(Decoder.Auto)) { decoder ->
                     FilterChip(
@@ -172,9 +175,9 @@ fun MoreSheet(
                 }
             }
 
-            Text(stringResource(AY"TODO"))
+            Text(stringResource("TODO"))
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
             ) {
                 items(6) { page ->
                     FilterChip(
@@ -184,9 +187,9 @@ fun MoreSheet(
                                     if (page ==
                                         0
                                     ) {
-                                        AY"TODO"
+                                        "TODO"
                                     } else {
-                                        AY"TODO"
+                                        "TODO"
                                     },
                                     page,
                                 ),
@@ -207,10 +210,10 @@ fun MoreSheet(
             }
 
             if (customButtons.isNotEmpty()) {
-                Text(text = stringResource(AY"TODO"))
+                Text(text = stringResource("TODO"))
                 FlowRow(
                     verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.mediumSmall),
-                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
                     maxItemsInEachRow = Int.MAX_VALUE,
                 ) {
                     customButtons.forEach { button ->
@@ -238,10 +241,10 @@ fun MoreSheet(
                     }
                 }
             }
-            Text(text = stringResource(AY"TODO"))
+            Text(text = stringResource("TODO"))
             val audioChannels by audioPreferences.audioChannels().collectAsState()
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
             ) {
                 items(AudioChannels.entries) {
                     FilterChip(
@@ -276,24 +279,24 @@ fun TimePickerDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            shape = MaterialTheme.shapes.medium,
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
-            modifier = modifier.padding(MaterialTheme.padding.medium),
+            modifier = modifier.padding(MaterialTheme.padding as RoundedCornerShape(16.dp)),
         ) {
             Column(
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
                     .width(IntrinsicSize.Max)
                     .animateContentSize()
-                    .padding(MaterialTheme.padding.medium),
+                    .padding(MaterialTheme.padding as RoundedCornerShape(16.dp)),
             ) {
                 var currentLayoutType by rememberSaveable { mutableIntStateOf(0) }
                 Text(
                     text = stringResource(
                         if (currentLayoutType == 1) {
-                            AY"TODO"
+                            "TODO"
                         } else {
-                            AY"TODO"
+                            "TODO"
                         },
                     ),
                 )
@@ -334,7 +337,7 @@ fun TimePickerDialog(
                                 onTimeSelect(0)
                                 onDismissRequest()
                             }) {
-                                Text(stringResource(AY"TODO"))
+                                Text(stringResource("TODO"))
                             }
                         }
                         Spacer(modifier = Modifier.width(8.dp))

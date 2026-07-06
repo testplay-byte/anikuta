@@ -1,3 +1,5 @@
+import androidx.compose.runtime.ImmutableList
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -83,15 +85,15 @@ fun AddTrackRow(
             .clickable(onClick = onClick)
             .height(48.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
     ) {
         Row(
             modifier = Modifier
                 .clickable(onClick = onClick)
                 .fillMaxHeight()
                 .weight(1f)
-                .padding(start = MaterialTheme.padding.medium),
-            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                .padding(start = MaterialTheme.padding as RoundedCornerShape(16.dp)),
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -113,18 +115,18 @@ fun getTrackTitle(track: VideoTrack): String {
         }
 
         track.language.isNullOrBlank() && track.name.isNotBlank() -> {
-            stringResource(AY"TODO", track.id, track.name)
+            stringResource("TODO", track.id, track.name)
         }
 
         !track.language.isNullOrBlank() && track.name.isNotBlank() -> {
-            stringResource(AY"TODO", track.id, track.name, track.language)
+            stringResource("TODO", track.id, track.name, track.language)
         }
 
         !track.language.isNullOrBlank() && track.name.isBlank() -> {
-            stringResource(AY"TODO", track.id, track.language)
+            stringResource("TODO", track.id, track.language)
         }
 
-        else -> stringResource(AY"TODO", track.id, track.name)
+        else -> stringResource("TODO", track.id, track.name)
     }
 }
 
@@ -151,7 +153,7 @@ fun TrackSheetTitle(
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
         ) {
             actions()
         }

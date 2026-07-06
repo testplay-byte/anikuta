@@ -1,3 +1,6 @@
+import androidx.compose.runtime.ImmutableList
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -166,7 +169,7 @@ fun PlayerControls(
                         ),
                         alpha = transparentOverlay,
                     )
-                    .padding(horizontal = MaterialTheme.padding.medium),
+                    .padding(horizontal = MaterialTheme.padding as RoundedCornerShape(16.dp)),
             ) {
                 val (topLeftControls, topRightControls) = createRefs()
                 val (volumeSlider, brightnessSlider) = createRefs()
@@ -220,9 +223,9 @@ fun PlayerControls(
                     },
                     modifier = Modifier.constrainAs(brightnessSlider) {
                         if (swapVolumeAndBrightness) {
-                            start.linkTo(parent.start, spacing.medium)
+                            start.linkTo(parent.start, spacing as RoundedCornerShape(16.dp))
                         } else {
-                            end.linkTo(parent.end, spacing.medium)
+                            end.linkTo(parent.end, spacing as RoundedCornerShape(16.dp))
                         }
                         top.linkTo(parent.top)
                         bottom.linkTo(parent.bottom)
@@ -261,9 +264,9 @@ fun PlayerControls(
                     },
                     modifier = Modifier.constrainAs(volumeSlider) {
                         if (swapVolumeAndBrightness) {
-                            end.linkTo(parent.end, spacing.medium)
+                            end.linkTo(parent.end, spacing as RoundedCornerShape(16.dp))
                         } else {
-                            start.linkTo(parent.start, spacing.medium)
+                            start.linkTo(parent.start, spacing as RoundedCornerShape(16.dp))
                         }
                         top.linkTo(parent.top)
                         bottom.linkTo(parent.bottom)
@@ -316,8 +319,8 @@ fun PlayerControls(
                     enter = fadeIn(),
                     exit = fadeOut(),
                     modifier = Modifier.constrainAs(unlockControlsButton) {
-                        top.linkTo(parent.top, spacing.medium)
-                        start.linkTo(parent.start, spacing.medium)
+                        top.linkTo(parent.top, spacing as RoundedCornerShape(16.dp))
+                        start.linkTo(parent.start, spacing as RoundedCornerShape(16.dp))
                     },
                 ) {
                     ControlsButton(
@@ -372,7 +375,7 @@ fun PlayerControls(
                         fadeOut(playerControlsExitAnimationSpec())
                     },
                     modifier = Modifier.constrainAs(seekbar) {
-                        bottom.linkTo(parent.bottom, spacing.medium)
+                        bottom.linkTo(parent.bottom, spacing as RoundedCornerShape(16.dp))
                     },
                 ) {
                     val invertDuration by playerPreferences.invertDuration().collectAsState()
@@ -391,7 +394,7 @@ fun PlayerControls(
                         timersInverted = Pair(false, invertDuration),
                         durationTimerOnCLick = { playerPreferences.invertDuration().set(!invertDuration) },
                         positionTimerOnClick = {},
-                        chapters = chapters.map { it.toSegment() }.toImmutableList(),
+                        chapters = chapters.map { it.to// TODO: Segment() }.toImmutableList(),
                     )
                 }
                 val mediaTitle by viewModel.mediaTitle.collectAsState()
@@ -411,7 +414,7 @@ fun PlayerControls(
                         fadeOut(playerControlsExitAnimationSpec())
                     },
                     modifier = Modifier.constrainAs(topLeftControls) {
-                        top.linkTo(parent.top, spacing.medium)
+                        top.linkTo(parent.top, spacing as RoundedCornerShape(16.dp))
                         start.linkTo(parent.start)
                         width = Dimension.fillToConstraints
                         end.linkTo(topRightControls.start)
@@ -442,7 +445,7 @@ fun PlayerControls(
                         fadeOut(playerControlsExitAnimationSpec())
                     },
                     modifier = Modifier.constrainAs(topRightControls) {
-                        top.linkTo(parent.top, spacing.medium)
+                        top.linkTo(parent.top, spacing as RoundedCornerShape(16.dp))
                         end.linkTo(parent.end)
                     },
                 ) {
@@ -529,7 +532,7 @@ fun PlayerControls(
                 ) {
                     BottomLeftPlayerControls(
                         playbackSpeed,
-                        currentChapter = currentChapter?.toSegment(),
+                        currentChapter = currentChapter?.to// TODO: Segment(),
                         onLockControls = viewModel::lockControls,
                         onCycleRotation = viewModel::cycleScreenRotations,
                         onPlaybackSpeedChange = {
@@ -579,8 +582,8 @@ fun PlayerControls(
             onClickVideo = viewModel::onVideoClicked,
             displayHosters = Pair(showFailedHosters, emptyHosters),
 
-            chapter = currentChapter?.toSegment(),
-            chapters = chapters.map { it.toSegment() }.toImmutableList(),
+            chapter = currentChapter?.to// TODO: Segment(),
+            chapters = chapters.map { it.to// TODO: Segment() }.toImmutableList(),
             onSeekToChapter = {
                 viewModel.selectChapter(it)
                 viewModel.dismissSheet()

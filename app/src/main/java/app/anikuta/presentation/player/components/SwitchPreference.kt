@@ -40,7 +40,7 @@ fun SwitchPreference(
     Row(
         modifier = modifier
             .toggleable(value, true, Role.Switch, onValueChange)
-            .padding(horizontal = MaterialTheme.padding.large, vertical = MaterialTheme.padding.small)
+            .padding(horizontal = MaterialTheme.padding.large, vertical = MaterialTheme.padding as RoundedCornerShape(8.dp))
             .fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,

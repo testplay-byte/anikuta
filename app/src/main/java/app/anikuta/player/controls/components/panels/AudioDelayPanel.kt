@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -57,7 +58,7 @@ fun AudioDelayPanel(
     ConstraintLayout(
         modifier = modifier
             .fillMaxSize()
-            .padding(MaterialTheme.padding.medium),
+            .padding(MaterialTheme.padding as RoundedCornerShape(16.dp)),
     ) {
         val delayControlCard = createRef()
 
@@ -91,7 +92,7 @@ fun AudioDelayCardTitle(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            stringResource(AY"TODO"),
+            stringResource("TODO"),
             style = MaterialTheme.typography.headlineMedium,
         )
         IconButton(onClose) {

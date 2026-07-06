@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -39,8 +40,8 @@ fun createPipActions(
     if (replaceWithPrevious) {
         createPipAction(
             context,
-            android.R.drawable.ic_media_play24dp,
-            AY"TODO",
+            android.R.drawable.ic_media_play
+            "TODO",
             PIP_PREVIOUS,
             PIP_PREVIOUS,
             playlistPosition != 0,
@@ -48,8 +49,8 @@ fun createPipActions(
     } else {
         createPipAction(
             context,
-            android.R.drawable.ic_media_play10_24dp,
-            AY"TODO"10,
+            android.R.drawable.ic_media_play
+            "TODO"10,
             PIP_SKIP,
             PIP_SKIP,
         )
@@ -57,15 +58,15 @@ fun createPipActions(
     if (isPaused) {
         createPipAction(
             context,
-            android.R.drawable.ic_media_play24dp,
-            AY"TODO",
+            android.R.drawable.ic_media_play
+            "TODO",
             PIP_PLAY,
             PIP_PLAY,
         )
     } else {
         createPipAction(
             context,
-            android.R.drawable.ic_media_play24dp,
+            android.R.drawable.ic_media_play
             "TODO",
             PIP_PAUSE,
             PIP_PAUSE,
@@ -73,8 +74,8 @@ fun createPipActions(
     },
     createPipAction(
         context,
-        android.R.drawable.ic_media_play24dp,
-        AY"TODO",
+        android.R.drawable.ic_media_play
+        "TODO",
         PIP_NEXT,
         PIP_NEXT,
         playlistPosition != playlistCount - 1,

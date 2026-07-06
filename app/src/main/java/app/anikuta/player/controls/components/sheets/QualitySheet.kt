@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 package app.anikuta.player.controls.components.sheets
 
 import androidx.compose.animation.AnimatedVisibility
@@ -93,7 +94,7 @@ fun QualitySheet(
     ) {
         Column {
             Text(
-                text = stringResource(AY"TODO"),
+                text = stringResource("TODO"),
                 style = MaterialTheme.typography.headlineMedium,
                 modifier = Modifier.padding(
                     top = MaterialTheme.padding.medium,
@@ -110,7 +111,7 @@ fun QualitySheet(
                 Box(
                     modifier = modifier
                         .fillMaxWidth()
-                        .padding(vertical = MaterialTheme.padding.medium),
+                        .padding(vertical = MaterialTheme.padding as RoundedCornerShape(16.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator()
@@ -297,19 +298,19 @@ fun HosterTrack(
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(end = MaterialTheme.padding.small),
+            modifier = Modifier.padding(end = MaterialTheme.padding as RoundedCornerShape(8.dp)),
         )
 
         when (hoster) {
             is HosterState.Idle -> {
                 Text(
-                    text = stringResource(AY"TODO"),
+                    text = stringResource("TODO"),
                     modifier = Modifier.alpha(DISABLED_ALPHA),
                 )
             }
             is HosterState.Error -> {
                 Text(
-                    text = stringResource(AY"TODO"),
+                    text = stringResource("TODO"),
                     modifier = Modifier.alpha(DISABLED_ALPHA),
                 )
                 Spacer(modifier = Modifier.weight(1f))
@@ -325,7 +326,7 @@ fun HosterTrack(
             is HosterState.Ready -> {
                 Text(
                     text = pluralStringResource(
-                        AYMR.plurals.hoster_video_count,
+                        "hoster_video_count",
                         hoster.videoList.size,
                         hoster.videoList.size,
                     ),
@@ -356,7 +357,7 @@ fun VideoTrack(
             .fillMaxWidth()
             .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
     ) {
         if (noHoster) {
             VideoText(

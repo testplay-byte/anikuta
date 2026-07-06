@@ -1,3 +1,5 @@
+import androidx.compose.runtime.ImmutableList
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -55,22 +57,22 @@ fun AudioTracksSheet(
         onDismissRequest = onDismissRequest,
         header = {
             TrackSheetTitle(
-                title = stringResource(AY"TODO"),
+                title = stringResource("TODO"),
                 actions = {
                     TextButton(onClick = onOpenDelayPanel) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
                         ) {
                             Icon(imageVector = Icons.Default.MoreTime, contentDescription = null)
-                            Text(text = stringResource(AY"TODO"))
+                            Text(text = stringResource("TODO"))
                         }
                     }
                 },
             )
 
             AddTrackRow(
-                title = stringResource(AY"TODO"),
+                title = stringResource("TODO"),
                 onClick = onAddAudioTrack,
             )
         },
@@ -96,9 +98,9 @@ fun AudioTrackRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(start = MaterialTheme.padding.small, end = MaterialTheme.padding.medium),
+            .padding(start = MaterialTheme.padding.small, end = MaterialTheme.padding as RoundedCornerShape(16.dp)),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
     ) {
         RadioButton(
             selected = isSelected,

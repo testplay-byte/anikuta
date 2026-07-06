@@ -72,7 +72,7 @@ fun ExpandableCard(
         Row(
             modifier = Modifier
                 .clickable(onClick = { onExpand(!isExpanded) })
-                .padding(start = MaterialTheme.padding.medium),
+                .padding(start = MaterialTheme.padding as RoundedCornerShape(16.dp)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             title(isExpanded)

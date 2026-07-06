@@ -1,3 +1,4 @@
+import androidx.compose.runtime.ImmutableList
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -39,7 +40,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.vivvvek.seeker.Seeker
 import dev.vivvvek.seeker.SeekerDefaults
-import dev.vivvvek.seeker.Segment
+import dev.vivvvek.seeker.// TODO: Segment
 import app.anikuta.source.api.model.ChapterType
 import app.anikuta.player.controls.LocalPlayerButtonsClickEvent
 import `is`.xyz.mpv.Utils
@@ -48,7 +49,7 @@ import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.presentation.core.components.material.padding
 
 @Immutable
-data class IndexedSegment(
+data class Indexed// TODO: Segment(
     val name: String,
     val start: Float,
     val color: Color = Color.Unspecified,
@@ -56,10 +57,10 @@ data class IndexedSegment(
     val chapterType: ChapterType = ChapterType.Other,
 ) {
     companion object {
-        val Unspecified = IndexedSegment(name = "", start = 0f)
+        val Unspecified = Indexed// TODO: Segment(name = "", start = 0f)
     }
 
-    fun toSegment(): Segment = Segment(name, start, color)
+    fun to// TODO: Segment(): // TODO: Segment = // TODO: Segment(name, start, color)
 }
 
 @Composable
@@ -72,14 +73,14 @@ fun SeekbarWithTimers(
     timersInverted: Pair<Boolean, Boolean>,
     positionTimerOnClick: () -> Unit,
     durationTimerOnCLick: () -> Unit,
-    chapters: ImmutableList<Segment>,
+    chapters: ImmutableList<// TODO: Segment>,
     modifier: Modifier = Modifier,
 ) {
     val clickEvent = LocalPlayerButtonsClickEvent.current
     Row(
         modifier = modifier.height(48.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
     ) {
         VideoTimer(
             value = position,
@@ -101,7 +102,7 @@ fun SeekbarWithTimers(
                 .let {
                     // add an extra segment at 0 if it doesn't exist.
                     if (it.isNotEmpty() && it[0].start != 0f) {
-                        persistentListOf(Segment("", 0f)) + it
+                        persistentListOf(// TODO: Segment("", 0f)) + it
                     } else {
                         it
                     } + it

@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 package app.anikuta.player.controls
 
 import androidx.compose.animation.AnimatedVisibility
@@ -66,7 +67,7 @@ fun MiddlePlayerControls(
     Row(
         modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.large),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(24.dp)),
     ) {
         AnimatedVisibility(
             visible = controlsShown && !areControlsLocked,
@@ -83,13 +84,13 @@ fun MiddlePlayerControls(
             }
         }
 
-        val icon = AnimatedImageVector.animatedVectorResource(android.R.drawable.ic_media_play)
+        val icon = AnimatedImageVector.animatedVectorResource(android.R.drawable.ic_media_play
         val interaction = remember { MutableInteractionSource() }
         when {
             gestureSeekAmount != null -> {
                 Text(
                     stringResource(
-                        AY"TODO",
+                        "TODO",
                         if (gestureSeekAmount.second >= 0) '+' else '-',
                         Utils.prettyTime(abs(gestureSeekAmount.second)),
                         Utils.prettyTime(gestureSeekAmount.first + gestureSeekAmount.second),
@@ -119,7 +120,7 @@ fun MiddlePlayerControls(
                                 ripple(),
                                 onClick = onPlayPauseClick,
                             )
-                            .padding(MaterialTheme.padding.medium),
+                            .padding(MaterialTheme.padding as RoundedCornerShape(16.dp)),
                         contentDescription = null,
                     )
                 }

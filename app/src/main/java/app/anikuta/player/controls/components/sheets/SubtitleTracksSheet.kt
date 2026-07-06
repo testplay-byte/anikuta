@@ -1,3 +1,5 @@
+import androidx.compose.runtime.ImmutableList
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -60,30 +62,30 @@ fun SubtitlesSheet(
         onDismissRequest = onDismissRequest,
         header = {
             TrackSheetTitle(
-                title = stringResource(AY"TODO"),
+                title = stringResource("TODO"),
                 actions = {
                     TextButton(onClick = onOpenSubtitleSettings) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
                         ) {
                             Icon(imageVector = Icons.Default.Palette, contentDescription = null)
-                            Text(text = stringResource(AY"TODO"))
+                            Text(text = stringResource("TODO"))
                         }
                     }
                     TextButton(onClick = onOpenSubtitleDelay) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
                         ) {
                             Icon(imageVector = Icons.Default.MoreTime, contentDescription = null)
-                            Text(text = stringResource(AY"TODO"))
+                            Text(text = stringResource("TODO"))
                         }
                     }
                 },
             )
             AddTrackRow(
-                title = stringResource(AY"TODO"),
+                title = stringResource("TODO"),
                 onClick = onAddSubtitle,
             )
         },
@@ -97,13 +99,13 @@ fun SubtitlesSheet(
         footer = {
             Column(
                 modifier = modifier
-                    .padding(MaterialTheme.padding.medium)
+                    .padding(MaterialTheme.padding as RoundedCornerShape(16.dp))
                     .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium),
+                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(16.dp)),
                 horizontalAlignment = Alignment.Start,
             ) {
                 Icon(Icons.Outlined.Info, null)
-                Text(stringResource(AY"TODO"))
+                Text(stringResource("TODO"))
             }
         },
         modifier = modifier,
@@ -121,7 +123,7 @@ fun SubtitleTrackRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(start = MaterialTheme.padding.small, end = MaterialTheme.padding.medium),
+            .padding(start = MaterialTheme.padding.small, end = MaterialTheme.padding as RoundedCornerShape(16.dp)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(

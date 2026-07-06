@@ -1,3 +1,5 @@
+import androidx.compose.runtime.ImmutableList
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -29,7 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import dev.vivvvek.seeker.Segment
+import dev.vivvvek.seeker.// TODO: Segment
 import `is`.xyz.mpv.Utils
 import kotlinx.collections.immutable.ImmutableList
 // TODO: AYMR
@@ -38,9 +40,9 @@ import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable
 fun ChaptersSheet(
-    chapters: ImmutableList<Segment>,
-    currentChapter: Segment,
-    onClick: (Segment) -> Unit,
+    chapters: ImmutableList<// TODO: Segment>,
+    currentChapter: // TODO: Segment,
+    onClick: (// TODO: Segment) -> Unit,
     onDismissRequest: () -> Unit,
     dismissSheet: Boolean,
     modifier: Modifier = Modifier,
@@ -49,8 +51,8 @@ fun ChaptersSheet(
         tracks = chapters,
         header = {
             TrackSheetTitle(
-                title = stringResource(AY"TODO"),
-                modifier = modifier.padding(top = MaterialTheme.padding.small),
+                title = stringResource("TODO"),
+                modifier = modifier.padding(top = MaterialTheme.padding as RoundedCornerShape(8.dp)),
             )
         },
         track = {
@@ -69,7 +71,7 @@ fun ChaptersSheet(
 
 @Composable
 fun ChapterTrack(
-    chapter: Segment,
+    chapter: // TODO: Segment,
     index: Int,
     selected: Boolean,
     onClick: () -> Unit,
@@ -79,11 +81,11 @@ fun ChapterTrack(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = MaterialTheme.padding.small, horizontal = MaterialTheme.padding.medium),
+            .padding(vertical = MaterialTheme.padding.small, horizontal = MaterialTheme.padding as RoundedCornerShape(16.dp)),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            stringResource(AY"TODO", index + 1, chapter.name),
+            stringResource("TODO", index + 1, chapter.name),
             fontStyle = if (selected) FontStyle.Italic else FontStyle.Normal,
             fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Normal,
             maxLines = 1,

@@ -1,3 +1,4 @@
+import androidx.compose.runtime.ImmutableList
 package app.anikuta.player.controls.components.dialogs
 
 import androidx.compose.foundation.layout.Box

@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -81,12 +82,12 @@ fun SubtitleSettingsPanel(
                     top.linkTo(parent.top, 32.dp)
                     start.linkTo(parent.start)
                 },
-                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(4.dp)),
             ) {
                 TopAppBar(
                     title = {
                         Text(
-                            text = stringResource(AY"TODO"),
+                            text = stringResource("TODO"),
                             style = MaterialTheme.typography.headlineMedium.copy(shadow = Shadow(blurRadius = 20f)),
                         )
                     },
@@ -102,7 +103,7 @@ fun SubtitleSettingsPanel(
                     pageSize = PageSize.Fixed(LocalConfiguration.current.screenWidthDp.dp * 0.9f),
                     verticalAlignment = Alignment.Top,
                     pageSpacing = MaterialTheme.padding.small,
-                    contentPadding = PaddingValues(horizontal = MaterialTheme.padding.small),
+                    contentPadding = PaddingValues(horizontal = MaterialTheme.padding as RoundedCornerShape(8.dp)),
                     beyondViewportPageCount = 1,
                 ) { page ->
                     cards(page, Modifier.fillMaxWidth())
@@ -111,7 +112,7 @@ fun SubtitleSettingsPanel(
         } else {
             Column(
                 horizontalAlignment = Alignment.Start,
-                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding as RoundedCornerShape(8.dp)),
                 modifier = Modifier
                     .constrainAs(subSettingsCards) {
                         top.linkTo(parent.top)
@@ -126,7 +127,7 @@ fun SubtitleSettingsPanel(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = stringResource(AY"TODO"),
+                        text = stringResource("TODO"),
                         style = MaterialTheme.typography.headlineMedium.copy(
                             shadow = Shadow(blurRadius = 20f),
                         ),

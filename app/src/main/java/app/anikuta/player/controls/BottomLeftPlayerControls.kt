@@ -1,3 +1,4 @@
+import androidx.compose.ui.res.stringResource
 /*
  * Copyright 2024 Abdallah Mehiz
  * https://github.com/abdallahmehiz/mpvKt
@@ -29,7 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import dev.vivvvek.seeker.Segment
+import dev.vivvvek.seeker.// TODO: Segment
 import app.anikuta.player.Sheets
 import app.anikuta.player.controls.components.ControlsButton
 import app.anikuta.player.controls.components.CurrentChapter
@@ -42,7 +43,7 @@ import uy.kohesive.injekt.api.get
 @Composable
 fun BottomLeftPlayerControls(
     playbackSpeed: Float,
-    currentChapter: Segment?,
+    currentChapter: // TODO: Segment?,
     onLockControls: () -> Unit,
     onCycleRotation: () -> Unit,
     onPlaybackSpeedChange: (Float) -> Unit,
@@ -64,7 +65,7 @@ fun BottomLeftPlayerControls(
             onClick = onCycleRotation,
         )
         ControlsButton(
-            text = stringResource(AY"TODO", playbackSpeed),
+            text = stringResource("TODO", playbackSpeed),
             onClick = {
                 val newSpeed = if (playbackSpeed >= 2) 0.25f else playbackSpeed + 0.25f
                 onPlaybackSpeedChange(newSpeed)

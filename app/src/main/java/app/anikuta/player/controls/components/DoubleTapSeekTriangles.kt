@@ -52,7 +52,7 @@ private fun DoubleTapArrow(
     alpha: Float,
 ) {
     Icon(
-        painter = painterResource(android.R.drawable.ic_media_play),
+        painter = painterResource(android.R.drawable.ic_media_play
         contentDescription = null,
         modifier = Modifier
             .size(width = 16.dp, height = 20.dp)
