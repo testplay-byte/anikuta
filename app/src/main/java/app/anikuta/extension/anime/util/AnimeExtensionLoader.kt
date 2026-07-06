@@ -70,14 +70,25 @@ class AnimeExtensionLoader(
             libVersion = getLibVersionFromMetadata(pkgInfo),
             lang = "",
             isNsfw = false,
+            pkgFactory = null,
             sources = sources,
             icon = pkgInfo.applicationInfo?.loadIcon(context.packageManager),
+            isShared = false,
         )
 
         return if (isExtensionTrusted(pkgInfo)) {
             AnimeLoadResult.Success(extension)
         } else {
-            AnimeLoadResult.Untrusted(extension)
+            AnimeLoadResult.Untrusted(
+                name = extension.name,
+                pkgName = extension.pkgName,
+                versionName = extension.versionName,
+                versionCode = extension.versionCode,
+                libVersion = extension.libVersion,
+                signatureHash = "unknown",
+                lang = extension.lang,
+                isNsfw = extension.isNsfw,
+            )
         }
     }
 
@@ -88,8 +99,8 @@ class AnimeExtensionLoader(
     }
 
     private fun isExtensionTrusted(pkgInfo: PackageInfo): Boolean {
-        val signatures = pkgInfo.signingInfo?.apkContentsSigners?.map {
-            app.anikuta.util.lang.Hash.sha256(it.encoded)
+        val signatures = pkgInfo.signingInfo?.signingCertificateHistory?.map {
+            app.anikuta.util.lang.Hash.sha256(it.toByteArray())
         } ?: emptyList()
         return true  // Always trust for now (TrustAnimeExtension stub returns true)
     }
@@ -143,7 +154,4 @@ class AnimeExtensionLoader(
         }
     }
 
-    companion object {
-        private const val TAG = "AnimeExtLoader"
-    }
 }
