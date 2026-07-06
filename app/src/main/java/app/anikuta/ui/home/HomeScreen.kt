@@ -39,7 +39,9 @@ import app.anikuta.data.anilist.model.AniListAnime
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    onAnimeClick: (Int) -> Unit = {},
+) {
     val viewModel: HomeViewModel = viewModel()
     val trending by viewModel.trending.collectAsState()
     val popular by viewModel.popular.collectAsState()
@@ -93,16 +95,16 @@ fun HomeScreen() {
                 }
 
                 item(key = "trending", contentType = "anime_section") {
-                    HomeSection("Trending Now") { AnimeSection(trending, viewModel) }
+                    HomeSection("Trending Now") { AnimeSection(trending, viewModel, onAnimeClick) }
                 }
                 item(key = "fresh", contentType = "anime_section") {
-                    HomeSection("Freshly Updated") { AnimeSection(fresh, viewModel) }
+                    HomeSection("Freshly Updated") { AnimeSection(fresh, viewModel, onAnimeClick) }
                 }
                 item(key = "genres", contentType = "genre_section") {
                     HomeSection("Browse by Genre") { GenreSection(genres) }
                 }
                 item(key = "popular", contentType = "anime_section") {
-                    HomeSection("Most Popular") { AnimeSection(popular, viewModel) }
+                    HomeSection("Most Popular") { AnimeSection(popular, viewModel, onAnimeClick) }
                 }
                 item(key = "schedule", contentType = "text_section") {
                     HomeSection("Coming Up Next") {
@@ -217,7 +219,7 @@ private fun HomeSection(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun AnimeSection(state: HomeSectionState, viewModel: HomeViewModel) {
+private fun AnimeSection(state: HomeSectionState, viewModel: HomeViewModel, onAnimeClick: (Int) -> Unit) {
     when (state) {
         is HomeSectionState.Loading -> SkeletonRow()
         is HomeSectionState.Success -> {
@@ -268,7 +270,7 @@ private fun AnimeCard(anime: AniListAnime) {
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        onClick = { /* TODO: detail page (Phase 3) */ },
+        onClick = { onAnimeClick(anime.id) },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
