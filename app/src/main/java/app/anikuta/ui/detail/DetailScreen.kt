@@ -211,7 +211,7 @@ private fun DetailHeader(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(320.dp),
+                .height(360.dp),  // Taller to truly cover behind status bar
         ) {
             // Blurred cover image as background
             AsyncImage(
@@ -219,14 +219,14 @@ private fun DetailHeader(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(radius = 24.dp),
+                    .blur(radius = 12.dp),
                 contentScale = ContentScale.Crop,
             )
-            // Theme color tint overlay (from AniList cover color)
+            // Theme color tint overlay (from AniList cover color) — subtle
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(coverColor.copy(alpha = 0.4f)),
+                    .background(coverColor.copy(alpha = 0.3f)),
             )
             // Gradient overlay for text readability (bottom fade to background)
             Box(
