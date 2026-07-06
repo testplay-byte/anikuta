@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
@@ -53,8 +55,29 @@ fun DetailScreen(
     val detailState by viewModel.anime.collectAsState()
     val isSaved by viewModel.isSaved.collectAsState()
     val episodeState by viewModel.episodes.collectAsState()
+    val playRequest by viewModel.playRequest.collectAsState()
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
+
+    // Observe play requests from the ViewModel → launch the player.
+    androidx.compose.runtime.LaunchedEffect(playRequest) {
+        val req = playRequest ?: return@LaunchedEffect
+        when (req) {
+            is PlayRequest.Play -> {
+                val intent = app.anikuta.player.PlayerActivity.newIntent(
+                    context = context,
+                    videoUrl = req.url,
+                    title = req.title,
+                )
+                context.startActivity(intent)
+                viewModel.consumePlayRequest()
+            }
+            is PlayRequest.Error -> {
+                android.widget.Toast.makeText(context, req.message, android.widget.Toast.LENGTH_SHORT).show()
+                viewModel.consumePlayRequest()
+            }
+        }
+    }
 
     when (detailState) {
         is DetailState.Loading -> {
@@ -165,34 +188,68 @@ fun DetailScreen(
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         Text("Episodes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(8.dp))
-                        when (episodeState) {
-                            is EpisodeState.NoExtension -> {
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        when (val es = episodeState) {
+                            is EpisodeState.Idle, is EpisodeState.Searching -> {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Searching extensions…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            is EpisodeState.LoadingEpisodes -> {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Loading episodes…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            is EpisodeState.NotAired -> {
+                                InfoCard(
+                                    title = "Not yet available",
+                                    body = "This anime hasn't aired yet. It will be available to stream after it airs." +
+                                        (es.seasonYear?.let { " Expected: ${es.season ?: ""} $it".trim() } ?: ""),
+                                )
+                            }
+                            is EpisodeState.NoMatch -> {
+                                InfoCard(
+                                    title = "No streaming source available",
+                                    body = "No installed extension has '${es.searchedTitle}'. Install more extensions to stream this anime.",
+                                )
+                            }
+                            is EpisodeState.Loaded -> {
+                                Text(
+                                    "${es.episodeList.size} episodes · from ${es.sourceName}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                // Episode list — scrollable, capped height
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 400.dp)
+                                        .verticalScroll(rememberScrollState()),
                                 ) {
-                                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("No streaming source available", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("Install an extension to stream episodes", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    es.episodeList.forEach { episode ->
+                                        EpisodeRow(
+                                            episode = episode,
+                                            onClick = { viewModel.playEpisode(episode) },
+                                        )
                                     }
                                 }
                             }
-                            is EpisodeState.Loaded -> {
-                                Text("${(episodeState as EpisodeState.Loaded).episodeCount} episodes available", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
                             is EpisodeState.Error -> {
-                                Text("Couldn't load episodes: ${(episodeState as EpisodeState.Error).message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                InfoCard(
+                                    title = "Couldn't load episodes",
+                                    body = es.message,
+                                )
                             }
                         }
 
+                        // Play-sample fallback — always available so the player
+                        // is testable even without a working extension.
                         Spacer(modifier = Modifier.height(12.dp))
-
-                        // Player launcher.
-                        // TODO(Phase 5): when the source system is wired, launch the first
-                        // resolved Video.videoUrl from the extension instead of this sample.
-                        Button(
+                        OutlinedButton(
                             onClick = {
                                 val intent = app.anikuta.player.PlayerActivity.newIntent(
                                     context = context,
@@ -206,9 +263,10 @@ fun DetailScreen(
                             Icon(
                                 Icons.Filled.PlayArrow,
                                 contentDescription = null,
-                                modifier = Modifier.padding(end = 8.dp),
+                                modifier = Modifier.size(18.dp),
                             )
-                            Text("Play sample")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Play sample (test stream)")
                         }
                     }
                 }
@@ -359,5 +417,71 @@ private fun InfoRow(label: String, value: String) {
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun InfoCard(title: String, body: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun EpisodeRow(
+    episode: app.anikuta.source.api.model.SEpisode,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surface,
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Episode number badge
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(36.dp, 24.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = if (episode.episode_number % 1f == 0f) episode.episode_number.toInt().toString()
+                        else episode.episode_number.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = episode.name.ifBlank { "Episode ${episode.episode_number}" },
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                Icons.Filled.PlayArrow,
+                contentDescription = "Play",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
