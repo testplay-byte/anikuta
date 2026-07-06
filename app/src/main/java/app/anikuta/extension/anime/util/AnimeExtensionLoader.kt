@@ -104,7 +104,7 @@ internal object AnimeExtensionLoader {
             }
             true
         } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "Failed to copy extension file." }
+            Log.e("AnimeExtLoader",  "Failed to copy extension file." }
             target.delete()
             false
         }
@@ -275,7 +275,7 @@ internal object AnimeExtensionLoader {
                 libVersion,
                 signatures.last(),
             )
-            logcat(LogPriority.WARN, message = { "Extension $pkgName isn't trusted" })
+            Log.d("AnimeExtLoader", "")
             return AnimeLoadResult.Untrusted(extension)
         }
 
@@ -288,7 +288,7 @@ internal object AnimeExtensionLoader {
         val classLoader = try {
             ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
         } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "Extension load error: $extName ($pkgName)" }
+            Log.e("AnimeExtLoader",  "Extension load error: $extName ($pkgName)" }
             return AnimeLoadResult.Error
         }
 
@@ -326,11 +326,11 @@ internal object AnimeExtensionLoader {
                             else -> throw Exception("Unknown source class type: ${obj.javaClass}")
                         }
                     } catch (e: Throwable) {
-                        logcat(LogPriority.ERROR, e) { "Extension load error: $extName ($it)" }
+                        Log.e("AnimeExtLoader",  "Extension load error: $extName ($it)" }
                         return AnimeLoadResult.Error
                     }
                 } catch (e: Throwable) {
-                    logcat(LogPriority.ERROR, e) { "Extension load error: $extName ($it)" }
+                    Log.e("AnimeExtLoader",  "Extension load error: $extName ($it)" }
                     return AnimeLoadResult.Error
                 }
             }

@@ -61,7 +61,7 @@ class AnimeExtensionManager(
     /**
      * The installer which installs, updates and uninstalls the anime extensions.
      */
-    private val installer by lazy { AnimeExtensionInstaller(context) }
+    // TODO: private val installer by lazy { AnimeExtensionInstaller(context) }
 
     private val iconMap = mutableMapOf<String, Drawable>()
 
@@ -76,7 +76,7 @@ class AnimeExtensionManager(
 
     init {
         initAnimeExtensions()
-        AnimeExtensionInstallReceiver(AnimeInstallationListener()).register(context)
+        // TODO: AnimeExtensionInstallReceiver(AnimeInstallationListener()).register(context)
     }
 
     private var subLanguagesEnabledOnFirstRun = preferences.enabledLanguages().isSet()
@@ -148,7 +148,7 @@ class AnimeExtensionManager(
         val extensions: List<AnimeExtension.Available> = try {
             api.findExtensions()
         } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e)
+            Log.e("AnimeExtManager", "Error", e)
             // TODO: withUIContext { // TODO: toast }
             emptyList()
         }
@@ -241,7 +241,7 @@ class AnimeExtensionManager(
      * @param extension The anime extension to be installed.
      */
     fun installExtension(extension: AnimeExtension.Available): Flow<InstallStep> {
-        return installer.downloadAndInstall(api.getApkUrl(extension), extension)
+        return // TODO: installer.downloadAndInstall(api.getApkUrl(extension), extension)
     }
 
     /**
@@ -257,7 +257,7 @@ class AnimeExtensionManager(
     }
 
     fun cancelInstallUpdateExtension(extension: AnimeExtension) {
-        installer.cancelInstall(extension.pkgName)
+        // TODO: installer.cancelInstall(extension.pkgName)
     }
 
     /**
@@ -266,11 +266,11 @@ class AnimeExtensionManager(
      * @param downloadId The id of the download.
      */
     fun setInstalling(downloadId: Long) {
-        installer.updateInstallStep(downloadId, InstallStep.Installing)
+        // TODO: installer.updateInstallStep(downloadId, InstallStep.Installing)
     }
 
     fun updateInstallStep(downloadId: Long, step: InstallStep) {
-        installer.updateInstallStep(downloadId, step)
+        // TODO: installer.updateInstallStep(downloadId, step)
     }
 
     /**
@@ -279,7 +279,7 @@ class AnimeExtensionManager(
      * @param extension The extension to uninstall.
      */
     fun uninstallExtension(extension: AnimeExtension) {
-        installer.uninstallApk(extension.pkgName)
+        // TODO: installer.uninstallApk(extension.pkgName)
     }
 
     /**
@@ -333,65 +333,65 @@ class AnimeExtensionManager(
     /**
      * Listener which receives events of the anime extensions being installed, updated or removed.
      */
-    private inner class AnimeInstallationListener : AnimeExtensionInstallReceiver.Listener {
-
-        override fun onExtensionInstalled(extension: AnimeExtension.Installed) {
-            registerNewExtension(extension.withUpdateCheck())
-            updatePendingUpdatesCount()
-        }
-
-        override fun onExtensionUpdated(extension: AnimeExtension.Installed) {
-            registerUpdatedExtension(extension.withUpdateCheck())
-            updatePendingUpdatesCount()
-        }
-
-        override fun onExtensionUntrusted(extension: AnimeExtension.Untrusted) {
-            installedExtensionsMapFlow.value -= extension.pkgName
-            untrustedExtensionsMapFlow.value += extension
-            updatePendingUpdatesCount()
-        }
-
-        override fun onPackageUninstalled(pkgName: String) {
-            AnimeExtensionLoader.uninstallPrivateExtension(context, pkgName)
-            unregisterAnimeExtension(pkgName)
-            updatePendingUpdatesCount()
-        }
-    }
-
-    /**
-     * AnimeExtension method to set the update field of an installed anime extension.
-     */
-    private fun AnimeExtension.Installed.withUpdateCheck(): AnimeExtension.Installed {
-        return if (updateExists()) {
-            copy(hasUpdate = true)
-        } else {
-            this
-        }
-    }
-
-    private fun AnimeExtension.Installed.updateExists(
-        availableExtension: AnimeExtension.Available? = null,
-    ): Boolean {
-        val availableExt = availableExtension
-            ?: availableExtensionsMapFlow.value[pkgName]
-            ?: return false
-
-        return (availableExt.versionCode > versionCode || availableExt.libVersion > libVersion)
-    }
-
-    private fun updatePendingUpdatesCount() {
-        val pendingUpdateCount = installedExtensionsMapFlow.value.values.count { it.hasUpdate }
-        preferences.animeExtensionUpdatesCount().set(pendingUpdateCount)
-        if (pendingUpdateCount == 0) {
-            ExtensionUpdateNotifier(context).dismiss()
-        }
-    }
-
-    private operator fun <T : AnimeExtension> Map<String, T>.plus(extension: T) = plus(extension.pkgName to extension)
-
-    private fun <T : AnimeExtension> StateFlow<Map<String, T>>.mapExtensions(
-        scope: CoroutineScope,
-    ): StateFlow<List<T>> {
-        return map { it.values.toList() }.stateIn(scope, SharingStarted.Lazily, value.values.toList())
-    }
-}
+// TODO:     //     private inner class AnimeInstallationListener : // TODO: AnimeExtensionInstallReceiver.Listener {
+    //
+    //         // TODO: fun onExtensionInstalled(extension: AnimeExtension.Installed) {
+    //             registerNewExtension(extension.withUpdateCheck())
+    //             updatePendingUpdatesCount()
+    //         }
+    //
+    //         // TODO: fun onExtensionUpdated(extension: AnimeExtension.Installed) {
+    //             registerUpdatedExtension(extension.withUpdateCheck())
+    //             updatePendingUpdatesCount()
+    //         }
+    //
+    //         // TODO: fun onExtensionUntrusted(extension: AnimeExtension.Untrusted) {
+    //             installedExtensionsMapFlow.value -= extension.pkgName
+    //             untrustedExtensionsMapFlow.value += extension
+    //             updatePendingUpdatesCount()
+    //         }
+    //
+    //         // TODO: fun onPackageUninstalled(pkgName: String) {
+    //             AnimeExtensionLoader.uninstallPrivateExtension(context, pkgName)
+    //             unregisterAnimeExtension(pkgName)
+    //             updatePendingUpdatesCount()
+    //         }
+    //     }
+    //
+    //     /**
+    //      * AnimeExtension method to set the update field of an installed anime extension.
+    //      */
+    //     private fun AnimeExtension.Installed.withUpdateCheck(): AnimeExtension.Installed {
+    //         return if (updateExists()) {
+    //             copy(hasUpdate = true)
+    //         } else {
+    //             this
+    //         }
+    //     }
+    //
+    //     private fun AnimeExtension.Installed.updateExists(
+    //         availableExtension: AnimeExtension.Available? = null,
+    //     ): Boolean {
+    //         val availableExt = availableExtension
+    //             ?: availableExtensionsMapFlow.value[pkgName]
+    //             ?: return false
+    //
+    //         return (availableExt.versionCode > versionCode || availableExt.libVersion > libVersion)
+    //     }
+    //
+    //     private fun updatePendingUpdatesCount() {
+    //         val pendingUpdateCount = installedExtensionsMapFlow.value.values.count { it.hasUpdate }
+    //         preferences.animeExtensionUpdatesCount().set(pendingUpdateCount)
+    //         if (pendingUpdateCount == 0) {
+    //             ExtensionUpdateNotifier(context).dismiss()
+    //         }
+    //     }
+    //
+    //     private operator fun <T : AnimeExtension> Map<String, T>.plus(extension: T) = plus(extension.pkgName to extension)
+    //
+    //     private fun <T : AnimeExtension> StateFlow<Map<String, T>>.mapExtensions(
+    //         scope: CoroutineScope,
+    //     ): StateFlow<List<T>> {
+    //         return map { it.values.toList() }.stateIn(scope, SharingStarted.Lazily, value.values.toList())
+    //     }
+    // }

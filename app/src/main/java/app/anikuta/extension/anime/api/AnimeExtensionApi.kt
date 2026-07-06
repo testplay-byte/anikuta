@@ -1,7 +1,7 @@
 package app.anikuta.extension.anime.api
 
 import android.content.Context
-import app.anikuta.extension.ExtensionUpdateNotifier
+import app.anikuta.extension.EextensionUpdateNotifier
 import app.anikuta.extension.anime.AnimeExtensionManager
 import app.anikuta.extension.anime.model.AnimeExtension
 import app.anikuta.extension.anime.model.AnimeLoadResult
@@ -78,7 +78,7 @@ internal class AnimeExtensionApi {
         }
 
         // Update extension repo details
-        { updateExtensionRepo.await("") }
+        updateExtensionRepo.await("")
 
         val extensions = if (fromAvailableExtensionList) {
             animeExtensionManager.availableExtensionsFlow.value
@@ -104,7 +104,7 @@ internal class AnimeExtensionApi {
         }
 
         if (extensionsWithUpdate.isNotEmpty()) {
-            xtensionUpdateNotifier(context).promptUpdates(0
+            extensionUpdateNotifier(context).promptUpdates(0
                 
                 
             )
