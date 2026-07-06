@@ -84,9 +84,16 @@ class AnikutaMPVView(
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString(
             "hwdec",
-            if (playerPreferences.tryHWDecoding().get()) "auto" else "no",
+            if (playerPreferences.tryHWDecoding().get()) "auto-safe" else "no",
         )
         MPVLib.setOptionString("msg-level", "all=warn")
+
+        // Force a video window even when paused/before first frame — without
+        // this, some devices never attach the decoded frames to the surface
+        // (symptom: decoder runs, renderFps=0, blank video). aniyomi's
+        // BaseMPVView sets force-window in its own init, but being explicit
+        // here ensures it's applied regardless of lib version.
+        MPVLib.setOptionString("force-window", "yes")
 
         // Keep the file loaded so seeking works after EOF.
         MPVLib.setPropertyBoolean("keep-open", true)

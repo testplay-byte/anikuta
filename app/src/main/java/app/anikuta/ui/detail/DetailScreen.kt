@@ -56,6 +56,7 @@ fun DetailScreen(
     val isSaved by viewModel.isSaved.collectAsState()
     val episodeState by viewModel.episodes.collectAsState()
     val playRequest by viewModel.playRequest.collectAsState()
+    val resolvingEpisode by viewModel.resolvingEpisode.collectAsState()
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
 
@@ -120,6 +121,7 @@ fun DetailScreen(
                 }
             }
 
+            Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 24.dp),
@@ -296,6 +298,44 @@ fun DetailScreen(
                     }
                 }
             }
+
+            // Loading overlay while resolving an episode's video URL.
+            // The extension's getVideoList can take 10-30s (resolving multiple
+            // servers in parallel). Without this, the user taps an episode and
+            // nothing happens for a long time — feels broken.
+            if (resolvingEpisode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.6f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                "Resolving video…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "Fetching servers from the extension",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+            } // end Box
         }
     }
 }

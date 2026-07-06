@@ -69,6 +69,10 @@ class DetailViewModel(
     private val _playRequest = MutableStateFlow<PlayRequest?>(null)
     val playRequest: StateFlow<PlayRequest?> = _playRequest.asStateFlow()
 
+    /** True while resolving an episode's video URL (extension network call). */
+    private val _resolvingEpisode = MutableStateFlow(false)
+    val resolvingEpisode: StateFlow<Boolean> = _resolvingEpisode.asStateFlow()
+
     // Remember the matched source + SAnime so we can fetch episodes/videos later.
     private var matchedSource: AnimeCatalogueSource? = null
     private var matchedSAnime: SAnime? = null
@@ -186,6 +190,7 @@ class DetailViewModel(
             _playRequest.value = PlayRequest.Error("No source available")
             return
         }
+        _resolvingEpisode.value = true
         viewModelScope.launch {
             try {
                 val videos = withContext(Dispatchers.IO) { source.getVideoList(episode) }
@@ -205,6 +210,8 @@ class DetailViewModel(
             } catch (e: Exception) {
                 Log.e(TAG, "Video resolution failed", e)
                 _playRequest.value = PlayRequest.Error(e.message ?: "Failed to resolve video")
+            } finally {
+                _resolvingEpisode.value = false
             }
         }
     }
