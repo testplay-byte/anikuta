@@ -19,7 +19,7 @@ import `is`.xyz.mpv.MPVLib
  */
 class AnikutaMPVView(
     context: Context,
-    attributes: AttributeSet? = null,
+    attributes: AttributeSet,
     private val playerPreferences: PlayerPreferences,
 ) : BaseMPVView(context, attributes) {
 
@@ -92,6 +92,11 @@ class AnikutaMPVView(
 
     override fun observeProperties() {
         for ((name, format) in observedProps) MPVLib.observeProperty(name, format)
+    }
+
+    override fun postInitOptions() {
+        // No-op for the minimal player. aniyomi toggles a stats overlay here;
+        // we defer player-statistics page selection to a later phase.
     }
 
     /**

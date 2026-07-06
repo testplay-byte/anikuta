@@ -14,6 +14,7 @@ import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
 import app.anikuta.data.supabase.SupabaseClient
+import app.anikuta.player.PlayerPreferences
 import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.UpdateAnimeExtensionRepo
@@ -39,7 +40,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { NetworkHelper(get<Context>(), get<NetworkPreferences>()) }
 
         // Player preferences + MPV player surface
-        addSingletonFactory { app.anikuta.player.PlayerPreferences(get<PreferenceStore>()) }
+        addSingletonFactory { PlayerPreferences(get<PreferenceStore>()) }
 
         // Anime database
         addSingletonFactory { AnimeDatabaseFactory.create(app) }

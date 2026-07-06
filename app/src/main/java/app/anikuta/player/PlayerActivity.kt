@@ -199,7 +199,10 @@ private fun PlayerScreen(
     ) {
         AndroidView(
             factory = { ctx ->
-                AnikutaMPVView(ctx, null, playerPreferences).also { view ->
+                // BaseMPVView requires a non-null AttributeSet; an empty one is
+                // fine since we set all options programmatically in initOptions.
+                val attrs = android.util.Xml.asAttributeSet(android.util.Xml.newPullParser())
+                AnikutaMPVView(ctx, attrs, playerPreferences).also { view ->
                     mpvView = view
                     val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
                     view.initialize(
