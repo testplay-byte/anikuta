@@ -387,11 +387,11 @@ class AnimeExtensionManager(
     //         }
     //     }
     //
-    //     private operator fun <T : AnimeExtension> Map<String, T>.plus(extension: T) = plus(extension.pkgName to extension)
-    //
-    //     private fun <T : AnimeExtension> StateFlow<Map<String, T>>.mapExtensions(
-    //         scope: CoroutineScope,
-    //     ): StateFlow<List<T>> {
-    //         return map { it.values.toList() }.stateIn(scope, SharingStarted.Lazily, value.values.toList())
-    //     }
-    // }
+        private operator fun <T : AnimeExtension> Map<String, T>.plus(extension: T) = plus(extension.pkgName to extension)
+    
+        private fun <T : AnimeExtension> StateFlow<Map<String, T>>.mapExtensions(
+            scope: CoroutineScope,
+        ): StateFlow<List<T>> {
+            return map { it.values.toList() }.stateIn(scope, SharingStarted.Lazily, value.values.toList())
+        }
+    }
