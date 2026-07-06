@@ -80,14 +80,16 @@ class AnimeExtensionLoader(
             AnimeLoadResult.Success(extension)
         } else {
             AnimeLoadResult.Untrusted(
-                name = extension.name,
-                pkgName = extension.pkgName,
-                versionName = extension.versionName,
-                versionCode = extension.versionCode,
-                libVersion = extension.libVersion,
-                signatureHash = "unknown",
-                lang = extension.lang,
-                isNsfw = extension.isNsfw,
+                AnimeExtension.Untrusted(
+                    name = extension.name,
+                    pkgName = extension.pkgName,
+                    versionName = extension.versionName,
+                    versionCode = extension.versionCode,
+                    libVersion = extension.libVersion,
+                    signatureHash = "unknown",
+                    lang = extension.lang,
+                    isNsfw = extension.isNsfw,
+                )
             )
         }
     }
