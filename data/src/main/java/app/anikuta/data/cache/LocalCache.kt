@@ -13,7 +13,7 @@ class LocalCache(
     private val db: AnimeDatabase,
 ) {
     suspend fun get(key: String): CacheEntry? = withContext(Dispatchers.IO) {
-        val row = db.anilistCacheQueries.getCacheEntry(key).executeAsOneOrNull() ?: return@withContext null
+        val row = db.anilistcacheQueries.getCacheEntry(key).executeAsOneOrNull() ?: return@withContext null
         val now = System.currentTimeMillis()
         if (now - row.created_at > row.ttl_ms) {
             return@withContext null
@@ -22,16 +22,16 @@ class LocalCache(
     }
 
     suspend fun getStale(key: String): CacheEntry? = withContext(Dispatchers.IO) {
-        val row = db.anilistCacheQueries.getCacheEntry(key).executeAsOneOrNull() ?: return@withContext null
+        val row = db.anilistcacheQueries.getCacheEntry(key).executeAsOneOrNull() ?: return@withContext null
         CacheEntry(key, row.cache_value, row.created_at, row.ttl_ms)
     }
 
     suspend fun put(key: String, value: String, ttlMs: Long) = withContext(Dispatchers.IO) {
-        db.anilistCacheQueries.upsertCacheEntry(key, value, System.currentTimeMillis(), ttlMs)
+        db.anilistcacheQueries.upsertCacheEntry(key, value, System.currentTimeMillis(), ttlMs)
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {
-        db.anilistCacheQueries.clearCache()
+        db.anilistcacheQueries.clearCache()
     }
 }
 
