@@ -6,68 +6,52 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil3.compose.AsyncImage
+import app.anikuta.data.anilist.model.AniListAnime
 
-/**
- * Home screen — 6 sections.
- * Material 3 design.
- *
- * TODO (Phase 2): wire real AniList data via ViewModel + 3-step cache.
- * For now, shows section headers with placeholder content.
- */
 @Composable
 fun HomeScreen() {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
+    val viewModel: HomeViewModel = viewModel()
+    val trending by viewModel.trending.collectAsState()
+    val popular by viewModel.popular.collectAsState()
+    val fresh by viewModel.fresh.collectAsState()
+    val genres by viewModel.genres.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { viewModel.refresh() },
     ) {
-        // Hero section
-        item { HeroSection() }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            item { HeroSection() }
 
-        // Trending Now
-        item {
-            HomeSection("Trending Now") {
-                PlaceholderCarousel()
-            }
-        }
-
-        // Freshly Updated
-        item {
-            HomeSection("Freshly Updated") {
-                PlaceholderCarousel()
-            }
-        }
-
-        // Browse by Genre
-        item {
-            HomeSection("Browse by Genre") {
-                GenreRow(listOf("Action", "Romance", "Comedy", "Fantasy", "Drama"))
-            }
-        }
-
-        // Most Popular
-        item {
-            HomeSection("Most Popular") {
-                PlaceholderCarousel()
-            }
-        }
-
-        // Coming Up Next
-        item {
-            HomeSection("Coming Up Next") {
-                Text(
-                    "Schedule coming soon",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+            item { HomeSection("Trending Now") { AnimeSection(trending, viewModel) } }
+            item { HomeSection("Freshly Updated") { AnimeSection(fresh, viewModel) } }
+            item { HomeSection("Browse by Genre") { GenreSection(genres) } }
+            item { HomeSection("Most Popular") { AnimeSection(popular, viewModel) } }
+            item {
+                HomeSection("Coming Up Next") {
+                    Text(
+                        "Schedule coming in a later phase",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
         }
     }
@@ -76,31 +60,12 @@ fun HomeScreen() {
 @Composable
 private fun HeroSection() {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp)
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(16.dp)),
+        modifier = Modifier.fillMaxWidth().height(200.dp).padding(horizontal = 16.dp).clip(RoundedCornerShape(16.dp)),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.primaryContainer,
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    "ANI-KUTA",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    "Discover. Watch. Enjoy.",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primaryContainer) {
+            Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+                Text("ANI-KUTA", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text("Discover. Watch. Enjoy.", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
         }
     }
@@ -109,41 +74,62 @@ private fun HeroSection() {
 @Composable
 private fun HomeSection(title: String, content: @Composable () -> Unit) {
     Column {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        )
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         content()
     }
 }
 
 @Composable
-private fun PlaceholderCarousel() {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        items(5) {
-            Card(modifier = Modifier.width(140.dp)) {
-                Column {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                    ) {}
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(0.8f).height(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                        ) {}
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(0.5f).height(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                        ) {}
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
+private fun AnimeSection(state: HomeSectionState, viewModel: HomeViewModel) {
+    when (state) {
+        is HomeSectionState.Loading -> SkeletonRow()
+        is HomeSectionState.Success -> {
+            if (state.anime.isEmpty()) {
+                Text("No data", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
+            } else {
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(state.anime) { anime -> AnimeCard(anime) }
+                }
+            }
+        }
+        is HomeSectionState.Error -> {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text("Couldn't load: ${state.message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { viewModel.refresh() }) { Text("Retry") }
+            }
+        }
+        else -> {}
+    }
+}
+
+@Composable
+private fun AnimeCard(anime: AniListAnime) {
+    Card(modifier = Modifier.width(140.dp), onClick = { /* TODO: detail page (Phase 3) */ }) {
+        Column {
+            // Cover image via Coil
+            AsyncImage(
+                model = anime.coverImage.best(),
+                contentDescription = anime.title.preferred(),
+                modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                contentScale = ContentScale.Crop,
+            )
+            Column(modifier = Modifier.padding(8.dp)) {
+                Text(
+                    text = anime.title.preferred(),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (anime.averageScore != null) {
+                    Text("★ ${anime.averageScore}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (anime.episodes != null) {
+                    Text("${anime.episodes} eps", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                // Show up to 2 genres
+                anime.genres?.take(2)?.let { genres ->
+                    Text(genres.joinToString(", "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -151,16 +137,43 @@ private fun PlaceholderCarousel() {
 }
 
 @Composable
-private fun GenreRow(genres: List<String>) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        items(genres) { genre ->
-            AssistChip(
-                onClick = { /* TODO: browse by genre */ },
-                label = { Text(genre) },
-            )
+private fun GenreSection(state: HomeSectionState) {
+    when (state) {
+        is HomeSectionState.Loading -> {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(5) { AssistChip(onClick = {}, label = { Text("Loading...") })
+            }
+            }
+        }
+        is HomeSectionState.GenresSuccess -> {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(state.genres.take(5)) { genre ->
+                    AssistChip(onClick = { /* TODO: browse by genre */ }, label = { Text(genre) })
+                }
+            }
+        }
+        is HomeSectionState.Error -> {
+            Text("Couldn't load genres", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
+        }
+        else -> {}
+    }
+}
+
+@Composable
+private fun SkeletonRow() {
+    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        items(5) {
+            Card(modifier = Modifier.width(140.dp)) {
+                Column {
+                    Surface(modifier = Modifier.fillMaxWidth().height(200.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Surface(modifier = Modifier.fillMaxWidth(0.8f).height(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Surface(modifier = Modifier.fillMaxWidth(0.5f).height(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
         }
     }
 }

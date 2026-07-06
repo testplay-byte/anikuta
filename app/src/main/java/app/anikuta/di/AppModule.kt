@@ -6,9 +6,12 @@ import app.anikuta.core.network.NetworkPreferences
 import app.anikuta.core.preference.AndroidPreferenceStore
 import app.anikuta.core.preference.PreferenceStore
 import app.anikuta.data.AnimeDatabaseFactory
+import app.anikuta.data.cache.CacheManager
+import app.anikuta.data.cache.LocalCache
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
+import app.anikuta.data.supabase.SupabaseClient
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
 import app.anikuta.extension.anime.AnimeExtensionManager
 import app.anikuta.extension.anime.util.AnimeExtensionLoader
@@ -20,7 +23,7 @@ import uy.kohesive.injekt.api.addSingletonFactory
 import uy.kohesive.injekt.api.get
 
 /**
- * Minimal AppModule — wires only what we have so far.
+ * AppModule — wires all backend components.
  */
 class AppModule(val app: Application) : InjektModule {
     override fun InjektRegistrar.registerInjectables() {
@@ -29,7 +32,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { NetworkPreferences(get()) }
         addSingletonFactory { NetworkHelper(get(), get()) }
 
-        // Anime database (SQLDelight) — created via factory in :data module
+        // Anime database (SQLDelight)
         addSingletonFactory { AnimeDatabaseFactory.create(app) }
         addSingletonFactory<AnimeDatabaseHandler> { AndroidAnimeDatabaseHandler(get(), get()) }
 
@@ -40,5 +43,10 @@ class AppModule(val app: Application) : InjektModule {
 
         // AniList client (ours — discovery layer)
         addSingletonFactory { AniListRepository(get()) }
+
+        // 3-step cache: Local → Supabase → AniList
+        addSingletonFactory { LocalCache(get()) }
+        addSingletonFactory { SupabaseClient(get()) }
+        addSingletonFactory { CacheManager(get(), get()) }
     }
 }

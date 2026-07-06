@@ -19,6 +19,7 @@ jsoup = "1.19.1"
 paging = "3.3.6"
 injekt = "91edab2317"
 sqldelight = "2.0.2"
+coil = "3.1.0"
 
 [libraries]
 # AndroidX
@@ -57,6 +58,11 @@ sqldelight-coroutines = { group = "app.cash.sqldelight", name = "coroutines-exte
 sqldelight-android-paging = { group = "app.cash.sqldelight", name = "androidx-paging3-extensions", version.ref = "sqldelight" }
 sqldelight-dialects-sql = { group = "app.cash.sqldelight", name = "sqlite-3-38-dialect", version.ref = "sqldelight" }
 paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
+
+# Coil (image loading)
+coil-bom = { group = "io.coil-kt.coil3", name = "coil-bom", version.ref = "coil" }
+coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose" }
+coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
