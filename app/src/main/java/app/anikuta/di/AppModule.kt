@@ -14,9 +14,15 @@ import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
 import app.anikuta.data.supabase.SupabaseClient
+import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
+import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
+import app.anikuta.domain.mihon.extensionrepo.anime.interactor.UpdateAnimeExtensionRepo
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
+import app.anikuta.domain.source.service.SourcePreferences
 import app.anikuta.extension.anime.AnimeExtensionManager
+import app.anikuta.extension.anime.api.AnimeExtensionApi
 import app.anikuta.extension.anime.util.AnimeExtensionLoader
+import app.anikuta.extension.ExtensionUpdateNotifier
 import app.anikuta.source.AndroidAnimeSourceManager
 import uy.kohesive.injekt.api.InjektModule
 import uy.kohesive.injekt.api.InjektRegistrar
@@ -24,15 +30,8 @@ import uy.kohesive.injekt.api.addSingleton
 import uy.kohesive.injekt.api.addSingletonFactory
 import uy.kohesive.injekt.api.get
 
-/**
- * AppModule — wires all backend components.
- *
- * KEY: register both Application AND Context so `get<Context>()` works.
- * (Injekt doesn't auto-resolve Application → Context; must register both.)
- */
 class AppModule(val app: Application) : InjektModule {
     override fun InjektRegistrar.registerInjectables() {
-        // Register both Application AND Context (Injekt needs both)
         addSingleton(app)
         addSingleton<Context>(app)
 
@@ -46,16 +45,20 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory<AnimeDatabaseHandler> { AndroidAnimeDatabaseHandler(get(), get()) }
 
         // Extension + source management
+        addSingletonFactory { SourcePreferences(get<PreferenceStore>()) }
+        addSingletonFactory { TrustAnimeExtension() }
+        addSingletonFactory { GetAnimeExtensionRepo() }
+        addSingletonFactory { UpdateAnimeExtensionRepo() }
         addSingletonFactory { AnimeExtensionLoader(get<Context>()) }
-        addSingletonFactory { import app.anikuta.domain.source.service.SourcePreferences(get<PreferenceStore>()) }
-        addSingletonFactory { app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension() }
-        addSingletonFactory { AnimeExtensionManager(get<Context>(), get(), get()) }
+        addSingletonFactory { AnimeExtensionApi(get(), get(), get()) }
+        addSingletonFactory { ExtensionUpdateNotifier(get<Context>()) }
+        addSingletonFactory { AnimeExtensionManager(get<Context>(), get(), get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get<Context>(), get()) }
 
-        // AniList client (ours — discovery layer)
+        // AniList client
         addSingletonFactory { AniListRepository(get()) }
 
-        // 3-step cache: Local → Supabase → AniList
+        // 3-step cache
         addSingletonFactory { LocalCache(get<AnimeDatabase>()) }
         addSingletonFactory { SupabaseClient(get()) }
         addSingletonFactory { CacheManager(get(), get()) }

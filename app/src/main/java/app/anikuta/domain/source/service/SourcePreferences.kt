@@ -1,11 +1,10 @@
 package app.anikuta.domain.source.service
 
-import app.anikuta.core.preference.PreferenceStore
 import app.anikuta.core.preference.Preference
+import app.anikuta.core.preference.PreferenceStore
 
 /**
- * Stub SourcePreferences — minimal implementation for extension system.
- * TODO: copy full implementation from aniyomi when needed.
+ * SourcePreferences — minimal implementation for extension system.
  */
 class SourcePreferences(
     private val preferenceStore: PreferenceStore,
@@ -21,8 +20,7 @@ class SourcePreferences(
 
     fun extensionUpdatesCount(): Preference<Int> =
         preferenceStore.getInt("extension_updates_count", 0)
-}
 
-    fun animeExtensionUpdatesCount(): app.anikuta.core.preference.Preference<Int> =
+    fun animeExtensionUpdatesCount(): Preference<Int> =
         preferenceStore.getInt("anime_extension_updates_count", 0)
-
+}
