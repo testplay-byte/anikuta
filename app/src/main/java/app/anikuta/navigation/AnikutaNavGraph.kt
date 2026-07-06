@@ -159,6 +159,14 @@ fun AnikutaNavGraph() {
                     onBack = { navController.popBackStack() },
                 )
             }
+            // Hidden debug screen (Phase 5 task 5.1). Accessible via long-press
+            // on the version number in MoreScreen. Easily removable: delete this
+            // composable + the DebugScreen file + the long-press handler.
+            composable(route = "debug") {
+                app.anikuta.ui.debug.DebugScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }
