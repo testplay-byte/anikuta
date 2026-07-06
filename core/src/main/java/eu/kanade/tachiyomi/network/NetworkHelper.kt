@@ -1,10 +1,10 @@
-package app.anikuta.core.network
+package eu.kanade.tachiyomi.network
 
 import android.content.Context
-// TODO (later): import app.anikuta.core.network.interceptor.CloudflareInterceptor
-import app.anikuta.core.network.interceptor.IgnoreGzipInterceptor
-import app.anikuta.core.network.interceptor.UncaughtExceptionInterceptor
-import app.anikuta.core.network.interceptor.UserAgentInterceptor
+// TODO (later): import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
+import eu.kanade.tachiyomi.network.interceptor.IgnoreGzipInterceptor
+import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
+import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.brotli.BrotliInterceptor

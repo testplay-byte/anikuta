@@ -1,4 +1,4 @@
-package app.anikuta.core.network
+package eu.kanade.tachiyomi.network
 
 import app.anikuta.core.preference.Preference
 import app.anikuta.core.preference.PreferenceStore

@@ -2,8 +2,8 @@ package app.anikuta.extension.anime.api
 
 import android.content.Context
 import android.util.Log
-import app.anikuta.core.network.GET
-import app.anikuta.core.network.NetworkHelper
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.model.ExtensionRepo
 import app.anikuta.extension.ExtensionUpdateNotifier

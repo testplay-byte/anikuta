@@ -1,7 +1,7 @@
 package app.anikuta.data.supabase
 
 import android.util.Log
-import app.anikuta.core.network.NetworkHelper
+import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json

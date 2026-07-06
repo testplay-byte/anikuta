@@ -1,4 +1,4 @@
-package app.anikuta.core.network.interceptor
+package eu.kanade.tachiyomi.network.interceptor
 
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull

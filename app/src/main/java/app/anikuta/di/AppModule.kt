@@ -2,8 +2,8 @@ package app.anikuta.di
 
 import android.app.Application
 import android.content.Context
-import app.anikuta.core.network.NetworkHelper
-import app.anikuta.core.network.NetworkPreferences
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.NetworkPreferences
 import app.anikuta.core.preference.AndroidPreferenceStore
 import app.anikuta.core.preference.PreferenceStore
 import app.anikuta.data.AnimeDatabase

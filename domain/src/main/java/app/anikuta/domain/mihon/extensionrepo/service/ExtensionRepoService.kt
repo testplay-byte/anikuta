@@ -1,9 +1,9 @@
 package app.anikuta.domain.mihon.extensionrepo.service
 
-import app.anikuta.core.network.GET
-import app.anikuta.core.network.NetworkHelper
-import app.anikuta.core.network.awaitSuccess
-import app.anikuta.core.network.parseAs
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.parseAs
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import app.anikuta.domain.mihon.extensionrepo.model.ExtensionRepo

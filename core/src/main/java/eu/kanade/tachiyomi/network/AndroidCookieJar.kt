@@ -1,4 +1,4 @@
-package app.anikuta.core.network
+package eu.kanade.tachiyomi.network
 
 import android.webkit.CookieManager
 import okhttp3.Cookie

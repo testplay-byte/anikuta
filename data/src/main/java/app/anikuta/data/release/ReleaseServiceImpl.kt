@@ -1,10 +1,10 @@
 package app.anikuta.data.release
 
 import android.os.Build
-import app.anikuta.core.network.GET
-import app.anikuta.core.network.NetworkHelper
-import app.anikuta.core.network.awaitSuccess
-import app.anikuta.core.network.parseAs
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.parseAs
 import kotlinx.serialization.json.Json
 import app.anikuta.domain.release.interactor.GetApplicationRelease
 import app.anikuta.domain.release.model.Release

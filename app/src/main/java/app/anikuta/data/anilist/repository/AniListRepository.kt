@@ -2,7 +2,7 @@ package app.anikuta.data.anilist.repository
 
 import app.anikuta.data.anilist.api.AniListQueries
 import app.anikuta.data.anilist.model.*
-import app.anikuta.core.network.NetworkHelper
+import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json

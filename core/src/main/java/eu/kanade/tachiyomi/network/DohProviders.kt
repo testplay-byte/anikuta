@@ -1,4 +1,4 @@
-package app.anikuta.core.network
+package eu.kanade.tachiyomi.network
 
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient

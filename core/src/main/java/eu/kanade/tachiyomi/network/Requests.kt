@@ -1,6 +1,6 @@
 @file:Suppress("FunctionName")
 
-package app.anikuta.core.network
+package eu.kanade.tachiyomi.network
 
 import okhttp3.CacheControl
 import okhttp3.FormBody

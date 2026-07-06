@@ -1,4 +1,4 @@
-package app.anikuta.core.network
+package eu.kanade.tachiyomi.network
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
