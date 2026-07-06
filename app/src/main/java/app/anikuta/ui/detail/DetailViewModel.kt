@@ -192,6 +192,8 @@ class DetailViewModel(
                         url = best.videoUrl,
                         title = episode.name,
                         episodeNumber = episode.episode_number,
+                        anilistId = anilistId,
+                        episodeUrl = episode.url,
                     )
                 } else {
                     _playRequest.value = PlayRequest.Error("No playable video found for this episode")
@@ -243,6 +245,12 @@ sealed class EpisodeState {
 }
 
 sealed class PlayRequest {
-    data class Play(val url: String, val title: String, val episodeNumber: Float) : PlayRequest()
+    data class Play(
+        val url: String,
+        val title: String,
+        val episodeNumber: Float,
+        val anilistId: Int = -1,
+        val episodeUrl: String = "",
+    ) : PlayRequest()
     data class Error(val message: String) : PlayRequest()
 }

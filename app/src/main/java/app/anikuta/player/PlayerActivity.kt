@@ -52,24 +52,44 @@ class PlayerActivity : ComponentActivity() {
         private const val TAG = "PlayerActivity"
         const val EXTRA_VIDEO_URL = "app.anikuta.player.VIDEO_URL"
         const val EXTRA_TITLE = "app.anikuta.player.TITLE"
+        const val EXTRA_ANILIST_ID = "app.anikuta.player.ANILIST_ID"
+        const val EXTRA_EPISODE_URL = "app.anikuta.player.EPISODE_URL"
         const val MPV_DIR = "mpv"
 
-        /** Build a launch Intent for the player. */
-        fun newIntent(context: Context, videoUrl: String, title: String): Intent =
+        /**
+         * Build a launch Intent for the player.
+         * [anilistId] + [episodeUrl] are optional — when both are provided,
+         * watch progress is saved/resumed (Phase 5 tasks 5.4 + 5.5).
+         */
+        fun newIntent(
+            context: Context,
+            videoUrl: String,
+            title: String,
+            anilistId: Int = -1,
+            episodeUrl: String = "",
+        ): Intent =
             Intent(context, PlayerActivity::class.java).apply {
                 putExtra(EXTRA_VIDEO_URL, videoUrl)
                 putExtra(EXTRA_TITLE, title)
+                if (anilistId > 0) putExtra(EXTRA_ANILIST_ID, anilistId)
+                if (episodeUrl.isNotBlank()) putExtra(EXTRA_EPISODE_URL, episodeUrl)
             }
     }
 
     private lateinit var observer: PlayerObserver
     private var viewModel: PlayerViewModel? = null
+    private val watchProgress: WatchProgressStore? = try { uy.kohesive.injekt.Injekt.get() } catch (e: Exception) { null }
+    private var anilistId: Int = -1
+    private var episodeUrl: String = ""
+    private var resumedPosition: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val videoUrl = intent.getStringExtra(EXTRA_VIDEO_URL)
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Now Playing"
+        anilistId = intent.getIntExtra(EXTRA_ANILIST_ID, -1)
+        episodeUrl = intent.getStringExtra(EXTRA_EPISODE_URL) ?: ""
 
         if (videoUrl.isNullOrBlank()) {
             Log.e(TAG, "No video URL provided, finishing")
@@ -113,10 +133,57 @@ class PlayerActivity : ComponentActivity() {
 
     private fun handleEvent(eventId: Int) {
         when (eventId) {
-            MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> viewModel?.onFileLoaded()
+            MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
+                viewModel?.onFileLoaded()
+                // Resume from saved position (task 5.5).
+                seekToSavedPosition()
+            }
             MPVLib.mpvEventId.MPV_EVENT_SEEK -> viewModel?.onBufferingChanged(true)
             MPVLib.mpvEventId.MPV_EVENT_PLAYBACK_RESTART -> viewModel?.onBufferingChanged(false)
             MPVLib.mpvEventId.MPV_EVENT_IDLE -> Log.d(TAG, "Player idle")
+        }
+    }
+
+    /**
+     * Seek to the last saved position for this episode (task 5.5).
+     * Called after MPV_EVENT_FILE_LOADED — the video is ready to seek.
+     */    private fun seekToSavedPosition() {
+        val pos = watchProgress?.get(anilistId, episodeUrl) ?: return
+        if (pos.positionSeconds > 5) {  // don't resume if < 5s in
+            resumedPosition = pos.positionSeconds
+            try {
+                MPVLib.command(arrayOf("set", "start", "${pos.positionSeconds}"))
+                viewModel?.onPositionUpdate(pos.positionSeconds)
+                android.widget.Toast.makeText(this, "Resumed from ${formatTime(pos.positionSeconds)}", android.widget.Toast.LENGTH_SHORT).show()
+                Log.d(TAG, "Resumed from ${pos.positionSeconds}s")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not seek to saved position", e)
+            }
+        }
+    }
+
+    private fun formatTime(seconds: Int): String {
+        val m = seconds / 60
+        val s = seconds % 60
+        return String.format("%d:%02d", m, s)
+    }
+
+    /**
+     * Save current playback progress to WatchProgressStore (task 5.4).
+     */
+    private fun saveProgress() {
+        val store = watchProgress ?: return
+        if (anilistId < 0 || episodeUrl.isBlank()) return  // no identity to save under
+        val vm = viewModel ?: return
+        val pos = vm.position.value
+        val dur = vm.duration.value
+        if (dur > 0 && pos < dur - 2) {  // don't save if basically finished
+            store.save(anilistId, episodeUrl, pos, dur, vm.title)
+            Log.d(TAG, "Saved progress: ${pos}s / ${dur}s")
+        } else if (dur > 0 && pos >= dur - 2) {
+            // Finished — clear the progress so next time we start from 0.
+            store.clear(anilistId, episodeUrl)
+            Log.d(TAG, "Episode finished — cleared progress")
         }
     }
 
@@ -159,10 +226,12 @@ class PlayerActivity : ComponentActivity() {
         try { MPVLib.setPropertyBoolean("pause", true) } catch (e: Exception) {
             Log.w(TAG, "Could not pause on background", e)
         }
+        saveProgress()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        saveProgress()
         try {
             MPVLib.removeLogObserver(observer)
             MPVLib.removeObserver(observer)

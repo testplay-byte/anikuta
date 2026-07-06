@@ -42,6 +42,7 @@ class AppModule(val app: Application) : InjektModule {
 
         // Player preferences + MPV player surface
         addSingletonFactory { PlayerPreferences(get<PreferenceStore>()) }
+        addSingletonFactory { app.anikuta.player.WatchProgressStore(get<PreferenceStore>()) }
 
         // Anime database
         addSingletonFactory { AnimeDatabaseFactory.create(app) }
