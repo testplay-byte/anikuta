@@ -15,6 +15,7 @@ import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
 import app.anikuta.data.supabase.SupabaseClient
 import app.anikuta.player.PlayerPreferences
+import app.anikuta.source.bridge.AniyomiSourceBridge
 import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.UpdateAnimeExtensionRepo
@@ -54,6 +55,9 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { AnimeExtensionLoader(get<Context>()) }
         addSingletonFactory { AnimeExtensionManager(get<Context>(), get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get<Context>(), get()) }
+
+        // AniList ↔ extension source bridge (fuzzy title matching)
+        addSingletonFactory { AniyomiSourceBridge(get<AnimeSourceManager>()) }
 
         // AniList client
         addSingletonFactory { AniListRepository(get()) }
