@@ -19,9 +19,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // TODO (Phase 4): when we add MPV native lib, filter to arm64-v8a only:
-    //   ndk { abiFilters += "arm64-v8a" }
-    // For now (pure Compose, no native code), no ABI filter needed.
+    // MPV native lib — only build arm64-v8a
+    ndk {
+        abiFilters += "arm64-v8a"
+    }
 
     buildTypes {
         debug {
@@ -78,6 +79,7 @@ dependencies {
     implementation(platform(libs.coil.bom))
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.mpv.lib)
 
     // Testing
     testImplementation(libs.junit)
