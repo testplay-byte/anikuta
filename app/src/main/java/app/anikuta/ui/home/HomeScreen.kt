@@ -19,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import app.anikuta.data.anilist.model.AniListAnime
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen() {
     val viewModel: HomeViewModel = viewModel()
@@ -141,8 +142,9 @@ private fun GenreSection(state: HomeSectionState) {
     when (state) {
         is HomeSectionState.Loading -> {
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(5) { AssistChip(onClick = {}, label = { Text("Loading...") })
-            }
+                items(List(5) { "Loading..." }) { _ ->
+                    AssistChip(onClick = {}, label = { Text("Loading...") })
+                }
             }
         }
         is HomeSectionState.GenresSuccess -> {
@@ -162,7 +164,7 @@ private fun GenreSection(state: HomeSectionState) {
 @Composable
 private fun SkeletonRow() {
     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(5) {
+        items(List(5) { it }) { _ ->
             Card(modifier = Modifier.width(140.dp)) {
                 Column {
                     Surface(modifier = Modifier.fillMaxWidth().height(200.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}

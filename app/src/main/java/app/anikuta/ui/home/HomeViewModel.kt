@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 
 /**
  * ViewModel for the home page.
@@ -119,8 +121,8 @@ class HomeViewModel : ViewModel() {
                     key = "genres",
                     ttlMs = CacheManager.TTL_GENRES,
                     fetch = { anilistRepo.getGenres() },
-                    serialize = { json.encodeToString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), it) },
-                    deserialize = { json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), it) },
+                    serialize = { json.encodeToString(ListSerializer(String.serializer()), it) },
+                    deserialize = { json.decodeFromString(ListSerializer(String.serializer()), it) },
                 )
                 _genres.value = if (data != null) HomeSectionState.GenresSuccess(data) else HomeSectionState.Error("Failed to load")
             } catch (e: Exception) {
