@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +32,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import app.anikuta.data.anilist.model.AniListAnime
+
+/**
+ * Public-domain sample stream (Big Buck Bunny) used to verify the MPV player
+ * works before the extension→source→episode pipeline is wired (Phase 5).
+ * Swapped out for real episode URLs once source resolution is in place.
+ */
+private const val SAMPLE_STREAM_URL =
+    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -176,6 +185,30 @@ fun DetailScreen(
                             is EpisodeState.Error -> {
                                 Text("Couldn't load episodes: ${(episodeState as EpisodeState.Error).message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Player launcher.
+                        // TODO(Phase 5): when the source system is wired, launch the first
+                        // resolved Video.videoUrl from the extension instead of this sample.
+                        Button(
+                            onClick = {
+                                val intent = app.anikuta.player.PlayerActivity.newIntent(
+                                    context = context,
+                                    videoUrl = SAMPLE_STREAM_URL,
+                                    title = anime.title.preferred(),
+                                )
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
+                            Text("Play sample")
                         }
                     }
                 }

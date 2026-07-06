@@ -38,6 +38,9 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { NetworkPreferences(get<PreferenceStore>()) }
         addSingletonFactory { NetworkHelper(get<Context>(), get<NetworkPreferences>()) }
 
+        // Player preferences + MPV player surface
+        addSingletonFactory { app.anikuta.player.PlayerPreferences(get<PreferenceStore>()) }
+
         // Anime database
         addSingletonFactory { AnimeDatabaseFactory.create(app) }
         addSingletonFactory<AnimeDatabaseHandler> { AndroidAnimeDatabaseHandler(get(), get()) }
