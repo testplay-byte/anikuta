@@ -1,136 +1,188 @@
-# Phase 6 — The 4 Designs + Theming System
+# Phase 6 — App Functionality + Polish
 
 > **Status: PLANNING (not started).** This document defines the goal, scope,
 > tasks, open questions, and dependencies. Implementation begins after the user
 > answers the open questions and gives the go-ahead.
 >
 > **Prerequisite:** Phase 5 complete ✅ (extension chain works, real episodes
-> play, Library/History/Search/Settings all functional).
+> play, Library/History/Search/Settings functional).
+>
+> **Note:** The original Phase 6 (4 designs + theming) has been moved to
+> **Phase 8** (see `PHASE-8-DESIGNS-PLAN.md`). The user decided the app needs
+> to be fully functional and polished before adding more visual designs.
 
 ---
 
 ## 1. Goal
 
-**The customization system lands.** By the end of Phase 6, the user can:
-1. Pick from **4 complete designs** (Material 3, Dark Neon, Neobrutalism, Coffee Notebook) — each applies throughout the entire app.
-2. Choose a **theme variant** (Light / Dark / AMOLED) per design.
-3. Pick an **accent color** from presets (or follow system/Monet on M3).
-4. **Show/hide home page sections** (trending, popular, fresh, genres, schedule).
-5. See the design they pick in a **live preview** before applying.
+**Make the app fully functional and polished.** The core works (search →
+detail → play → save → resume), but it's missing key features that make an
+anime app usable day-to-day. By the end of Phase 6:
 
-The app goes from "functional but one-design" to "fully customizable with 4 distinct visual identities."
+1. **Extension management** — install, uninstall, update, enable/disable
+   extensions from within the app (no more sideloading APKs manually).
+2. **AniList tracking** — login to AniList, sync watch progress, mark episodes
+   as watched, update anime status (watching/completed/plan to watch).
+3. **Video downloads** — download episodes for offline viewing; a downloads
+   queue with progress; offline playback in the player.
+4. **Settings reorganization** — split the cluttered single-page MoreScreen
+   into proper subpages (General, Player, Extensions, Downloads, Tracking,
+   About).
+5. **Player UX improvements** — faster video start (preload before showing
+   player), better loading feedback, smoother experience.
+6. **General polish** — bug fixes, performance, edge cases, error handling.
 
 ---
 
 ## 2. Scope — what's IN Phase 6
 
-### 2.1 Design system architecture (the foundation)
+### 2.1 Extension management (was Phase 7)
 
-This is the most important piece. Currently the app has ONE hardcoded theme (`AnikutaTheme` in `Theme.kt` + `Expressive.kt`). Phase 6 builds a **design-system abstraction** so all 4 designs plug in:
-
-```
-DesignProvider (CompositionLocal)
-  ├── Material3Design   (current — refactored)
-  ├── NeonDesign        (new — dark glass, neon accents)
-  ├── NeobrutalismDesign (new — thick borders, hard shadows)
-  └── CoffeeDesign      (new — paper texture, handwriting font)
-```
-
-Each design provides:
-- **Color scheme** (light + dark + AMOLED variants)
-- **Typography** (font family, weights, sizes)
-- **Shapes** (corner radii, border styles)
-- **Motion specs** (spring configs, durations)
-- **Component overrides** (card style, button style, nav style)
+Currently extensions are detected and loaded, but the user has no way to
+install/uninstall/update them from within the app. They have to sideload APKs.
 
 **Tasks:**
-- **6.1** `DesignSpec` interface + `DesignProvider` CompositionLocal — the abstraction layer.
-- **6.2** Refactor existing `AnikutaTheme` → `Material3Design` (no visual change, just moves it behind the interface).
-- **6.3** `DesignStore` (PreferenceStore-backed) — remembers the user's pick + theme variant + accent.
+- **6.1** Extensions screen: list installed extensions (name, version, source
+  count, enable/disable toggle). Accessible from Settings → Extensions.
+- **6.2** Available extensions: fetch the extension repo index
+  (`index.min.json` from the configured repo), show available extensions with
+  install buttons.
+- **6.3** Extension installer: download APK from repo → install via
+  `PackageInstaller` (Android system installer) → reload extension manager.
+- **6.4** Extension uninstaller: uninstall via `PackageInstaller` or Intent.
+- **6.5** Extension updates: check for newer versions in the repo, show update
+  badge, update button.
+- **6.6** Extension repo management: add/remove extension repos (URLs), default
+  to `Confused-Creature-180/aniyomi-extensions`.
 
-### 2.2 Design 2 — Dark Neon
+### 2.2 AniList tracking (was Phase 8)
 
-From `DOCS/PLAN/DESIGNS/02-neon/`: dark glass-morphic, lime/sky/coral neon accents, backdrop-blur, hairline borders, neon glow shadows.
-
-**Tasks:**
-- **6.4** `NeonDesign` — color scheme (dark-only, AMOLED variant), typography (same as M3 but with neon weight), shapes (rounded with hairline borders), motion (Framer-Motion-style springs).
-- **6.5** Neon component overrides: `NeoCard` (glass + blur + glow), `NeoButton` (neon outline), `NeoNavBar` (glass pill).
-
-### 2.3 Design 3 — Neobrutalism
-
-From `DOCS/PLAN/DESIGNS/03-notebook/`: bold, raw, 3px borders, hard offset shadows (4px rest / 8px hover / 1px press), uppercase black/extrabold typography, 28px background grid pattern, spring-overshoot easing.
-
-**Tasks:**
-- **6.6** `NeobrutalismDesign` — 7 accent colors (blue/pink/green/yellow/orange/purple/red), Acid Cream (light) + Midnight Raw (dark) palettes, 3px borders, hard shadows.
-- **6.7** Neobrutalism component overrides: `NeoCard` (3.5px border, offset shadow, lift-on-press), `NeoButton`, `NeoBadge`, custom `Modifier.neoShadow` (Compose's built-in shadow is wrong for neobrutalism).
-- **6.8** Background grid pattern via `Modifier.drawBehind`.
-
-### 2.4 Design 4 — Coffee Notebook
-
-From `DOCS/PLAN/DESIGNS/04-coffee/`: cozy, coffee-stained paper, Caveat handwriting font, terracotta/cream palette, sticky-note badges, washi tape, coffee-ring decor.
+Currently the app uses AniList for discovery only (no login). Phase 6 adds
+AniList OAuth login + progress sync.
 
 **Tasks:**
-- **6.9** `CoffeeDesign` — terracotta/cream palette, Caveat font (bundled), paper texture background, sticky-note badges.
-- **6.10** Coffee component overrides: `CoffeeCard` (paper texture, sticky-note badge), `CoffeeButton` (washi tape accent).
+- **6.7** AniList OAuth login: open browser → AniList auth → callback → store
+  access token. Settings → Tracking → "Login with AniList".
+- **6.8** AniList API client: authenticated queries (update progress, get user
+  lists, search user's anime list).
+- **6.9** Progress sync: when the user watches an episode (progress saved),
+  also update AniList (mark episode as watched, update progress %).
+- **6.10** Anime status: in detail page, show + edit the anime's status
+  (Watching / Completed / Paused / Dropped / Planning) — synced to AniList.
+- **6.11** User library sync: pull the user's AniList library into the app's
+  Library tab (merge with locally-saved anime).
 
-### 2.5 Theme variants + accents
+### 2.3 Video downloads (was Phase 7)
 
-**Tasks:**
-- **6.11** Theme variant system: Light / Dark / AMOLED per design. AMOLED = pure black backgrounds (OLED battery save).
-- **6.12** Accent picker: each design has 5-7 accent presets. M3 also supports "follow system/Monet" (Android 12+).
-- **6.13** `ThemeStore` — persists theme variant + accent per design.
-
-### 2.6 Home page customization
-
-**Tasks:**
-- **6.14** Section show/hide: `HomeCustomizationStore` (PreferenceStore) — user can toggle each of the 6 home sections (trending, popular, fresh, genres, schedule, hero). HomeScreen reads this + shows/hides accordingly.
-- **6.15** Section reordering (stretch goal — may defer): drag-to-reorder home sections.
-
-### 2.7 Settings UI
+Download episodes for offline viewing. This is a large feature.
 
 **Tasks:**
-- **6.16** Design picker screen (replaces the "Coming soon" badge in MoreScreen): grid of 4 design cards, each showing a mini-preview. Tap → live preview → "Apply" button.
-- **6.17** Theme picker: Light / Dark / AMOLED segmented control.
-- **6.18** Accent picker: row of color swatches per design.
-- **6.19** Home customization screen: list of 6 sections with toggles + (optionally) drag handles.
+- **6.12** Download manager: WorkManager-based queue. Downloads episodes in the
+  background, survives app restart.
+- **6.13** Download UI: queue screen (Settings → Downloads) showing
+  downloading/completed/failed items with progress bars.
+- **6.14** Download storage: save to the user-selected folder (from onboarding
+  step 3). Format: MP4/MKV via FFmpeg (ffmpeg-kit is already a dependency).
+- **6.15** Offline playback: player reads downloaded files instead of streaming
+  when available. "Downloaded" badge on episodes in the detail page.
+- **6.16** Download settings: quality preference (360p/720p/1080p), max
+  concurrent downloads, delete after watching toggle.
 
-### 2.8 Live preview
+### 2.4 Settings reorganization
+
+The current MoreScreen is a single page with 4 groups — getting cluttered.
+Split into subpages.
 
 **Tasks:**
-- **6.20** Design preview composable: shows a sample card + button + nav bar in the selected design, so the user sees what they're picking before applying.
+- **6.17** Settings home: a list of categories (General, Player, Extensions,
+  Downloads, Tracking, About). Each → a subpage.
+- **6.18** General subpage: clear cache, storage info, default home view.
+- **6.19** Player subpage: speed, hwdec, audio language, subtitle settings
+  (basic), gesture toggles.
+- **6.20** Extensions subpage: installed + available + repos (task 6.1-6.6).
+- **6.21** Downloads subpage: queue + settings (task 6.13 + 6.16).
+- **6.22** Tracking subpage: AniList login + sync settings (task 6.7).
+- **6.23** About subpage: version, build, GitHub, licenses, debug screen entry.
+- **6.24** Navigation: each subpage has a back button, proper titles, M3
+  Expressive styling.
+
+### 2.5 Player UX improvements
+
+The user reported: "video does not directly start to play. It loads on the
+video player page a bit too and after some time then the video starts to play."
+
+**Tasks:**
+- **6.25** Preload video URL before opening player: keep the loading overlay on
+  the detail page until the video URL is resolved AND the first frame is ready,
+  then open the player already playing. (Currently the player opens, then
+  loads.)
+- **6.26** Player loading state: show a spinner + "Buffering…" in the player
+  while MPV loads the stream, instead of a blank screen.
+- **6.27** Resume prompt: when opening an episode with saved progress, show a
+  "Resume from X:XX?" dialog before the player opens (instead of auto-seeking
+  silently).
+
+### 2.6 General polish
+
+**Tasks:**
+- **6.28** Error handling audit: every screen should have proper Error states
+  with retry buttons (some do, some don't).
+- **6.29** Empty states: every list/grid should have a helpful empty state
+  (some do, some don't).
+- **6.30** Loading skeletons: replace spinners with skeleton placeholders on
+  Home, Library, History, Search.
+- **6.31** Performance: profile startup time, scroll smoothness, image loading.
+  Fix obvious bottlenecks.
+- **6.32** Edge cases: no internet, extension crashes, invalid video URLs,
+  expired cache, low storage.
 
 ---
 
 ## 3. Scope — what's NOT in Phase 6
 
-- **Player UI redesign** (server/quality selection, better controls, gestures) — deferred to a later player-polish phase.
-- **Per-screen design overrides** — the user picks ONE design for the whole app (no mixing). Per-screen overrides come later if requested.
-- **Custom fonts upload** — only the bundled fonts (Caveat for Coffee, system for others). User can't upload their own.
-- **Custom accent color picker** (hex input) — only presets. Hex picker comes later if requested.
-- **Animated theme transitions** (crossfade when switching designs) — nice-to-have, may defer.
-- **Widget / lock screen customization** — not in scope.
+- **4 designs + theming** — moved to Phase 8. The app stays Material 3
+  Expressive for now.
+- **Player gestures** (swipe for volume/brightness/seek) — deferred to Phase 8
+  (player-polish, alongside designs).
+- **Player settings panels** (subtitle typography, decoder presets, mpv.conf) —
+  deferred to Phase 8.
+- **PiP, media session, AniSkip, screenshots, chapters** — deferred.
+- **Backup/restore** — deferred to Phase 8 (polish).
+- **Manga support** — not planned (anime-only, Decision D2).
 
 ---
 
 ## 4. Dependencies + risks
 
-### 4.1 The big risk: Compose theme abstraction complexity
+### 4.1 Extension installer (6.3) — biggest risk
 
-Compose's `MaterialTheme` is global — there's no built-in way to swap color schemes / typography / shapes at runtime without recomposing the whole tree. The standard approach is `CompositionLocal` + a `DesignProvider` that wraps `MaterialTheme`. This works but requires every component to read from the provider, not hardcoded `MaterialTheme.colorScheme.*`.
+Installing APKs from within an app requires either:
+- `PackageInstaller` API (Android 8+, requires `REQUEST_INSTALL_PACKAGES`
+  permission + user confirmation dialog), OR
+- Launching the system installer via `Intent.ACTION_VIEW` + `application/vnd.android.package-archive`
 
-**Mitigation:** Phase 6.1 (DesignSpec interface) is the foundation — if it's wrong, everything breaks. We build it first, test it with Material3 (refactored), then plug in the other 3 designs one at a time.
+The `REQUEST_INSTALL_PACKAGES` permission is restricted on Google Play but
+fine for sideloaded apps. aniyomi uses this approach. Risk: some OEMs/Oppo/
+Xiaomi may block unknown-source installs with extra dialogs.
 
-### 4.2 Font bundling (Coffee design)
+### 4.2 AniList OAuth (6.7) — needs a client ID
 
-The Coffee design needs the Caveat handwriting font. We need to bundle it as a resource (`res/font/`) and load it via `FontFamily(Font(R.font.caveat))`. This adds ~100KB to the APK.
+AniList OAuth requires registering an AniList app to get a client ID + secret.
+The user needs to register at `anilist.co/settings/developer` and provide the
+client ID. This is a user action — I'll ask in the questions.
 
-### 4.3 Glass-morphic blur (Neon design)
+### 4.3 Downloads (6.12-6.16) — large feature, FFmpeg dependency
 
-Compose's `Modifier.blur` works on Android 12+ but is slow on older devices. For the Neon design's glass cards, we may need `RenderEffect` (API 31+) with a fallback to semi-transparent overlays on older devices.
+Downloads need FFmpeg to mux streams into MP4/MKV. We already have `ffmpeg-kit`
+(from Phase 4). The download manager needs WorkManager (not yet a dependency).
+Storage: the user selected a folder in onboarding step 3 — we need to use that
+via `DocumentFile` (scoped storage).
 
-### 4.4 Neobrutalism shadows
+### 4.4 Settings subpages — needs navigation refactoring
 
-Compose's built-in `Modifier.shadow` uses soft elevation shadows — wrong for neobrutalism (which needs hard offset shadows). We need a custom `Modifier.neoShadow` using `drawBehind` + `translation` offset.
+The current NavGraph has a single `More` route. We need nested navigation or
+multiple routes (`settings/general`, `settings/player`, `settings/extensions`,
+etc.). This is a moderate refactor.
 
 ---
 
@@ -138,79 +190,133 @@ Compose's built-in `Modifier.shadow` uses soft elevation shadows — wrong for n
 
 | # | Task | Depends on | Est. complexity |
 |---|------|------------|-----------------|
-| 6.1 | DesignSpec interface + DesignProvider CompositionLocal | — | High |
-| 6.2 | Refactor AnikutaTheme → Material3Design | 6.1 | Medium |
-| 6.3 | DesignStore (persist pick + theme + accent) | 6.1 | Low |
-| 6.4 | NeonDesign (colors, typography, shapes, motion) | 6.1 | Medium |
-| 6.5 | Neon component overrides (NeoCard, NeoButton, NeoNavBar) | 6.4 | Medium |
-| 6.6 | NeobrutalismDesign (7 accents, Acid Cream + Midnight Raw) | 6.1 | Medium |
-| 6.7 | Neobrutalism component overrides + Modifier.neoShadow | 6.6 | High |
-| 6.8 | Neobrutalism background grid pattern | 6.6 | Low |
-| 6.9 | CoffeeDesign (terracotta/cream, Caveat font, paper texture) | 6.1 | Medium |
-| 6.10 | Coffee component overrides | 6.9 | Medium |
-| 6.11 | Theme variant system (Light/Dark/AMOLED) | 6.2 | Medium |
-| 6.12 | Accent picker (5-7 presets per design + Monet for M3) | 6.11 | Low |
-| 6.13 | ThemeStore (persist theme + accent per design) | 6.3 | Low |
-| 6.14 | Home section show/hide (HomeCustomizationStore) | — | Low |
-| 6.15 | Section reordering (stretch — may defer) | 6.14 | High |
-| 6.16 | Design picker screen (grid + preview + apply) | 6.1–6.10 | Medium |
-| 6.17 | Theme picker (Light/Dark/AMOLED segmented) | 6.11 | Low |
-| 6.18 | Accent picker (swatches) | 6.12 | Low |
-| 6.19 | Home customization screen (toggles) | 6.14 | Low |
-| 6.20 | Live preview composable | 6.1–6.10 | Medium |
-| 6.21 | Phase 6 verification | all | — |
+| **Settings reorg** | | | |
+| 6.17 | Settings home (category list) | — | Medium |
+| 6.18-6.24 | 7 subpages | 6.17 | Medium |
+| **Player UX** | | | |
+| 6.25 | Preload video before opening player | — | Medium |
+| 6.26 | Player loading state (spinner + "Buffering…") | — | Low |
+| 6.27 | Resume prompt dialog | — | Low |
+| **Extension mgmt** | | | |
+| 6.1 | Extensions screen (installed list) | 6.20 | Medium |
+| 6.2 | Available extensions (repo index) | 6.6 | Medium |
+| 6.3 | Extension installer (APK download + install) | 6.2 | High |
+| 6.4 | Extension uninstaller | 6.1 | Low |
+| 6.5 | Extension updates | 6.2, 6.3 | Medium |
+| 6.6 | Extension repo management | — | Medium |
+| **AniList tracking** | | | |
+| 6.7 | AniList OAuth login | — | High |
+| 6.8 | AniList API client (authenticated) | 6.7 | Medium |
+| 6.9 | Progress sync | 6.8, 6.7 | Medium |
+| 6.10 | Anime status (detail page) | 6.8 | Low |
+| 6.11 | User library sync | 6.8 | Medium |
+| **Downloads** | | | |
+| 6.12 | Download manager (WorkManager) | — | High |
+| 6.13 | Download UI (queue) | 6.12, 6.21 | Medium |
+| 6.14 | Download storage (FFmpeg mux) | 6.12 | High |
+| 6.15 | Offline playback | 6.14 | Medium |
+| 6.16 | Download settings | 6.12 | Low |
+| **Polish** | | | |
+| 6.28 | Error handling audit | — | Medium |
+| 6.29 | Empty states audit | — | Low |
+| 6.30 | Loading skeletons | — | Medium |
+| 6.31 | Performance pass | — | Medium |
+| 6.32 | Edge cases | — | Medium |
+| 6.33 | Phase 6 verification | all | — |
 
-**Suggested order:** 6.1 → 6.2 → 6.3 (foundation), then 6.11 → 6.12 → 6.13 (theme system), then 6.4–6.10 (the 3 new designs, one at a time), then 6.14 → 6.19 (home customization), then 6.16–6.20 (settings UI + preview), then 6.21 (verify).
+**Suggested order:** Settings reorg (6.17-6.24) first — it's the foundation
+for the other features (extensions/downloads/tracking all need settings
+subpages). Then Player UX (6.25-6.27) — quick wins. Then Extension mgmt
+(6.1-6.6) — highest user value. Then AniList tracking (6.7-6.11). Then
+Downloads (6.12-6.16) — largest feature, last. Then Polish (6.28-6.32).
+Then verify (6.33).
 
 ---
 
 ## 6. Open questions for the user
 
-**Q1 — Build order:** Should we build all 4 designs in Phase 6, or build the foundation (6.1–6.3) + Material 3 + ONE new design (Neon), then ship the other 2 designs in Phase 7? My proposal: **all 4 in Phase 6** — the design docs are thorough, and doing them together keeps the abstraction consistent.
+**Q1 — Priority order:** Which section do you want first? My proposal:
+1. Settings reorganization (foundation for everything else)
+2. Player UX improvements (quick wins, you flagged the slow start)
+3. Extension management (highest user value — no more sideloading)
+4. AniList tracking (needs your client ID)
+5. Downloads (largest feature)
+6. Polish
+Agree, or reorder?
 
-**Q2 — Default design:** Which design should be the default for new users (first boot)? My proposal: **Material 3** (safest, most familiar, supports Monet).
+**Q2 — AniList client ID:** AniList OAuth needs a registered app. Do you want
+to register one at `anilist.co/settings/developer` and provide the client ID +
+secret, or should I defer tracking to Phase 8 and focus on the other features?
+My proposal: **register it now** — tracking is a core feature and you'll want
+it eventually.
 
-**Q3 — AMOLED:** Should every design have an AMOLED variant (pure black), or only the dark-capable ones (M3, Neon, Neobrutalism)? Coffee is inherently light (paper). My proposal: **AMOLED for M3 + Neon + Neobrutalism; Coffee has Light + Dark only** (Dark = dark coffee stain, not pure black).
+**Q3 — Extension repo:** Should we default to `Confused-Creature-180/aniyomi-
+extensions` (the one from onboarding), or allow the user to add multiple repos?
+My proposal: **default to that repo + allow adding more** (like aniyomi does).
 
-**Q4 — Accent presets:** How many accent colors per design? My proposal: **5-7 per design** (matching the design's palette — e.g., Neon has lime/sky/coral/purple/pink; Neobrutalism has the 7 neo colors; Coffee has terracotta/olive/navy/plum; M3 follows Monet or 6 presets).
+**Q4 — Download format:** Should downloads be MP4 (universally compatible) or
+MKV (preserves all streams/audio tracks)? My proposal: **MKV** — preserves
+quality + multiple audio tracks, and our player (MPV) plays MKV natively.
 
-**Q5 — Home section reordering:** Include drag-to-reorder in Phase 6 (task 6.15, high complexity), or defer? My proposal: **defer** — show/hide is enough for Phase 6; reordering is polish.
+**Q5 — Download quality:** Should the user pick a preferred quality (e.g.,
+720p) that auto-applies to all downloads, or pick per-episode? My proposal:
+**preferred quality in settings + per-episode override** (long-press episode →
+download at X quality).
 
-**Q6 — Live preview:** When the user is in the design picker, should the preview be (a) a static sample card, or (b) a live mini-app (actual home cards rendered in the selected design)? My proposal: **(a) static sample card** — simpler, faster, and enough to show the design's vibe.
+**Q6 — Settings subpages navigation:** Should subpages be separate routes in
+the NavGraph (`settings/extensions`, `settings/player`, etc.) or a nested
+navigation graph? My proposal: **separate routes** — simpler, back button
+works naturally, deep-linkable.
 
-**Q7 — Onboarding integration:** Should the onboarding Design step (step 6) use the new full design picker, or keep the simple 4-button pick? My proposal: **simple pick in onboarding (4 buttons), full picker in Settings** — onboarding should be fast.
+**Q7 — Player preload (6.25):** Should the player (a) open immediately and
+show a loading state inside the player, or (b) stay on the detail page with a
+loading overlay until the video is ready, then open the player already playing?
+My proposal: **(b)** — you flagged the "player opens then loads" as annoying,
+so we keep the loading on the detail page and open the player ready to play.
 
-**Q8 — Animated transitions:** When the user switches designs, should the whole app crossfade to the new design, or just snap? My proposal: **snap** (crossfade is nice but risky — Compose recomposition can glitch).
+**Q8 — Resume prompt:** When opening an episode with saved progress, should we
+(a) auto-resume silently (current behavior), (b) show a "Resume from X:XX?"
+dialog, or (c) show "Resume from X:XX / Start from beginning" buttons? My
+proposal: **(c)** — two buttons, clear and non-blocking.
 
 ---
 
 ## 7. How we'll manage Phase 6
 
-- **Same incremental copy-paste (D1):** each design references its `DOCS/PLAN/DESIGNS/0X-*/` docs. No bulk copy from aniyomi (aniyomi only has one design).
-- **UI/logic separation:** all design specs are pure data (no composables). Component overrides are thin wrappers. The app's screens don't change — they read from `DesignProvider`.
-- **One design at a time:** build M3 (refactored) → verify no visual regression → build Neon → verify → build Neobrutalism → verify → build Coffee → verify. Each is a separate commit + build.
-- **GitHub:** each task = one commit. Push after each. Build must be green before moving on.
-- **Documentation:** each design gets a `DOCS/APP/STRUCTURE/designs/0X-*.md` adoption record (what was implemented, what was adapted, what was deferred).
+- **Same incremental approach (D1):** each feature is built incrementally,
+  one commit per task. No bulk copy-paste.
+- **UI/logic separation:** ViewModels in `app.anikuta.ui.*`, interactors/repos
+  in `domain`/`data`. Settings subpages are thin UI over existing stores.
+- **M3 Expressive throughout:** all new screens use the existing `AnikutaTheme`.
+  No new design system (that's Phase 8).
+- **GitHub:** each task = one commit. Push after each. Build must be green.
+- **Documentation:** each major feature gets a `DOCS/APP/STRUCTURE/` doc
+  (extensions.md, tracking.md, downloads.md, settings.md).
 - **ntfy:** sent at the end of each task + when builds go green/red.
 
 ---
 
 ## 8. Verification (Phase 6 done = these all pass)
 
-- [ ] Onboarding Design step still works (simple 4-button pick).
-- [ ] Settings → Design picker shows all 4 designs with previews.
-- [ ] Tap each design → app instantly switches to that design (no restart).
-- [ ] Material 3: looks identical to before (no regression).
-- [ ] Neon: dark glass cards, neon accents, hairline borders.
-- [ ] Neobrutalism: 3px borders, hard shadows, uppercase type, grid background.
-- [ ] Coffee: paper texture, Caveat font, terracotta/cream, sticky-note badges.
-- [ ] Theme picker: Light/Dark/AMOLED works per design (Coffee = Light/Dark only).
-- [ ] Accent picker: 5-7 swatches per design, tap → accent changes.
-- [ ] Home customization: toggle each of 6 sections → home page updates.
-- [ ] Restart app → design + theme + accent + home sections all persist.
-- [ ] No crashes when switching designs rapidly.
+- [ ] Settings → 6 subpages, each with proper content + back navigation.
+- [ ] Player: tap episode → loading overlay on detail page → player opens
+  already playing (no blank-screen-then-load).
+- [ ] Resume prompt: "Resume from X:XX / Start from beginning" buttons.
+- [ ] Extensions screen: installed list with enable/disable + uninstall.
+- [ ] Extensions screen: available list with install button → system install
+  dialog → extension appears in installed list.
+- [ ] Extension updates: update badge → update button → new version installed.
+- [ ] AniList login: Settings → Tracking → "Login with AniList" → browser →
+  callback → "Logged in as [user]".
+- [ ] Watch an episode → AniList progress updates (check on anilist.co).
+- [ ] Detail page: anime status (Watching/Completed/etc.) shows + editable.
+- [ ] Downloads: long-press episode → download → progress in Downloads screen.
+- [ ] Downloads: play downloaded episode offline (no internet) → plays from
+  local file.
+- [ ] Every screen has proper Loading / Error / Empty states.
+- [ ] No crashes on edge cases (no internet, extension crash, invalid URL).
 
 ---
 
-_Last updated: Session 20 (Phase 6 planning). Implementation starts after user
-answers the open questions._
+_Last updated: Session 21 (Phase 6 re-planned — designs moved to Phase 8).
+Implementation starts after user answers the open questions._

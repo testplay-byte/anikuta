@@ -108,40 +108,53 @@ slice is complete.
 
 ---
 
-## Phase 6 — The 4 designs + theming
+## Phase 6 — App Functionality + Polish (current)
+
+**Goal:** Make the app fully functional and polished. Extension management,
+AniList tracking, video downloads, settings reorganization, player UX.
+
+- [ ] Settings reorganization (6 subpages: General, Player, Extensions,
+      Downloads, Tracking, About).
+- [ ] Player UX: preload before opening player, loading state, resume prompt.
+- [ ] Extension management: install/uninstall/update from within the app.
+- [ ] AniList tracking: OAuth login + progress sync + anime status.
+- [ ] Video downloads: WorkManager queue + FFmpeg mux + offline playback.
+- [ ] General polish: error states, empty states, skeletons, performance.
+
+**Deliverable:** A fully functional anime app — extensions manageable,
+progress tracked, episodes downloadable, settings organized.
+
+---
+
+## Phase 7 — (absorbed into Phase 6)
+
+Downloads + Extensions management moved to Phase 6 (tasks 6.1-6.16).
+
+---
+
+## Phase 8 — The 4 designs + theming (moved from Phase 6)
 
 **Goal:** The customization system lands.
 
-- [ ] Design 2 "Compact", Design 3 "Cinematic", Design 4 "Minimal".
+- [ ] Design abstraction (DesignSpec interface + DesignProvider).
+- [ ] Design 2 "Dark Neon", Design 3 "Neobrutalism", Design 4 "Coffee Notebook".
 - [ ] Theme system (light/dark/AMOLED + accent presets).
 - [ ] Custom theming panel (limited overrides).
 - [ ] Settings: design picker, theme picker, accent picker.
 - [ ] Section show/hide on home page.
+- [ ] Player gestures (swipe volume/brightness/seek) + player settings panels.
+- [ ] PiP, media session, AniSkip, screenshots, chapters.
 
-**Deliverable:** The user can pick from 4 designs + themes + accents.
-
----
-
-## Phase 7 — Downloads + Extensions management
-
-**Goal:** Offline viewing + extension management.
-
-- [ ] Wire `AnimeDownloadManager` (WorkManager + FFmpeg → .mkv).
-- [ ] Download UI (queue, progress).
-- [ ] Extensions page (install/enable/disable).
-- [ ] Offline playback (player reads downloaded files).
-
-**Deliverable:** Downloads work; extensions are manageable.
+**Deliverable:** The user can pick from 4 designs + themes + accents. Player
+is fully featured.
 
 ---
 
-## Phase 8 — Polish + backup + trackers
+## Phase 9 — Polish + backup + trackers
 
 **Goal:** Production-ready.
 
 - [ ] Backup/restore (anime data).
-- [ ] AniList tracker sync (login + progress sync) — if we decide to.
-- [ ] Onboarding flow (first launch).
 - [ ] Performance pass (startup, scroll, player).
 - [ ] Bug bash + fixes.
 
