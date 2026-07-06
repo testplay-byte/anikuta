@@ -13,6 +13,7 @@ data class AniListAnime(
     val title: AniListTitle,
     val coverImage: AniListCoverImage,
     val bannerImage: String? = null,
+    val description: String? = null,
     val averageScore: Int? = null,
     val episodes: Int? = null,
     val genres: List<String>? = null,

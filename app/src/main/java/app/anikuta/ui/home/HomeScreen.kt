@@ -240,7 +240,7 @@ private fun AnimeSection(state: HomeSectionState, viewModel: HomeViewModel, onAn
                         key = { it.id },
                         contentType = { "anime_card" },
                     ) { anime ->
-                        AnimeCard(anime)
+                        AnimeCard(anime, onAnimeClick)
                     }
                 }
             }
@@ -260,7 +260,7 @@ private fun AnimeSection(state: HomeSectionState, viewModel: HomeViewModel, onAn
 }
 
 @Composable
-private fun AnimeCard(anime: AniListAnime) {
+private fun AnimeCard(anime: AniListAnime, onAnimeClick: (Int) -> Unit) {
     Card(
         modifier = Modifier
             .width(140.dp)
