@@ -31,7 +31,7 @@ internal class AnimeExtensionApi {
 
     suspend fun findExtensions(): List<AnimeExtension.Available> = withContext(Dispatchers.IO) {
         try {
-            val repos = getExtensionRepo.await()
+            val repos = getExtensionRepo.getAll()
             repos.map { repo ->
                 async { getExtensionsFromRepo(repo) }
             }.awaitAll().flatten()

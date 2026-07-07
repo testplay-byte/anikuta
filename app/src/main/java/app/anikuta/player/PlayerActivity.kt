@@ -68,6 +68,16 @@ class PlayerActivity : ComponentActivity() {
         const val MPV_DIR = "mpv"
 
         /**
+         * MPV can only be initialized ONCE per process. Calling
+         * BaseMPVView.initialize() a second time triggers a native assertion
+         * (SIGABRT) that kills the process — the Java crash handler can't
+         * catch native signals. This flag tracks whether MPV has been
+         * initialized so we skip initialize() on subsequent player opens.
+         */
+        @Volatile
+        var mpvInitialized = false
+
+        /**
          * Build a launch Intent for the player.
          * [anilistId] + [episodeUrl] + [episodeNumber] are optional — when
          * provided, watch progress is saved/resumed + AniList sync happens.
@@ -178,7 +188,11 @@ class PlayerActivity : ComponentActivity() {
         if (pos.positionSeconds > 5) {  // don't resume if < 5s in
             resumedPosition = pos.positionSeconds
             try {
-                MPVLib.command(arrayOf("set", "start", "${pos.positionSeconds}"))
+                // Use setPropertyInt("time-pos") instead of command("set", "start").
+                // "start" is a pre-load option — it only works if set BEFORE
+                // loadfile. After FILE_LOADED, we need to seek directly via
+                // the time-pos property (or the seek command).
+                MPVLib.setPropertyInt("time-pos", pos.positionSeconds)
                 viewModel?.onPositionUpdate(pos.positionSeconds)
                 // Trigger the "start over?" overlay (Q8 — auto-dismisses in 10s)
                 viewModel?.triggerStartOverOverlay()
@@ -316,23 +330,32 @@ private fun PlayerScreen(
         AndroidView(
             factory = { ctx ->
                 // Inflate from a real XML layout so the view gets a proper
-                // XmlBlock$Parser-backed AttributeSet. Constructing it with a
-                // fake AttributeSet (Xml.newPullParser()) crashes at runtime:
-                //   ClassCastException: XmlPullAttributes cannot be cast to
-                //   XmlBlock$Parser
-                // because Resources.obtainStyledAttributes requires a real
-                // resource parser. Inflation produces one naturally.
-                // PlayerPreferences is pulled via Injekt inside the view.
+                // XmlBlock$Parser-backed AttributeSet.
                 val view = android.view.LayoutInflater
                     .from(ctx)
                     .inflate(R.layout.mpv_view, null) as AnikutaMPVView
                 mpvView = view
                 val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
-                view.initialize(
-                    mpvDir.absolutePath,
-                    ctx.cacheDir.absolutePath,
-                    "warn",
-                )
+                if (!PlayerActivity.mpvInitialized) {
+                    // First time: initialize MPV (native create + options + observers)
+                    view.initialize(
+                        mpvDir.absolutePath,
+                        ctx.cacheDir.absolutePath,
+                        "warn",
+                    )
+                    PlayerActivity.mpvInitialized = true
+                    Log.d("PlayerActivity", "MPV initialized for the first time")
+                } else {
+                    // MPV is already initialized from a previous player session.
+                    // Calling initialize() again would trigger a native SIGABRT
+                    // (assertion "!mpctx->initialized" failed in mp_initialize).
+                    // The SurfaceHolder.Callback on the new view will auto-attach
+                    // the surface to MPV when surfaceCreated fires. Options from
+                    // the first initialization persist (MPV options are sticky).
+                    Log.d("PlayerActivity", "MPV already initialized — skipping create()")
+                }
+                // Always re-add observers (they were removed in onDestroy of
+                // the previous PlayerActivity session).
                 MPVLib.addLogObserver(observer)
                 MPVLib.addObserver(observer)
                 Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
