@@ -298,9 +298,14 @@ class PlayerActivity : ComponentActivity() {
         super.onDestroy()
         saveProgress()
         try {
-            MPVLib.removeLogObserver(observer)
-            MPVLib.removeObserver(observer)
+            // Pause + stop the file so MPV is in a clean idle state for the
+            // next loadfile. Don't remove observers here — they'll be
+            // re-added in the next PlayerActivity's factory, and removing
+            // them can cause issues if MPV sends events between remove
+            // and the Activity fully destroying.
+            MPVLib.setPropertyBoolean("pause", true)
             MPVLib.command(arrayOf("stop"))
+            Log.d(TAG, "Player stopped — ready for next session")
         } catch (e: Exception) {
             Log.w(TAG, "Error during player cleanup", e)
         }
@@ -362,7 +367,10 @@ private fun PlayerScreen(
                 MPVLib.addLogObserver(observer)
                 MPVLib.addObserver(observer)
                 Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
-                MPVLib.command(arrayOf("loadfile", viewModel.videoUrl))
+                // Use "replace" mode (matching aniyomi) — replaces the current
+                // file (or loads fresh if stopped). Without "replace", MPV may
+                // ignore loadfile if it's in an idle state after a previous stop.
+                MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
                 view
             },
             modifier = Modifier.fillMaxSize(),

@@ -190,6 +190,18 @@ class DetailViewModel(
         _episodes.value = EpisodeState.Searching
         viewModelScope.launch {
             try {
+                // Wait for source manager to have sources loaded (same fix as
+                // the persistent cache path — on first app launch, extensions
+                // load async and getCatalogueSources() returns empty)
+                val mgr = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>()
+                var retries = 0
+                while (mgr.getCatalogueSources().isEmpty() && retries < 20) {
+                    kotlinx.coroutines.delay(500)
+                    retries++
+                }
+                if (retries > 0) {
+                    Log.d(TAG, "Waited ${retries * 500}ms for ${mgr.getCatalogueSources().size} sources to load")
+                }
                 val result = bridge.findMatch(anime)
                 when (result) {
                     is SourceMatchResult.NotAired -> {
