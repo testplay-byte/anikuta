@@ -90,7 +90,6 @@ class DetailViewModel(
     }
 
     private val preferenceStore: app.anikuta.core.preference.PreferenceStore? = try { Injekt.get() } catch (e: Exception) { null }
-    private val json = Json { ignoreUnknownKeys = true }
 
     init {
         loadAnimeDetails()
