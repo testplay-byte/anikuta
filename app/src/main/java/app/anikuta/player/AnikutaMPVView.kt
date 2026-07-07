@@ -109,7 +109,13 @@ class AnikutaMPVView(
         MPVLib.setPropertyBoolean("input-default-bindings", true)
 
         MPVLib.setOptionString("ytdl", "no")
-        MPVLib.setOptionString("tls-verify", "yes")
+        // aniyomi uses tls-verify=yes + tls-ca-file=cacert.pem (copied from
+        // assets). We don't have cacert.pem, so we disable TLS verification.
+        // Many streaming servers use self-signed or untrusted certificates.
+        // Without this, MPV rejects the connection: "The certificate is not
+        // correctly signed by the trusted CA" → loading failed.
+        // Safe for a sideloaded app (not distributed via Google Play).
+        MPVLib.setOptionString("tls-verify", "no")
 
         // Limit demuxer cache for mobile.
         val cacheMegs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) 64 else 32
