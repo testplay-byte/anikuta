@@ -7,7 +7,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.Server
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -97,7 +97,7 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
                     // Preferred server (text field)
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            LeadingIcon(Icons.Default.Server)
+                            LeadingIcon(Icons.Default.Storage)
                             Text("Preferred server", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                         }
                         Spacer(Modifier.height(4.dp))
