@@ -105,6 +105,8 @@ class PlayerActivity : ComponentActivity() {
     private var anilistId: Int = -1
     private var episodeUrl: String = ""
     private var resumedPosition: Int? = null
+    /** Reference to the MPV view — set from the Composable, used in onDestroy. */
+    @Volatile private var mpvViewRef: AnikutaMPVView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -310,8 +312,8 @@ class PlayerActivity : ComponentActivity() {
             // may not be in the public API. MPVLib.destroy() is the native
             // cleanup.
             try {
-                val destroyMethod = mpvView?.javaClass?.getMethod("destroy")
-                destroyMethod?.invoke(mpvView)
+                val destroyMethod = mpvViewRef?.javaClass?.getMethod("destroy")
+                destroyMethod?.invoke(mpvViewRef)
                 Log.d(TAG, "BaseMPVView.destroy() called")
             } catch (e: Exception) {
                 // Fallback: call MPVLib.destroy() directly
@@ -357,6 +359,7 @@ private fun PlayerScreen(
                     .from(ctx)
                     .inflate(R.layout.mpv_view, null) as AnikutaMPVView
                 mpvView = view
+                mpvViewRef = view  // Store for onDestroy
                 val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
 
                 // Always initialize — we destroy() in onDestroy, so MPV is
