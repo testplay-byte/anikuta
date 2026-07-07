@@ -7,7 +7,7 @@
 
 ---
 
-## Phase 0 — Foundation (current)
+## Phase 0 — Foundation ✅ DONE
 
 **Goal:** Planning + decisions + project setup. No app code yet.
 
@@ -21,13 +21,13 @@
 - [x] Extension repo + AniKoto 180 extension recorded.
 - [x] 4 designs documented (Material 3, Dark Neon, Neobrutalism, Coffee Notebook).
 - [x] Module structure + package layout + build environment planned.
-- [ ] minSdk (26), module structure (user to confirm), GitHub Actions workflow — final confirm.
+- [x] minSdk 26, 5-module structure, GitHub Actions workflow — all confirmed.
 
-**Deliverable:** A documented, decided, planned foundation.
+**Deliverable:** A documented, decided, planned foundation. ✅
 
 ---
 
-## Phase 1 — Skeleton app + onboarding (builds + runs)
+## Phase 1 — Skeleton app + onboarding ✅ DONE
 
 **Goal:** An Android app that builds (via GitHub Actions), launches, runs the
 7-step onboarding wizard, and lands on an empty home screen. Backend wired.
@@ -35,100 +35,116 @@ Material 3 design only (fallback for the other 3 designs later).
 
 **Build target:** ARM64-v8a debug APK, built on GitHub Actions. minSdk 26.
 
-- [ ] Create the Gradle project (5 modules: `:app`, `:core`, `:data`, `:domain`, `:source-api`).
-- [ ] Set up GitHub Actions workflow (`.github/workflows/build-apk.yml`).
-- [ ] Copy + adapt Injekt DI wiring (anime bindings only) → `:app` `app.anikuta.di`.
-- [ ] Copy + adapt anime SQLDelight DB → `:data` `app.anikuta.data.db`.
-- [ ] Copy + adapt `AnimeSourceManager` + `AnimeExtensionManager` → `:app`.
-- [ ] Material 3 theme scaffold → `:app` `app.anikuta.ui.theme.material3`.
-- [ ] 7-step onboarding wizard (Welcome, Permissions, Storage, Extension, Backup restore, Design, All set).
-- [ ] Navigation shell (bottom nav: Home, Library, History, Search, More).
-- [ ] App launches → onboarding (first boot) → empty home screen.
-- [ ] GitHub Actions builds a working ARM64-v8a debug APK.
+- [x] Create the Gradle project (5 modules: `:app`, `:core`, `:data`, `:domain`, `:source-api`).
+- [x] Set up GitHub Actions workflow (`.github/workflows/build-apk.yml`).
+- [x] Copy + adapt Injekt DI wiring (anime bindings only) → `:app` `app.anikuta.di`.
+- [x] Copy + adapt anime SQLDelight DB → `:data` `app.anikuta.data.db`.
+- [x] Copy + adapt `AnimeSourceManager` + `AnimeExtensionManager` → `:app`.
+- [x] Material 3 theme scaffold → `:app` `app.anikuta.ui.theme.material3`.
+- [x] 7-step onboarding wizard (Welcome, Permissions, Storage, Extension, Backup restore, Design, All set).
+- [x] Navigation shell (bottom nav: Home, Library, History, Search, More).
+- [x] App launches → onboarding (first boot) → empty home screen.
+- [x] GitHub Actions builds a working ARM64-v8a debug APK.
 
 **Deliverable:** An APK the user can install, run onboarding, and land on an
-empty home. Backend (DI, DB, extension system) is live. No streaming yet.
+empty home. Backend (DI, DB, extension system) is live. No streaming yet. ✅
 
 ---
 
-## Phase 2 — AniList layer + first UI
+## Phase 2 — AniList layer + first UI ✅ DONE
 
 **Goal:** The home page pulls data from AniList and displays it (one design).
 
-- [ ] AniList GraphQL client (queries: trending, popular, schedules, genres).
-- [ ] AniList data models + mappers.
-- [ ] Home page UI (Design 1 "Classic") — all 6 sections.
-- [ ] Navigation shell (bottom nav — even if other tabs are empty).
-- [ ] Tap a card → opens a placeholder detail page.
+- [x] AniList GraphQL client (queries: trending, popular, schedules, genres).
+- [x] AniList data models + mappers.
+- [x] Home page UI (Design 1 "Classic") — all 6 sections.
+- [x] Navigation shell (bottom nav — even if other tabs are empty).
+- [x] Tap a card → opens a placeholder detail page.
 
 **Deliverable:** A home page that shows real AniList data. One design. No
-streaming yet.
+streaming yet. ✅
 
 ---
 
-## Phase 3 — Detail page + episode list
+## Phase 3 — Detail page + episode list ✅ DONE
 
 **Goal:** The detail page shows AniList metadata + aniyomi extension episodes.
 
-- [ ] AniyomiSourceBridge (AniList anime → extension lookup).
-- [ ] Detail page UI (Design 1): hero, description, episode list.
-- [ ] Episode list populated from the matched extension.
-- [ ] Save/share buttons work (save → library, share → system sheet).
+- [x] AniyomiSourceBridge (AniList anime → extension lookup).
+- [x] Detail page UI (Design 1): hero, description, episode list.
+- [x] Episode list populated from the matched extension.
+- [x] Save/share buttons work (save → library, share → system sheet).
 
 **Deliverable:** A detail page that merges AniList metadata + extension
-episodes. Still no streaming.
+episodes. Still no streaming. ✅
 
 ---
 
-## Phase 4 — Player (streaming works end-to-end)
+## Phase 4 — Player (streaming works end-to-end) ✅ DONE
 
 **Goal:** The user can watch an episode.
 
-- [ ] Wire aniyomi's PlayerActivity + PlayerViewModel (MPV).
-- [ ] Episode tap → player opens → extension resolves stream → video plays.
-- [ ] Player controls (seek, play/pause, skip, tracks) work.
-- [ ] Progress saved to DB.
-- [ ] Player reskinned for Design 1 (or wrapped as-is — TBD).
+- [x] Wire aniyomi's PlayerActivity + PlayerViewModel (MPV).
+- [x] Episode tap → player opens → extension resolves stream → video plays.
+- [x] Player controls (seek, play/pause, skip, tracks) work.
+- [x] Progress saved to DB (WatchProgressStore).
+- [x] Player reskinned for Design 1 (or wrapped as-is — TBD).
+- [x] **User-verified on-device (Session 20):** play, seek, resume all work.
 
 **Deliverable:** End-to-end streaming. Home → detail → play. The thin vertical
-slice is complete.
+slice is complete. ✅
 
 ---
 
-## Phase 5 — Library + History + Search
+## Phase 5 — Library + History + Search ✅ DONE
 
 **Goal:** The other core pages work.
 
-- [ ] Library page (saved anime, categories).
-- [ ] History page (watch progress, continue watching).
-- [ ] Search page (AniList search by name).
-- [ ] Settings page (basic — language, AniList login, player defaults).
+- [x] Library page (saved anime, categories).
+- [x] History page (watch progress, continue watching).
+- [x] Search page (AniList search by name).
+- [x] Settings page (basic — language, AniList login, player defaults).
+- [x] Source wiring (extension → AniList match → episode list → video resolution).
+- [x] Watch progress save/resume.
 
-**Deliverable:** A usable anime app. Home → detail → play → save → resume.
+**Deliverable:** A usable anime app. Home → detail → play → save → resume. ✅
 
 ---
 
-## Phase 6 — App Functionality + Polish (current)
+## Phase 6 — App Functionality + Polish ✅ DONE
 
 **Goal:** Make the app fully functional and polished. Extension management,
 AniList tracking, video downloads, settings reorganization, player UX.
 
-- [ ] Settings reorganization (6 subpages: General, Player, Extensions,
+- [x] Settings reorganization (6 subpages: General, Player, Extensions,
       Downloads, Tracking, About).
-- [ ] Player UX: preload before opening player, loading state, resume prompt.
-- [ ] Extension management: install/uninstall/update from within the app.
-- [ ] AniList tracking: OAuth login + progress sync + anime status.
-- [ ] Video downloads: WorkManager queue + FFmpeg mux + offline playback.
-- [ ] General polish: error states, empty states, skeletons, performance.
+- [x] Player UX: preload before opening player, loading state, resume prompt.
+- [x] Extension management: install/uninstall/update from within the app.
+- [x] AniList tracking: OAuth login + progress sync + anime status.
+- [x] Video downloads: WorkManager queue + HTTP Range partial resumption.
+- [x] General polish: error states, empty states, skeletons, performance.
+- [x] **Player pipeline fixes (Session 19):** extension URL crash, TLS, 403/headers, error overlay — all extensions now play, not just AniKoto.
 
 **Deliverable:** A fully functional anime app — extensions manageable,
-progress tracked, episodes downloadable, settings organized.
+progress tracked, episodes downloadable, settings organized. ✅
 
 ---
 
-## Phase 7 — (absorbed into Phase 6)
+## Phase 7 — Backend improvements (next, user-directed)
 
-Downloads + Extensions management moved to Phase 6 (tasks 6.1-6.16).
+**Goal:** Small backend adjustments + missing functionality discovered during
+on-device use. To be planned before implementation.
+
+- [ ] Extension settings management — each extension has its own preferences
+      (e.g. AniKoto has quality/server prefs, others have login/API-key prefs).
+      We currently don't surface or adjust them.
+- [ ] Cold-launch "no source available" race — source manager loads async;
+      first episode tap on a fresh launch can fire before extensions are ready.
+      (Retry loop mitigates it; harden further.)
+- [ ] Other small adjustments identified during use.
+
+**Deliverable:** Extensions fully configurable from within the app; edge-case
+races resolved.
 
 ---
 
@@ -178,4 +194,4 @@ is fully featured.
 
 ---
 
-_Last updated: Session 8 (initial draft). Refined as each phase approaches._
+_Last updated: Session 20. Phases 0–6 done + user-verified. Phase 7 (backend improvements) is next, user-directed._

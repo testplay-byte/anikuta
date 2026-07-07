@@ -86,3 +86,58 @@ Stage Summary:
 - Live preview: rebuilt but dev server doesn't stay alive between Bash commands (sandbox limitation). Code is correct — server compiles in 3ms.
 - Worklog: restored from context. Going forward, will be backed up to GitHub.
 - READY for Phase 8 (4 designs + theming) when user gives go-ahead.
+
+---
+
+## Session 19 (Player pipeline fixes — extension video resolution + TLS + 403 + headers + error handling)
+
+Task ID: P5-FIX (Session 19)
+Agent: main (Z.ai Code)
+Task: Fix the end-to-end video playback pipeline so non-AniKoto extensions actually play. The player loaded for AniKoto but failed for every other extension with a chain of distinct root causes.
+
+Work Log:
+- **Issue 1 — extension URL crash (`IllegalArgumentException: Invalid URL host`).** Root cause: extensions only override `videoListRequest`, not `hosterListRequest`. The base `AnimeHttpSource.hosterListRequest` constructs `GET(baseUrl + episode.url)` where `episode.url` is an already-encoded path like `/watch/.../ep-1` — concatenating it onto `baseUrl` produces a malformed URL. Fix: in `DetailViewModel.playEpisode`, wrap `getHosterList` in a try/catch that catches **ALL** `Throwable` (not just `IllegalStateException`) and falls back to `getVideoList`. Commit `b25c8fa`.
+- **Issue 2 — `Requests.kt` lenient `toHttpUrl()` fallback.** Initially added a lenient fallback that tolerated bad URLs; this masked the real problem and was reverted. `GET()` now uses the standard `url.toHttpUrl()` again. Commit `b25c8fa`.
+- **Issue 3 — TLS certificate rejected (`The certificate is not correctly signed by the trusted CA` → `loading failed`).** Root cause: aniyomi ships a `cacert.pem` in assets and sets `tls-verify=yes` + `tls-ca-file=cacert.pem`. We don't have that asset, so MPV rejects the self-signed/untrusted certs that streaming servers commonly use. Fix: set `tls-verify=no` in `AnikutaMPVView.initOptions()`. Acceptable for a sideloaded app (not on Google Play). Commit `2414d12`.
+- **Issue 4 — HTTP 403 Forbidden.** Root cause: streaming servers require `Referer` + `User-Agent` headers. The extension sets these in its `videoListRequest`, but MPV knows nothing about them — it just loads the bare URL. Fix:
+  1. Extract the `Video.videoHeaders` field from the resolved `Video` object in `DetailViewModel.playSpecificVideo`.
+  2. Pass headers through `PlayerActivity.newIntent(..., videoHeaders = ...)` as `EXTRA_VIDEO_HEADERS`.
+  3. In `PlayerScreen`, before `loadfile`, call `MPVLib.setOptionString("http-header-fields", headers)` — one `Header: Value` pair per line (MPV parses newline-separated fields).
+  4. When no extension headers exist, fall back to a default `User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36`.
+  Commits `dbcd967`, `1d5f7d2`.
+- **Issue 5 — infinite loading spinner on failure.** Root cause: `PlayerObserver.efEvent` (END_FILE with error) wasn't surfaced to the ViewModel, so a failed load left the spinner spinning forever. Fix: added `onFileEnded(errorMessage: String?)` to `PlayerObserver.Callback`; `PlayerActivity` routes it to `viewModel.onError(message)`, which flips `loadingState` to `ERROR`. The overlay now shows the error message + a "Go Back" button within 1–2 seconds of failure. Commit `dbcd967`.
+- **Issue 6 — videoHeaders read from intent inside Composable (stale).** The Composable re-read `EXTRA_VIDEO_HEADERS` from the Activity intent on recomposition, which could be empty on the first pass. Fix: read `videoHeaders` once in `onCreate` and pass it as a parameter to `PlayerScreen`. Commit `1d5f7d2`.
+- **MPV lifecycle (re-confirmed).** Every `onCreate` calls `view.initialize()` (fresh MPV core). Every `onDestroy` calls `MPVLib.removeLogObserver` + `removeObserver` + `command("stop")`, then `BaseMPVView.destroy()` via reflection (falls back to `MPVLib.destroy()`). This is why the 2nd-open works: destroy() fully tears down the native context so the next initialize() is clean. Matches aniyomi's `onCreate→initialize`, `onDestroy→destroy`.
+
+Stage Summary:
+- The full pipeline now works for non-AniKoto extensions: extension → `getHosterList`/`getVideoList` (with fallback) → `Video` (with headers) → `PlayerActivity` → MPV `http-header-fields` → playback.
+- 5 distinct root causes fixed (URL host, TLS, 403, error surfacing, stale header read). Each fix references the aniyomi source before deviating.
+- Builds: `b25c8fa` → `2414d12` → `dbcd967` → `1d5f7d2` (all green on GitHub Actions, arm64-v8a).
+
+---
+
+## Session 20 (User on-device verification — PLAYER FULLY WORKING + documentation/backup)
+
+Task ID: VERIFY+DOC (Session 20)
+Agent: main (Z.ai Code)
+Task: User verified the player on-device. Document everything done in Sessions 18–19, back up all work + context to GitHub so a sandbox crash loses nothing.
+
+Work Log:
+- **User on-device test results (build `1d5f7d2`):**
+  - ✅ Episode plays from server/quality selection screen.
+  - ✅ Loading screen shows, then video starts playing correctly.
+  - ✅ Seek forward works — buffers, then seeks to the position and resumes.
+  - ✅ Resume works — go back, replay the same episode, it resumes from the saved position.
+  - ⚠️ Minor glitch: first episode tap after a fresh app launch sometimes showed "no source available"; closing and reopening the app cleared it. (Root cause: source manager still loading extensions when the first search fires. The retry loop in `searchExtensions` waits up to 10 s, but the very first cold launch can still race. Tracked as a polish item — NOT a blocker.)
+- **Documentation updates this session:**
+  - `worklog.md` — appended Sessions 19 + 20 (this file).
+  - `DOCS/APP/STRUCTURE/player.md` — added gotchas 5–9 (TLS, 403/headers, error overlay, destroy lifecycle, stale header read).
+  - `MEMORY/SESSION-LOGS/` — created session-15 through session-20 logs.
+  - `MEMORY/SESSION-LOGS/README.md` — updated index.
+- **GitHub backup:** all 21 unpushed commits (Sessions 18–20) pushed to `origin/main`. The repo now contains: all source, all docs, all session logs, the worklog, the live-preview HTML, and the build-progress HTML. Credentials are gitignored. A sandbox crash/restart → `git clone` restores everything except locally-built APKs (rebuildable via GitHub Actions).
+
+Stage Summary:
+- **Player is feature-complete and user-verified.** Play, seek, resume, server/quality selection all work on-device.
+- **Full project state is backed up to GitHub.** Clone + restore credentials = full recovery.
+- **Known minor issue (not a blocker):** cold-launch "no source available" race — to be addressed in the polish phase alongside extension-settings management.
+- **Next phase (user-directed):** backend/improvements — extension settings management (each extension has its own prefs we don't surface), plus other small adjustments. Will be properly planned before implementation.

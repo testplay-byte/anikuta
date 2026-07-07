@@ -41,3 +41,9 @@ One file per session, named `YYYY-MM-DD-SESSION-N.md`.
 - `Session 12` — Module structure (single vs multi, pros/cons) + package layout (what we copy vs build) + build environment (GitHub Actions, arm64-v8a) planned. NO building.
 - `Session 13` — Phase 1 plan (15 sub-steps, incremental copy) + build-progress webpage (`/#build`) + APK download page planned. NO implementation — user verifies first.
 - `Session 14` — Step 1.1 (Gradle scaffold: 5 modules, Compose, Material 3) + Step 1.2 (GitHub Actions). BUILD SUCCEEDED (Run #3, 15.4 MB APK). APK downloadable.
+- `Session 15` — Phase 6 planning: functionality-first (designs → Phase 8); 8 open questions drafted.
+- `Session 16` — User answered 8 questions (priority, AniList ID 5338, extension repo, MP4, quality, nav, preload, resume). Plan locked.
+- `Session 17` — Phase 6 implementation: all 6 sections (settings reorg, player UX, extensions, tracking, downloads, polish). Build 68c9e02 green.
+- `Session 18` — Sandbox restart recovery: cloned from GitHub, restored credentials, rebuilt live preview.
+- `Session 19` — Player pipeline fixes: extension URL crash, TLS, 403/headers, error overlay, stale header read. Builds b25c8fa→1d5f7d2 green.
+- `Session 20` — User on-device verification (PLAYER FULLY WORKING) + documentation backup + GitHub push.

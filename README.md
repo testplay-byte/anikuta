@@ -22,7 +22,8 @@
 | `BUILD-APK/` | Built APK outputs (binaries gitignored). |
 | `REFERENCE/` | Pristine, read-only copy of aniyomi. **Never edit.** |
 | `REFERENCE-STAGING/` | Incoming upstream copies for review/diffing. |
-| `app/` | Our working Android app source (added when dev starts). |
+| `app/` | Working Android app source (5-module Gradle project: `:app`, `:core`, `:data`, `:domain`, `:source-api`). |
+| `core/` `data/` `domain/` `source-api/` | The other 4 Gradle modules. |
 
 ---
 
@@ -57,4 +58,25 @@ committed.**
 
 ---
 
-_Status: repo setup complete. aniyomi not yet copied into `REFERENCE/`._
+## Current status
+
+| Phase | Status |
+|-------|--------|
+| 0 — Foundation | ✅ Done |
+| 1 — Skeleton + onboarding | ✅ Done |
+| 2 — AniList + home | ✅ Done |
+| 3 — Detail page + episodes | ✅ Done |
+| 4 — Player (MPV streaming) | ✅ Done + **user-verified on-device** (play, seek, resume all work) |
+| 5 — Library / History / Search | ✅ Done |
+| 6 — Functionality + Polish | ✅ Done (settings, extensions, tracking, downloads, error handling) |
+| 7 — Backend improvements | ⏭️ Next (extension settings management, cold-launch race, small adjustments) |
+| 8 — 4 designs + theming | Planned |
+| 9 — Final polish | Planned |
+
+**Latest verified build:** `1d5f7d2` — end-to-end streaming works for all
+extensions (not just AniKoto). See `worklog.md` (Sessions 19–20) and
+`DOCS/APP/STRUCTURE/player.md` for the full fix history.
+
+**Recovery:** `git clone` this repo + restore gitignored credentials = full
+recovery after a sandbox crash. All source, docs, session logs, and the
+worklog are on `origin/main`.
