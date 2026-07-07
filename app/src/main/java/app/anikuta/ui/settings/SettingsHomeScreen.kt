@@ -153,7 +153,7 @@ private fun CategoryCard(category: SettingsCategory, onClick: () -> Unit) {
                 .fillMaxWidth()
                 .combinedClickable(
                     interactionSource = interactionSource,
-                    indication = androidx.compose.material.ripple.rememberRipple(),
+                    indication = androidx.compose.foundation.LocalIndication.current,
                     onClick = onClick,
                 )
                 .padding(horizontal = 16.dp, vertical = 14.dp),
