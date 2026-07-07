@@ -339,6 +339,20 @@ private fun PlayerScreen(
                     .inflate(R.layout.mpv_view, null) as AnikutaMPVView
                 mpvView = view
                 val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
+
+                // The video URL to load
+                val videoUrl = viewModel.videoUrl
+
+                // Helper: load the video file. Called either immediately (first
+                // time, after initialize) or after the surface is attached
+                // (second time, when surfaceCreated fires).
+                val loadVideo = {
+                    MPVLib.addLogObserver(observer)
+                    MPVLib.addObserver(observer)
+                    Log.d("PlayerActivity", "Loading video: $videoUrl (surface ready)")
+                    MPVLib.command(arrayOf("loadfile", videoUrl, "replace"))
+                }
+
                 if (!PlayerActivity.mpvInitialized) {
                     // First time: full initialize (MPV create + options + surface callback)
                     view.initialize(
@@ -348,29 +362,41 @@ private fun PlayerScreen(
                     )
                     PlayerActivity.mpvInitialized = true
                     Log.d("PlayerActivity", "MPV initialized for the first time")
+                    // On first init, BaseMPVView.initialize() registers the
+                    // SurfaceHolder callback. The surface will be created
+                    // shortly after. We can load the file immediately — MPV
+                    // will queue it and play once the surface is ready.
+                    loadVideo()
                 } else {
-                    // MPV is already initialized. We can't call initialize() again
-                    // (native SIGABRT), but we need to re-attach the surface from
-                    // the new SurfaceView to MPV. BaseMPVView implements
-                    // SurfaceHolder.Callback and registers itself in initialize().
-                    // Without that registration, surfaceCreated never fires →
-                    // attachSurface never runs → MPV has no surface → loadfile
-                    // loads but can't display → stuck on loading forever.
+                    // MPV is already initialized. We can't call initialize()
+                    // again (native SIGABRT). We manually register the surface
+                    // callback, but we MUST wait for surfaceCreated to fire
+                    // before calling loadfile. If we call loadfile before the
+                    // surface is attached, MPV loads the file but can't
+                    // render it → no FILE_LOADED event → stuck on loading
+                    // forever (this was the root cause of the 2nd-open bug).
                     //
-                    // Fix: manually register the SurfaceHolder callback. When
-                    // surfaceCreated fires, BaseMPVView.surfaceCreated will call
-                    // attachSurface internally, connecting the new surface to MPV.
+                    // Fix: register a one-time SurfaceHolder.Callback that
+                    // calls loadVideo() when surfaceCreated fires. Then
+                    // remove the callback and let BaseMPVView handle the rest.
+                    val oneTimeCallback = object : android.view.SurfaceHolder.Callback {
+                        override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+                            Log.d("PlayerActivity", "Surface created — loading video now")
+                            loadVideo()
+                            // Remove this one-time callback — BaseMPVView's
+                            // own callback (registered via addCallback below)
+                            // handles subsequent surfaceChanged/Destroyed.
+                            holder.removeCallback(this)
+                        }
+                        override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {}
+                        override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {}
+                    }
+                    // Register both: our one-time callback (fires loadVideo)
+                    // AND the view's own callback (handles attachSurface).
+                    view.holder.addCallback(oneTimeCallback)
                     view.holder.addCallback(view)
-                    Log.d("PlayerActivity", "MPV already initialized — re-attached surface callback")
+                    Log.d("PlayerActivity", "MPV already initialized — waiting for surface before loadfile")
                 }
-                // Always re-add observers (removed in previous onDestroy)
-                MPVLib.addLogObserver(observer)
-                MPVLib.addObserver(observer)
-                Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
-                // Use "replace" mode (matching aniyomi) — replaces the current
-                // file (or loads fresh if stopped). Without "replace", MPV may
-                // ignore loadfile if it's in an idle state after a previous stop.
-                MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
                 view
             },
             modifier = Modifier.fillMaxSize(),

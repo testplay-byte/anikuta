@@ -15,6 +15,7 @@
          permission. Safe for sideloaded apps; Google Play restricts it but we don't
          distribute via Play. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <!-- Allow intent-based extension discovery on Android 11+ (package
          visibility). The intent-based fallback in AnimeExtensionLoader uses

@@ -188,14 +188,41 @@ class ExtensionsViewModel : ViewModel() {
             return
         }
         try {
-            // Use ACTION_DELETE with the package URI — opens the system
-            // uninstall confirmation dialog.
-            val intent = Intent(Intent.ACTION_DELETE).apply {
-                data = Uri.parse("package:${ext.pkgName}")
+            // Try multiple approaches — different Android versions handle
+            // uninstall intents differently.
+            val uri = Uri.parse("package:${ext.pkgName}")
+            val intent = Intent().apply {
+                // ACTION_UNINSTALL_PACKAGE is the newer API (API 14+).
+                // ACTION_DELETE is the older fallback.
+                action = "android.intent.action.UNINSTALL_PACKAGE"
+                data = uri
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(Intent.EXTRA_RETURN_RESULT, true)
             }
-            ctx.startActivity(intent)
-            Log.d(TAG, "Uninstall dialog launched for ${ext.pkgName}")
+            // Check if there's an activity to handle this intent
+            if (intent.resolveActivity(ctx.packageManager) != null) {
+                ctx.startActivity(intent)
+                Log.d(TAG, "Uninstall dialog launched for ${ext.pkgName}")
+            } else {
+                // Fallback to ACTION_DELETE
+                val fallbackIntent = Intent(Intent.ACTION_DELETE).apply {
+                    data = uri
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (fallbackIntent.resolveActivity(ctx.packageManager) != null) {
+                    ctx.startActivity(fallbackIntent)
+                    Log.d(TAG, "Uninstall (fallback) dialog launched for ${ext.pkgName}")
+                } else {
+                    // Last resort: open the app's system settings page
+                    val settingsIntent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = uri
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    ctx.startActivity(settingsIntent)
+                    Log.d(TAG, "Opened system settings for ${ext.pkgName} (no uninstall intent available)")
+                    Toast.makeText(ctx, "Open the app info to uninstall", Toast.LENGTH_SHORT).show()
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Uninstall failed for ${ext.pkgName}", e)
             Toast.makeText(ctx, "Uninstall failed: ${e.message}", Toast.LENGTH_SHORT).show()
