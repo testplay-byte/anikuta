@@ -152,15 +152,28 @@ class DetailViewModel(
             viewModelScope.launch {
                 try {
                     val mgr = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>()
-                    val source = mgr.getCatalogueSources().find { it.name == cachedSourceName }
+                    // Wait for the source manager to finish loading extensions.
+                    // On app restart, the manager loads extensions async — if we
+                    // check getCatalogueSources() before it's done, we get an
+                    // empty list → "No streaming source" even though the
+                    // extension IS installed. Wait up to 10 seconds.
+                    var retries = 0
+                    var source = mgr.getCatalogueSources().find { it.name == cachedSourceName }
+                    while (source == null && retries < 20) {
+                        kotlinx.coroutines.delay(500)
+                        retries++
+                        source = mgr.getCatalogueSources().find { it.name == cachedSourceName }
+                    }
                     if (source != null) {
+                        Log.d(TAG, "Cached source found after $retries retries")
                         val sAnime = app.anikuta.source.api.model.SAnime.create().apply {
                             url = cachedSAnimeUrl
                             title = anime.title.preferred()
                         }
                         loadEpisodes(sAnime, anime, cachedSourceName)
                     } else {
-                        // Source not found (extension uninstalled?) — fall through to search
+                        // Source not found after 10s — extension may be uninstalled
+                        Log.w(TAG, "Cached source '$cachedSourceName' not found after 10s, falling back to search")
                         searchExtensions(anime, bridge)
                     }
                 } catch (e: Exception) {

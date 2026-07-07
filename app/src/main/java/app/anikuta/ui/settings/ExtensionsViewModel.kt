@@ -188,10 +188,14 @@ class ExtensionsViewModel : ViewModel() {
             return
         }
         try {
-            val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:${ext.pkgName}")).apply {
+            // Use ACTION_DELETE with the package URI — opens the system
+            // uninstall confirmation dialog.
+            val intent = Intent(Intent.ACTION_DELETE).apply {
+                data = Uri.parse("package:${ext.pkgName}")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             ctx.startActivity(intent)
+            Log.d(TAG, "Uninstall dialog launched for ${ext.pkgName}")
         } catch (e: Exception) {
             Log.e(TAG, "Uninstall failed for ${ext.pkgName}", e)
             Toast.makeText(ctx, "Uninstall failed: ${e.message}", Toast.LENGTH_SHORT).show()
