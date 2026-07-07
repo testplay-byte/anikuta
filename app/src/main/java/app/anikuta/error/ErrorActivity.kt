@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,7 +64,7 @@ class ErrorActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Edge-to-edge so the theme background fills behind the status bar
         // (user reported the status bar was black instead of themed).
-        androidx.activity.enableEdgeToEdge()
+        enableEdgeToEdge()
         val crashReport = AnikutaCrashHandler.getLastCrash(this)
             ?: "No crash report was recorded. The app may have been killed by the system."
 
