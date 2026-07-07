@@ -17,8 +17,13 @@ class DownloadPreferences(
     fun preferredQuality(): Preference<String> =
         preferenceStore.getString("download_quality", "720p")
 
-    fun preferredAudio(): Preference<String> =
-        preferenceStore.getString("download_audio", "jpn")
+    /** Preferred audio version: "sub", "dub", or "hardsub" */
+    fun preferredAudioVersion(): Preference<String> =
+        preferenceStore.getString("download_audio_version", "sub")
+
+    /** Preferred server (empty = auto-pick first available) */
+    fun preferredServer(): Preference<String> =
+        preferenceStore.getString("download_preferred_server", "")
 
     fun maxConcurrentDownloads(): Preference<Int> =
         preferenceStore.getInt("download_max_concurrent", 2)
@@ -30,9 +35,6 @@ class DownloadPreferences(
         preferenceStore.getBoolean("download_wifi_only", true)
 }
 
-/**
- * Quality options for downloads.
- */
 enum class DownloadQuality(val label: String, val value: String) {
     P360("360p", "360p"),
     P720("720p", "720p"),
@@ -41,5 +43,16 @@ enum class DownloadQuality(val label: String, val value: String) {
 
     companion object {
         fun fromValue(v: String): DownloadQuality = entries.find { it.value == v } ?: P720
+    }
+}
+
+enum class AudioVersion(val label: String, val value: String) {
+    SUB("Subbed", "sub"),
+    DUB("Dubbed", "dub"),
+    HARDSUB("Hardsub", "hardsub"),
+    ANY("Any available", "any");
+
+    companion object {
+        fun fromValue(v: String): AudioVersion = entries.find { it.value == v } ?: SUB
     }
 }

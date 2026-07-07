@@ -371,47 +371,66 @@ fun DetailScreen(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                         )
-                        pickerState.videos.forEach { video ->
+                        // Show videos grouped by server — each server is a
+                        // section with a header chip + its qualities listed below.
+                        pickerState.serverGroups.forEach { group ->
+                            // Server header
                             Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = androidx.compose.ui.graphics.Color.Transparent,
-                                onClick = { viewModel.playSpecificVideo(video, pickerState.episode) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 24.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                Text(
+                                    group.serverName,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                )
+                            }
+                            // Qualities in this server
+                            group.videos.forEach { video ->
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = androidx.compose.ui.graphics.Color.Transparent,
+                                    onClick = { viewModel.playSpecificVideo(video, pickerState.episode) },
                                 ) {
-                                    Icon(
-                                        Icons.Filled.PlayArrow,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        text = video.videoTitle.ifBlank { "Unknown quality" },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    video.resolution?.let { res ->
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = MaterialTheme.colorScheme.secondaryContainer,
-                                        ) {
-                                            Text(
-                                                "${res}p",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                            )
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 24.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.PlayArrow,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = video.videoTitle.ifBlank { "Unknown quality" },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        video.resolution?.let { res ->
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                            ) {
+                                                Text(
+                                                    "${res}p",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical: 2.dp),
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
+                            Spacer(modifier = Modifier.height(4.dp))
                         }
                     }
                 }

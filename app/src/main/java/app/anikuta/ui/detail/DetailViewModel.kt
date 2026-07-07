@@ -214,24 +214,43 @@ class DetailViewModel(
         _resolvingEpisode.value = true
         viewModelScope.launch {
             try {
-                val videos = withContext(Dispatchers.IO) { source.getVideoList(episode) }
-                val playable = videos.filter { it.videoUrl.isNotBlank() }
-                if (playable.isEmpty()) {
+                // Try the newer getHosterList API first (groups videos by
+                // server/hoster). Fall back to flat getVideoList if the
+                // extension doesn't support it.
+                val serverGroups = try {
+                    val hosters = withContext(Dispatchers.IO) { source.getHosterList(episode) }
+                    hosters.mapNotNull { hoster ->
+                        val vids = hoster.videoList?.filter { it.videoUrl.isNotBlank() }
+                        if (!vids.isNullOrEmpty()) {
+                            ServerGroup(hoster.hosterName.ifBlank { "Server" }, vids)
+                        } else null
+                    }
+                } catch (e: IllegalStateException) {
+                    // "Not used" — extension doesn't support getHosterList
+                    Log.d(TAG, "getHosterList not supported, falling back to getVideoList")
+                    val flat = withContext(Dispatchers.IO) { source.getVideoList(episode) }
+                    val playable = flat.filter { it.videoUrl.isNotBlank() }
+                    // Group flat list by parsing server name from video title
+                    // (extensions often encode it: "SUB - 720p" → no server,
+                    // but some include it). If we can't parse, use one group.
+                    listOf(ServerGroup("Default", playable))
+                }
+
+                val allVideos = serverGroups.flatMap { it.videos }
+                if (allVideos.isEmpty()) {
                     _playRequest.value = PlayRequest.Error("No playable video found for this episode")
-                } else if (playable.size == 1) {
-                    // Only one video — skip the picker, play directly
-                    Log.d(TAG, "Single video: ${playable[0].videoTitle} → ${playable[0].videoUrl}")
+                } else if (allVideos.size == 1) {
+                    Log.d(TAG, "Single video: ${allVideos[0].videoTitle} → ${allVideos[0].videoUrl}")
                     _playRequest.value = PlayRequest.Play(
-                        url = playable[0].videoUrl,
+                        url = allVideos[0].videoUrl,
                         title = episode.name,
                         episodeNumber = episode.episode_number,
                         anilistId = anilistId,
                         episodeUrl = episode.url,
                     )
                 } else {
-                    // Multiple videos — show the quality picker
-                    Log.d(TAG, "${playable.size} videos available — showing picker")
-                    _videoPicker.value = VideoPickerState.Show(episode, playable)
+                    Log.d(TAG, "${allVideos.size} videos in ${serverGroups.size} server group(s) — showing picker")
+                    _videoPicker.value = VideoPickerState.Show(episode, serverGroups)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Video resolution failed", e)
@@ -336,8 +355,19 @@ sealed class PlayRequest {
 /**
  * Video quality picker state. When the extension returns multiple videos
  * (different servers/qualities), the user picks one from a bottom sheet.
+ * Videos are grouped by server ([ServerGroup]) for a cleaner UI.
  */
 sealed class VideoPickerState {
     data object Hidden : VideoPickerState()
-    data class Show(val episode: SEpisode, val videos: List<Video>) : VideoPickerState()
+    data class Show(val episode: SEpisode, val serverGroups: List<ServerGroup>) : VideoPickerState()
 }
+
+/**
+ * A group of videos from the same server/hoster. Each group shows as a
+ * section in the quality picker bottom sheet with the server name as a
+ * header and the available qualities listed below.
+ */
+data class ServerGroup(
+    val serverName: String,
+    val videos: List<Video>,
+)

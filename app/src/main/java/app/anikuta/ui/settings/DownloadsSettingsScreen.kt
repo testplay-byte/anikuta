@@ -2,12 +2,12 @@ package app.anikuta.ui.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Server
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,12 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.anikuta.download.AudioVersion
 import app.anikuta.download.DownloadQuality
 import app.anikuta.download.DownloadStatus
 
 /**
  * Phase 6 task 6.21 — Downloads settings subpage.
- * Download queue + download settings (quality, WiFi-only, delete after watch).
+ * Quality + audio version + server priority + WiFi-only + delete after watch.
  */
 @Composable
 fun DownloadsSettingsScreen(onBack: () -> Unit) {
@@ -38,18 +39,23 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Settings
+            // Download preferences
             item {
-                SettingsGroupCard(title = "Settings") {
-                    var quality by remember { mutableStateOf(viewModel.preferredQuality()) }
-                    var wifiOnly by remember { mutableStateOf(viewModel.downloadOverWifiOnly()) }
-                    var deleteAfter by remember { mutableStateOf(viewModel.deleteAfterWatching()) }
-                    var qualityExpanded by remember { mutableStateOf(false) }
+                var quality by remember { mutableStateOf(viewModel.preferredQuality()) }
+                var audioVersion by remember { mutableStateOf(viewModel.preferredAudioVersion()) }
+                var preferredServer by remember { mutableStateOf(viewModel.preferredServer()) }
+                var wifiOnly by remember { mutableStateOf(viewModel.downloadOverWifiOnly()) }
+                var deleteAfter by remember { mutableStateOf(viewModel.deleteAfterWatching()) }
+                var qualityExpanded by remember { mutableStateOf(false) }
+                var audioExpanded by remember { mutableStateOf(false) }
 
+                SettingsGroupCard(title = "Download preferences") {
                     // Quality dropdown
-                    Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        LeadingIcon(Icons.Default.HighQuality)
-                        Text("Preferred quality", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            LeadingIcon(Icons.Default.HighQuality)
+                            Text("Preferred quality", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        }
                         Spacer(Modifier.height(4.dp))
                         Box {
                             OutlinedButton(onClick = { qualityExpanded = true }) {
@@ -64,6 +70,44 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
                                 }
                             }
                         }
+                    }
+                    HorizontalDivider()
+                    // Audio version dropdown
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            LeadingIcon(Icons.Default.RecordVoiceOver)
+                            Text("Preferred audio version", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Box {
+                            OutlinedButton(onClick = { audioExpanded = true }) {
+                                Text(AudioVersion.fromValue(audioVersion).label)
+                            }
+                            DropdownMenu(expanded = audioExpanded, onDismissRequest = { audioExpanded = false }) {
+                                AudioVersion.entries.forEach { a ->
+                                    DropdownMenuItem(
+                                        text = { Text(a.label) },
+                                        onClick = { audioVersion = a.value; viewModel.setPreferredAudioVersion(a.value); audioExpanded = false },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider()
+                    // Preferred server (text field)
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            LeadingIcon(Icons.Default.Server)
+                            Text("Preferred server", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = preferredServer,
+                            onValueChange = { preferredServer = it; viewModel.setPreferredServer(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text("Auto (first available)") },
+                        )
                     }
                     HorizontalDivider()
                     SwitchSettingsRow(
