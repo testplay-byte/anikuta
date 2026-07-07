@@ -65,6 +65,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_ANILIST_ID = "app.anikuta.player.ANILIST_ID"
         const val EXTRA_EPISODE_URL = "app.anikuta.player.EPISODE_URL"
         const val EXTRA_EPISODE_NUMBER = "app.anikuta.player.EPISODE_NUMBER"
+        const val EXTRA_VIDEO_HEADERS = "app.anikuta.player.VIDEO_HEADERS"
         const val MPV_DIR = "mpv"
 
         /**
@@ -89,6 +90,7 @@ class PlayerActivity : ComponentActivity() {
             anilistId: Int = -1,
             episodeUrl: String = "",
             episodeNumber: Float = -1f,
+            videoHeaders: String = "",
         ): Intent =
             Intent(context, PlayerActivity::class.java).apply {
                 putExtra(EXTRA_VIDEO_URL, videoUrl)
@@ -96,6 +98,7 @@ class PlayerActivity : ComponentActivity() {
                 if (anilistId > 0) putExtra(EXTRA_ANILIST_ID, anilistId)
                 if (episodeUrl.isNotBlank()) putExtra(EXTRA_EPISODE_URL, episodeUrl)
                 if (episodeNumber > 0) putExtra(EXTRA_EPISODE_NUMBER, episodeNumber)
+                if (videoHeaders.isNotBlank()) putExtra(EXTRA_VIDEO_HEADERS, videoHeaders)
             }
     }
 
@@ -180,6 +183,11 @@ class PlayerActivity : ComponentActivity() {
             MPVLib.mpvEventId.MPV_EVENT_SEEK -> viewModel?.onBufferingChanged(true)
             MPVLib.mpvEventId.MPV_EVENT_PLAYBACK_RESTART -> viewModel?.onBufferingChanged(false)
             MPVLib.mpvEventId.MPV_EVENT_IDLE -> Log.d(TAG, "Player idle")
+            MPVLib.mpvEventId.MPV_EVENT_END_FILE -> {
+                // File ended or failed to load. The PlayerObserver.onFileEnded
+                // callback handles the error message. Log it here for debugging.
+                Log.w(TAG, "MPV_EVENT_END_FILE — file ended or failed")
+            }
         }
     }
 
@@ -378,6 +386,20 @@ private fun PlayerScreen(
 
                 MPVLib.addLogObserver(observer)
                 MPVLib.addObserver(observer)
+
+                // Set HTTP headers before loadfile — many streaming servers
+                // require Referer + User-Agent headers or return 403 Forbidden.
+                // aniyomi does the same in setHttpOptions().
+                val videoHeaders = intent.getStringExtra(EXTRA_VIDEO_HEADERS)
+                if (!videoHeaders.isNullOrBlank()) {
+                    MPVLib.setOptionString("http-header-fields", videoHeaders)
+                    Log.d("PlayerActivity", "Set HTTP headers: $videoHeaders")
+                } else {
+                    // Set a default User-Agent so servers don't block us
+                    MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+                    Log.d("PlayerActivity", "Set default User-Agent header")
+                }
+
                 Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
                 MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
                 view
@@ -409,25 +431,41 @@ private fun PlayerScreen(
             },
         )
 
-        // ---- Loading overlay (task 6.26) ----
-        // Shows a centered spinner + "Loading…" while MPV loads the stream.
-        // Replaces the blank black screen during initial load.
+        // ---- Loading/error overlay ----
+        // Shows spinner while loading, error message if loading fails.
+        // MPV fires efEvent with the error message when loading fails
+        // (403, TLS, network error, etc.) — the ViewModel sets ERROR state
+        // immediately, so the user sees the error within 1-2 seconds
+        // instead of spinning forever.
         val loadingState by viewModel.loadingState.collectAsState()
+        val errorMessage by viewModel.errorMessage.collectAsState()
         if (loadingState != app.anikuta.player.PlayerLoadingState.READY) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f)),
+                    .background(Color.Black.copy(alpha = 0.85f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    androidx.compose.material3.CircularProgressIndicator(color = Color.White)
-                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(12.dp))
-                    androidx.compose.material3.Text(
-                        "Loading…",
-                        color = Color.White,
-                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                    )
+                    if (loadingState == app.anikuta.player.PlayerLoadingState.ERROR) {
+                        androidx.compose.material3.Text("⚠️", color = Color.White, style = androidx.compose.material3.MaterialTheme.typography.headlineLarge)
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
+                        androidx.compose.material3.Text(
+                            errorMessage ?: "Video failed to load.",
+                            color = Color.White,
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 32.dp),
+                        )
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(16.dp))
+                        androidx.compose.material3.Button(onClick = onBack) {
+                            androidx.compose.material3.Text("Go Back")
+                        }
+                    } else {
+                        androidx.compose.material3.CircularProgressIndicator(color = Color.White)
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(12.dp))
+                        androidx.compose.material3.Text("Loading…", color = Color.White, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         }

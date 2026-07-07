@@ -315,13 +315,15 @@ class DetailViewModel(
                 if (allVideos.isEmpty()) {
                     _playRequest.value = PlayRequest.Error("No playable video found for this episode")
                 } else if (allVideos.size == 1) {
-                    Log.d(TAG, "Single video: ${allVideos[0].videoTitle} → ${allVideos[0].videoUrl}")
+                    val v = allVideos[0]
+                    Log.d(TAG, "Single video: ${v.videoTitle} → ${v.videoUrl}")
                     _playRequest.value = PlayRequest.Play(
-                        url = allVideos[0].videoUrl,
+                        url = v.videoUrl,
                         title = episode.name,
                         episodeNumber = episode.episode_number,
                         anilistId = anilistId,
                         episodeUrl = episode.url,
+                        videoHeaders = buildHeaders(v),
                     )
                 } else {
                     Log.d(TAG, "${allVideos.size} videos in ${serverGroups.size} server group(s) — showing picker")
@@ -346,7 +348,27 @@ class DetailViewModel(
             episodeNumber = episode.episode_number,
             anilistId = anilistId,
             episodeUrl = episode.url,
+            videoHeaders = buildHeaders(video),
         )
+    }
+
+    /**
+     * Build HTTP headers string for MPV's http-header-fields option.
+     * Combines the Video's headers with the source's default headers.
+     * Format: "Key: Value,Key2: Value2" (commas escaped as \,).
+     * Matches aniyomi's setHttpOptions().
+     */
+    private fun buildHeaders(video: Video): String {
+        val headers = video.headers
+        return if (headers != null && headers.size > 0) {
+            headers.toMultimap()
+                .mapValues { it.value.firstOrNull() ?: "" }
+                .map { "${it.key}: ${it.value.replace(",", "\\,")}" }
+                .joinToString(",")
+        } else {
+            // Default User-Agent so servers don't block us with 403
+            "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
+        }
     }
 
     /** Dismiss the quality picker without playing. */
@@ -423,6 +445,7 @@ sealed class PlayRequest {
         val episodeNumber: Float,
         val anilistId: Int = -1,
         val episodeUrl: String = "",
+        val videoHeaders: String = "",
     ) : PlayRequest()
     data class Error(val message: String) : PlayRequest()
 }

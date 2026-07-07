@@ -65,6 +65,7 @@ fun DetailScreen(
                     anilistId = req.anilistId,
                     episodeUrl = req.episodeUrl,
                     episodeNumber = req.episodeNumber,
+                    videoHeaders = req.videoHeaders,
                 )
                 context.startActivity(intent)
                 viewModel.consumePlayRequest()
