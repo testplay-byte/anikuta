@@ -89,6 +89,9 @@ class DetailViewModel(
         private val episodeCache = mutableMapOf<Int, Pair<List<SEpisode>, String>>()
     }
 
+    private val preferenceStore: app.anikuta.core.preference.PreferenceStore? = try { Injekt.get() } catch (e: Exception) { null }
+    private val json = Json { ignoreUnknownKeys = true }
+
     init {
         loadAnimeDetails()
     }
@@ -129,10 +132,9 @@ class DetailViewModel(
      * appropriate state so the UI shows the right message.
      */
     private fun findEpisodeSource(anime: AniListAnime) {
-        // Check cache first — if we already have episodes for this anime,
-        // show them immediately without re-fetching from the extension.
+        // Check in-memory cache first (survives navigation, not app restart)
         episodeCache[anilistId]?.let { (eps, sourceName) ->
-            Log.d(TAG, "Episode cache hit: ${eps.size} episodes from $sourceName")
+            Log.d(TAG, "Episode cache hit (in-memory): ${eps.size} episodes from $sourceName")
             _episodes.value = EpisodeState.Loaded(eps, sourceName)
             return
         }
@@ -140,6 +142,39 @@ class DetailViewModel(
             _episodes.value = EpisodeState.Error("Source bridge not available")
             return
         }
+        // Check persistent cache for the source match (survives app restart).
+        // We cache the source name so we can skip the extension search (the
+        // slow part). Episodes still need to be fetched from the extension.
+        val cachedSourceName = preferenceStore?.getString("ext_match_$anilistId", "")?.get()
+        val cachedSAnimeUrl = preferenceStore?.getString("ext_sanime_url_$anilistId", "")?.get()
+        if (!cachedSourceName.isNullOrBlank() && !cachedSAnimeUrl.isNullOrBlank()) {
+            Log.d(TAG, "Persistent cache hit: source=$cachedSourceName, fetching episodes...")
+            _episodes.value = EpisodeState.Searching
+            viewModelScope.launch {
+                try {
+                    val mgr = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>()
+                    val source = mgr.getCatalogueSources().find { it.name == cachedSourceName }
+                    if (source != null) {
+                        val sAnime = app.anikuta.source.api.model.SAnime.create().apply {
+                            url = cachedSAnimeUrl
+                            title = anime.title.preferred()
+                        }
+                        loadEpisodes(sAnime, anime, cachedSourceName)
+                    } else {
+                        // Source not found (extension uninstalled?) — fall through to search
+                        searchExtensions(anime, bridge)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Cached source lookup failed, falling back to search", e)
+                    searchExtensions(anime, bridge)
+                }
+            }
+            return
+        }
+        searchExtensions(anime, bridge)
+    }
+
+    private fun searchExtensions(anime: AniListAnime, bridge: AniyomiSourceBridge) {
         _episodes.value = EpisodeState.Searching
         viewModelScope.launch {
             try {
@@ -192,8 +227,11 @@ class DetailViewModel(
             _episodes.value = EpisodeState.LoadingEpisodes
             val eps = withContext(Dispatchers.IO) { source.getEpisodeList(sAnime) }
             Log.d(TAG, "Loaded ${eps.size} episodes from '$sourceName'")
-            // Cache the episode list so re-opening the detail page is instant.
+            // Cache in-memory (survives navigation)
             episodeCache[anilistId] = Pair(eps, sourceName)
+            // Cache source match persistently (survives app restart)
+            preferenceStore?.getString("ext_match_$anilistId", "")?.set(sourceName)
+            preferenceStore?.getString("ext_sanime_url_$anilistId", "")?.set(sAnime.url)
             _episodes.value = EpisodeState.Loaded(eps, sourceName)
         } catch (e: Exception) {
             Log.e(TAG, "Episode list fetch failed", e)

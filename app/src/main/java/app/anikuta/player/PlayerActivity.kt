@@ -329,15 +329,13 @@ private fun PlayerScreen(
     ) {
         AndroidView(
             factory = { ctx ->
-                // Inflate from a real XML layout so the view gets a proper
-                // XmlBlock$Parser-backed AttributeSet.
                 val view = android.view.LayoutInflater
                     .from(ctx)
                     .inflate(R.layout.mpv_view, null) as AnikutaMPVView
                 mpvView = view
                 val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
                 if (!PlayerActivity.mpvInitialized) {
-                    // First time: initialize MPV (native create + options + observers)
+                    // First time: full initialize (MPV create + options + surface callback)
                     view.initialize(
                         mpvDir.absolutePath,
                         ctx.cacheDir.absolutePath,
@@ -346,16 +344,21 @@ private fun PlayerScreen(
                     PlayerActivity.mpvInitialized = true
                     Log.d("PlayerActivity", "MPV initialized for the first time")
                 } else {
-                    // MPV is already initialized from a previous player session.
-                    // Calling initialize() again would trigger a native SIGABRT
-                    // (assertion "!mpctx->initialized" failed in mp_initialize).
-                    // The SurfaceHolder.Callback on the new view will auto-attach
-                    // the surface to MPV when surfaceCreated fires. Options from
-                    // the first initialization persist (MPV options are sticky).
-                    Log.d("PlayerActivity", "MPV already initialized — skipping create()")
+                    // MPV is already initialized. We can't call initialize() again
+                    // (native SIGABRT), but we need to re-attach the surface from
+                    // the new SurfaceView to MPV. BaseMPVView implements
+                    // SurfaceHolder.Callback and registers itself in initialize().
+                    // Without that registration, surfaceCreated never fires →
+                    // attachSurface never runs → MPV has no surface → loadfile
+                    // loads but can't display → stuck on loading forever.
+                    //
+                    // Fix: manually register the SurfaceHolder callback. When
+                    // surfaceCreated fires, BaseMPVView.surfaceCreated will call
+                    // attachSurface internally, connecting the new surface to MPV.
+                    view.holder.addCallback(view)
+                    Log.d("PlayerActivity", "MPV already initialized — re-attached surface callback")
                 }
-                // Always re-add observers (they were removed in onDestroy of
-                // the previous PlayerActivity session).
+                // Always re-add observers (removed in previous onDestroy)
                 MPVLib.addLogObserver(observer)
                 MPVLib.addObserver(observer)
                 Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")

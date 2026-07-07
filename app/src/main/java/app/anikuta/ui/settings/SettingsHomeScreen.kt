@@ -131,13 +131,12 @@ private fun CategoryCard(category: SettingsCategory, onClick: () -> Unit) {
         label = "settingsCardScale",
     )
 
-    // Use a single consistent color for all icons — the user reported that
-    // the dynamic color scheme (primaryContainer/secondaryContainer/etc.)
-    // produced random-looking colors on their device (deep blue, red, etc.)
-    // that didn't match. Using primaryContainer for all gives a clean,
-    // consistent look that matches the app's brand.
-    val iconBg = MaterialTheme.colorScheme.primaryContainer
-    val iconFg = MaterialTheme.colorScheme.onPrimaryContainer
+    // Use surfaceVariant for all icons — the user reported that primaryContainer
+    // produced "deep dark blue" on their device (Monet dynamic color extracted
+    // blue from their wallpaper). surfaceVariant is a neutral tonal color that
+    // looks consistent across devices and doesn't clash with the app's theme.
+    val iconBg = MaterialTheme.colorScheme.surfaceVariant
+    val iconFg = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         modifier = Modifier
