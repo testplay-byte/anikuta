@@ -44,10 +44,6 @@ class DetailViewModel(
     private val anilistId: Int,
 ) : ViewModel() {
 
-    companion object {
-        private const val TAG = "DetailViewModel"
-    }
-
     private val anilistRepo: AniListRepository? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
     private val cacheManager: CacheManager? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
     private val sourceBridge: AniyomiSourceBridge? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
@@ -80,6 +76,18 @@ class DetailViewModel(
     // Remember the matched source + SAnime so we can fetch episodes/videos later.
     private var matchedSource: AnimeCatalogueSource? = null
     private var matchedSAnime: SAnime? = null
+
+    /**
+     * Episode list cache — avoids re-fetching from the extension every time
+     * the detail page is re-opened. Keyed by AniList ID. The user reported
+     * that re-opening the detail page re-fetched the entire episode list,
+     * which was slow + wasted network. Now we cache it in a companion object
+     * (survives ViewModel destruction when navigating away + back).
+     */
+    companion object {
+        private const val TAG = "DetailViewModel"
+        private val episodeCache = mutableMapOf<Int, Pair<List<SEpisode>, String>>()
+    }
 
     init {
         loadAnimeDetails()
@@ -121,6 +129,13 @@ class DetailViewModel(
      * appropriate state so the UI shows the right message.
      */
     private fun findEpisodeSource(anime: AniListAnime) {
+        // Check cache first — if we already have episodes for this anime,
+        // show them immediately without re-fetching from the extension.
+        episodeCache[anilistId]?.let { (eps, sourceName) ->
+            Log.d(TAG, "Episode cache hit: ${eps.size} episodes from $sourceName")
+            _episodes.value = EpisodeState.Loaded(eps, sourceName)
+            return
+        }
         val bridge = sourceBridge ?: run {
             _episodes.value = EpisodeState.Error("Source bridge not available")
             return
@@ -177,6 +192,8 @@ class DetailViewModel(
             _episodes.value = EpisodeState.LoadingEpisodes
             val eps = withContext(Dispatchers.IO) { source.getEpisodeList(sAnime) }
             Log.d(TAG, "Loaded ${eps.size} episodes from '$sourceName'")
+            // Cache the episode list so re-opening the detail page is instant.
+            episodeCache[anilistId] = Pair(eps, sourceName)
             _episodes.value = EpisodeState.Loaded(eps, sourceName)
         } catch (e: Exception) {
             Log.e(TAG, "Episode list fetch failed", e)

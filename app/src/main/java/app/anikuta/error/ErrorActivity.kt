@@ -61,6 +61,9 @@ import app.anikuta.ui.theme.AnikutaTheme
 class ErrorActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge-to-edge so the theme background fills behind the status bar
+        // (user reported the status bar was black instead of themed).
+        androidx.activity.enableEdgeToEdge()
         val crashReport = AnikutaCrashHandler.getLastCrash(this)
             ?: "No crash report was recorded. The app may have been killed by the system."
 

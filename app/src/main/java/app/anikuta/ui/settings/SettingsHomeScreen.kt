@@ -131,14 +131,13 @@ private fun CategoryCard(category: SettingsCategory, onClick: () -> Unit) {
         label = "settingsCardScale",
     )
 
-    val toneColors = when (category.tone) {
-        "emerald" -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        "violet" -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-        "amber" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-        "sky" -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        "rose" -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    // Use a single consistent color for all icons — the user reported that
+    // the dynamic color scheme (primaryContainer/secondaryContainer/etc.)
+    // produced random-looking colors on their device (deep blue, red, etc.)
+    // that didn't match. Using primaryContainer for all gives a clean,
+    // consistent look that matches the app's brand.
+    val iconBg = MaterialTheme.colorScheme.primaryContainer
+    val iconFg = MaterialTheme.colorScheme.onPrimaryContainer
 
     Surface(
         modifier = Modifier
@@ -162,14 +161,14 @@ private fun CategoryCard(category: SettingsCategory, onClick: () -> Unit) {
             // Icon circle
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = toneColors.first,
+                color = iconBg,
                 modifier = Modifier.size(40.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         category.icon,
                         contentDescription = null,
-                        tint = toneColors.second,
+                        tint = iconFg,
                         modifier = Modifier.size(22.dp),
                     )
                 }
