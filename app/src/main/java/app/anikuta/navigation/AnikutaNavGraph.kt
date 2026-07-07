@@ -171,6 +171,7 @@ fun AnikutaNavGraph() {
             composable(Screen.More.route) {
                 MoreScreen(
                     onOpenDebug = { navController.navigate("debug") },
+                    onNavigate = { route -> navController.navigate(route) },
                 )
             }
             composable(
@@ -184,11 +185,33 @@ fun AnikutaNavGraph() {
                 )
             }
             // Hidden debug screen (Phase 5 task 5.1). Accessible via long-press
-            // on the version number in MoreScreen. Easily removable: delete this
+            // on the version number in About settings. Easily removable: delete this
             // composable + the DebugScreen file + the long-press handler.
             composable(route = "debug") {
                 app.anikuta.ui.debug.DebugScreen(
                     onBack = { navController.popBackStack() },
+                )
+            }
+            // --- Settings subpages (Phase 6 task 6.17-6.24) ---
+            composable("settings/general") {
+                app.anikuta.ui.settings.GeneralSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/player") {
+                app.anikuta.ui.settings.PlayerSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/extensions") {
+                app.anikuta.ui.settings.ExtensionsSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/downloads") {
+                app.anikuta.ui.settings.DownloadsSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/tracking") {
+                app.anikuta.ui.settings.TrackingSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/about") {
+                app.anikuta.ui.settings.AboutSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenDebug = { navController.navigate("debug") },
                 )
             }
         }
