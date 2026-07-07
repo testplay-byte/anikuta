@@ -65,6 +65,9 @@ class AppModule(val app: Application) : InjektModule {
         // AniList ↔ extension source bridge (fuzzy title matching)
         addSingletonFactory { AniyomiSourceBridge(get<AnimeSourceManager>()) }
 
+        // AniList tracker (OAuth + progress sync)
+        addSingletonFactory { app.anikuta.data.tracker.AniListTracker(get<PreferenceStore>()) }
+
         // AniList client
         addSingletonFactory { AniListRepository(get()) }
 

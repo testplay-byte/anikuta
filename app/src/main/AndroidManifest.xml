@@ -42,6 +42,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- AniList OAuth callback (Phase 6 task 6.7). Uses aniyomi's
+                 redirect URI because we use their client ID (5338). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="aniyomi" android:host="anilist-auth" />
+            </intent-filter>
         </activity>
 
         <!-- MPV video player. Landscape + fullscreen at runtime; theme from manifest. -->

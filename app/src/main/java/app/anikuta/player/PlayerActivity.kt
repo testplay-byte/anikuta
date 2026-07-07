@@ -34,8 +34,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.anikuta.R
 import app.anikuta.player.controls.PlayerControls
-import app.anikuta.ui.theme.AnikutaTheme
+import app.anikata.ui.theme.AnikutaTheme
 import `is`.xyz.mpv.MPVLib
+import kotlinx.coroutines.launch
 import uy.kohesive.injekt.api.get
 
 /**
@@ -63,12 +64,13 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_TITLE = "app.anikuta.player.TITLE"
         const val EXTRA_ANILIST_ID = "app.anikuta.player.ANILIST_ID"
         const val EXTRA_EPISODE_URL = "app.anikuta.player.EPISODE_URL"
+        const val EXTRA_EPISODE_NUMBER = "app.anikuta.player.EPISODE_NUMBER"
         const val MPV_DIR = "mpv"
 
         /**
          * Build a launch Intent for the player.
-         * [anilistId] + [episodeUrl] are optional — when both are provided,
-         * watch progress is saved/resumed (Phase 5 tasks 5.4 + 5.5).
+         * [anilistId] + [episodeUrl] + [episodeNumber] are optional — when
+         * provided, watch progress is saved/resumed + AniList sync happens.
          */
         fun newIntent(
             context: Context,
@@ -76,12 +78,14 @@ class PlayerActivity : ComponentActivity() {
             title: String,
             anilistId: Int = -1,
             episodeUrl: String = "",
+            episodeNumber: Float = -1f,
         ): Intent =
             Intent(context, PlayerActivity::class.java).apply {
                 putExtra(EXTRA_VIDEO_URL, videoUrl)
                 putExtra(EXTRA_TITLE, title)
                 if (anilistId > 0) putExtra(EXTRA_ANILIST_ID, anilistId)
                 if (episodeUrl.isNotBlank()) putExtra(EXTRA_EPISODE_URL, episodeUrl)
+                if (episodeNumber > 0) putExtra(EXTRA_EPISODE_NUMBER, episodeNumber)
             }
     }
 
@@ -99,6 +103,7 @@ class PlayerActivity : ComponentActivity() {
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Now Playing"
         anilistId = intent.getIntExtra(EXTRA_ANILIST_ID, -1)
         episodeUrl = intent.getStringExtra(EXTRA_EPISODE_URL) ?: ""
+        vmEpisodeNumber = intent.getFloatExtra(EXTRA_EPISODE_NUMBER, -1f).takeIf { it > 0 }
 
         if (videoUrl.isNullOrBlank()) {
             Log.e(TAG, "No video URL provided, finishing")
@@ -194,8 +199,32 @@ class PlayerActivity : ComponentActivity() {
             // Finished — clear the progress so next time we start from 0.
             store.clear(anilistId, episodeUrl)
             Log.d(TAG, "Episode finished — cleared progress")
+            // Sync to AniList: mark episode as watched (task 6.9)
+            syncToAniList()
         }
     }
+
+    /**
+     * Sync watch progress to AniList (task 6.9). Called when an episode is
+     * finished. Uses the AniListTracker (if logged in) to update progress.
+     */
+    private fun syncToAniList() {
+        try {
+            val tracker: app.anikuta.data.tracker.AniListTracker = uy.kohesive.injekt.Injekt.get()
+            if (!tracker.isLoggedIn()) return
+            // Extract episode number from the title (best-effort)
+            val epNum = vmEpisodeNumber ?: return
+            kotlinx.coroutines.MainScope().launch {
+                tracker.updateProgress(anilistId, epNum.toInt())
+            }
+            Log.d(TAG, "AniList sync triggered: anime=$anilistId ep=$epNum")
+        } catch (e: Exception) {
+            Log.w(TAG, "AniList sync failed (not logged in or tracker unavailable)", e)
+        }
+    }
+
+    /** Episode number passed from the detail page (for AniList sync). */
+    private var vmEpisodeNumber: Float? = null
 
     private fun handlePropertyLong(property: String, value: Long) {
         when (property) {
