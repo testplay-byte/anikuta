@@ -22,7 +22,19 @@ fun GET(
     headers: Headers = DEFAULT_HEADERS,
     cache: CacheControl = DEFAULT_CACHE_CONTROL,
 ): Request {
-    return GET(url.toHttpUrl(), headers, cache)
+    // Try strict parsing first (standard OkHttp). If the URL is invalid
+    // (e.g. extensions that construct URLs with encoded paths that OkHttp
+    // can't parse as a proper HttpUrl), fall back to Request.Builder.url(String)
+    // which is more lenient — it accepts any string that Java's URI can parse.
+    return try {
+        GET(url.toHttpUrl(), headers, cache)
+    } catch (e: Exception) {
+        Request.Builder()
+            .url(url)
+            .headers(headers)
+            .cacheControl(cache)
+            .build()
+    }
 }
 
 /**

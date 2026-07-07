@@ -35,14 +35,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import app.anikuta.data.anilist.model.AniListAnime
 
-/**
- * Public-domain sample stream (Big Buck Bunny) used to verify the MPV player
- * works before the extension→source→episode pipeline is wired (Phase 5).
- * Swapped out for real episode URLs once source resolution is in place.
- */
-private const val SAMPLE_STREAM_URL =
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
@@ -277,29 +269,6 @@ fun DetailScreen(
                                     body = es.message,
                                 )
                             }
-                        }
-
-                        // Play-sample fallback — always available so the player
-                        // is testable even without a working extension.
-                        Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedButton(
-                            onClick = {
-                                val intent = app.anikuta.player.PlayerActivity.newIntent(
-                                    context = context,
-                                    videoUrl = SAMPLE_STREAM_URL,
-                                    title = anime.title.preferred(),
-                                )
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(
-                                Icons.Filled.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Play sample (test stream)")
                         }
                     }
                 }
