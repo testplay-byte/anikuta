@@ -278,7 +278,20 @@ class DetailViewModel(
             try {
                 // Try the newer getHosterList API first (groups videos by
                 // server/hoster). Fall back to flat getVideoList if the
-                // extension doesn't support it.
+                // extension doesn't support it OR if getHosterList fails
+                // for any reason (URL parse error, classloader issue, etc.).
+                //
+                // Many extensions only override videoListRequest (the older
+                // API) and don't override hosterListRequest (the newer API
+                // from extensions-lib 16). When we call getHosterList on
+                // such an extension, the BASE CLASS default implementation
+                // runs: GET(baseUrl + episode.url). If the episode URL is
+                // not a simple relative path (e.g. it's an encoded string),
+                // this constructs an invalid URL → IllegalArgumentException.
+                //
+                // Fix: catch ALL exceptions (not just IllegalStateException)
+                // and fall back to getVideoList, which uses the extension's
+                // overridden videoListRequest — the correct URL constructor.
                 val serverGroups = try {
                     val hosters = withContext(Dispatchers.IO) { source.getHosterList(episode) }
                     hosters.mapNotNull { hoster ->
@@ -287,14 +300,14 @@ class DetailViewModel(
                             ServerGroup(hoster.hosterName.ifBlank { "Server" }, vids)
                         } else null
                     }
-                } catch (e: IllegalStateException) {
-                    // "Not used" — extension doesn't support getHosterList
-                    Log.d(TAG, "getHosterList not supported, falling back to getVideoList")
+                } catch (e: Exception) {
+                    // Any failure in getHosterList — fall back to getVideoList.
+                    // This handles: IllegalStateException ("Not used"),
+                    // IllegalArgumentException (invalid URL), LinkageError
+                    // (classloader conflict), and any other extension error.
+                    Log.d(TAG, "getHosterList failed (${e.javaClass.simpleName}: ${e.message}), falling back to getVideoList")
                     val flat = withContext(Dispatchers.IO) { source.getVideoList(episode) }
                     val playable = flat.filter { it.videoUrl.isNotBlank() }
-                    // Group flat list by parsing server name from video title
-                    // (extensions often encode it: "SUB - 720p" → no server,
-                    // but some include it). If we can't parse, use one group.
                     listOf(ServerGroup("Default", playable))
                 }
 
