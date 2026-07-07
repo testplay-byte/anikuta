@@ -73,6 +73,10 @@ class DetailViewModel(
     private val _resolvingEpisode = MutableStateFlow(false)
     val resolvingEpisode: StateFlow<Boolean> = _resolvingEpisode.asStateFlow()
 
+    /** Videos available for the current episode — shown in the quality picker. */
+    private val _videoPicker = MutableStateFlow<VideoPickerState>(VideoPickerState.Hidden)
+    val videoPicker: StateFlow<VideoPickerState> = _videoPicker.asStateFlow()
+
     // Remember the matched source + SAnime so we can fetch episodes/videos later.
     private var matchedSource: AnimeCatalogueSource? = null
     private var matchedSAnime: SAnime? = null
@@ -194,18 +198,23 @@ class DetailViewModel(
         viewModelScope.launch {
             try {
                 val videos = withContext(Dispatchers.IO) { source.getVideoList(episode) }
-                val best = videos.firstOrNull { it.videoUrl.isNotBlank() }
-                if (best != null) {
-                    Log.d(TAG, "Resolved video: ${best.videoTitle} → ${best.videoUrl}")
+                val playable = videos.filter { it.videoUrl.isNotBlank() }
+                if (playable.isEmpty()) {
+                    _playRequest.value = PlayRequest.Error("No playable video found for this episode")
+                } else if (playable.size == 1) {
+                    // Only one video — skip the picker, play directly
+                    Log.d(TAG, "Single video: ${playable[0].videoTitle} → ${playable[0].videoUrl}")
                     _playRequest.value = PlayRequest.Play(
-                        url = best.videoUrl,
+                        url = playable[0].videoUrl,
                         title = episode.name,
                         episodeNumber = episode.episode_number,
                         anilistId = anilistId,
                         episodeUrl = episode.url,
                     )
                 } else {
-                    _playRequest.value = PlayRequest.Error("No playable video found for this episode")
+                    // Multiple videos — show the quality picker
+                    Log.d(TAG, "${playable.size} videos available — showing picker")
+                    _videoPicker.value = VideoPickerState.Show(episode, playable)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Video resolution failed", e)
@@ -214,6 +223,24 @@ class DetailViewModel(
                 _resolvingEpisode.value = false
             }
         }
+    }
+
+    /** User picked a specific video from the quality picker → launch the player. */
+    fun playSpecificVideo(video: Video, episode: SEpisode) {
+        Log.d(TAG, "User selected: ${video.videoTitle} → ${video.videoUrl}")
+        _videoPicker.value = VideoPickerState.Hidden
+        _playRequest.value = PlayRequest.Play(
+            url = video.videoUrl,
+            title = episode.name,
+            episodeNumber = episode.episode_number,
+            anilistId = anilistId,
+            episodeUrl = episode.url,
+        )
+    }
+
+    /** Dismiss the quality picker without playing. */
+    fun dismissVideoPicker() {
+        _videoPicker.value = VideoPickerState.Hidden
     }
 
     /** Clear the play request after the UI has consumed it (launched the player). */
@@ -287,4 +314,13 @@ sealed class PlayRequest {
         val episodeUrl: String = "",
     ) : PlayRequest()
     data class Error(val message: String) : PlayRequest()
+}
+
+/**
+ * Video quality picker state. When the extension returns multiple videos
+ * (different servers/qualities), the user picks one from a bottom sheet.
+ */
+sealed class VideoPickerState {
+    data object Hidden : VideoPickerState()
+    data class Show(val episode: SEpisode, val videos: List<Video>) : VideoPickerState()
 }

@@ -57,6 +57,7 @@ fun DetailScreen(
     val episodeState by viewModel.episodes.collectAsState()
     val playRequest by viewModel.playRequest.collectAsState()
     val resolvingEpisode by viewModel.resolvingEpisode.collectAsState()
+    val videoPicker by viewModel.videoPicker.collectAsState()
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
 
@@ -349,6 +350,68 @@ fun DetailScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    }
+                }
+            }
+
+            // ---- Video quality picker bottom sheet ----
+            // Shows when the extension returns multiple videos (different
+            // servers/qualities). User picks one → player opens with that video.
+            val pickerState = videoPicker
+            if (pickerState is VideoPickerState.Show) {
+                androidx.compose.material3.ModalBottomSheet(
+                    onDismissRequest = { viewModel.dismissVideoPicker() },
+                    sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
+                ) {
+                    Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                        Text(
+                            "Select quality",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                        )
+                        pickerState.videos.forEach { video ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = androidx.compose.ui.graphics.Color.Transparent,
+                                onClick = { viewModel.playSpecificVideo(video, pickerState.episode) },
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.PlayArrow,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = video.videoTitle.ifBlank { "Unknown quality" },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    video.resolution?.let { res ->
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                        ) {
+                                            Text(
+                                                "${res}p",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
