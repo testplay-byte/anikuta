@@ -151,6 +151,7 @@ class PlayerActivity : ComponentActivity() {
                         viewModel = vm,
                         observer = observer,
                         onBack = { finish() },
+                        onViewCreated = { view -> mpvViewRef = view },
                     )
                 }
             }
@@ -342,6 +343,7 @@ private fun PlayerScreen(
     viewModel: PlayerViewModel,
     observer: PlayerObserver,
     onBack: () -> Unit,
+    onViewCreated: (AnikutaMPVView) -> Unit = {},
 ) {
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
 
@@ -359,7 +361,7 @@ private fun PlayerScreen(
                     .from(ctx)
                     .inflate(R.layout.mpv_view, null) as AnikutaMPVView
                 mpvView = view
-                mpvViewRef = view  // Store for onDestroy
+                onViewCreated(view)  // Pass to Activity for onDestroy
                 val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
 
                 // Always initialize — we destroy() in onDestroy, so MPV is
