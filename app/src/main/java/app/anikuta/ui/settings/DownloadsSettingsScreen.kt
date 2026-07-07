@@ -1,31 +1,188 @@
 package app.anikuta.ui.settings
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import app.anikuta.download.DownloadQuality
+import app.anikuta.download.DownloadStatus
 
 /**
  * Phase 6 task 6.21 — Downloads settings subpage.
- * Placeholder — filled in by Section 5 (Video downloads, tasks 6.12-6.16).
+ * Download queue + download settings (quality, WiFi-only, delete after watch).
  */
 @Composable
 fun DownloadsSettingsScreen(onBack: () -> Unit) {
+    val viewModel: DownloadsViewModel = viewModel()
+    val queue by viewModel.queue.collectAsState()
+
+    val active = queue.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }
+    val completed = queue.filter { it.status == DownloadStatus.COMPLETED }
+    val failed = queue.filter { it.status == DownloadStatus.FAILED }
+
     SettingsSubpageScaffold(title = "Downloads", onBack = onBack) {
-        Box(
+        LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                "Download management coming in Section 5",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium,
-            )
+            // Settings
+            item {
+                SettingsGroupCard(title = "Settings") {
+                    var quality by remember { mutableStateOf(viewModel.preferredQuality()) }
+                    var wifiOnly by remember { mutableStateOf(viewModel.downloadOverWifiOnly()) }
+                    var deleteAfter by remember { mutableStateOf(viewModel.deleteAfterWatching()) }
+                    var qualityExpanded by remember { mutableStateOf(false) }
+
+                    // Quality dropdown
+                    Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        LeadingIcon(Icons.Default.HighQuality)
+                        Text("Preferred quality", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(4.dp))
+                        Box {
+                            OutlinedButton(onClick = { qualityExpanded = true }) {
+                                Text(DownloadQuality.fromValue(quality).label)
+                            }
+                            DropdownMenu(expanded = qualityExpanded, onDismissRequest = { qualityExpanded = false }) {
+                                DownloadQuality.entries.forEach { q ->
+                                    DropdownMenuItem(
+                                        text = { Text(q.label) },
+                                        onClick = { quality = q.value; viewModel.setPreferredQuality(q.value); qualityExpanded = false },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Wifi,
+                        title = "Download over WiFi only",
+                        subtitle = "Save mobile data",
+                        checked = wifiOnly,
+                        onCheckedChange = { wifiOnly = it; viewModel.setDownloadOverWifiOnly(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Delete,
+                        title = "Delete after watching",
+                        subtitle = "Auto-remove downloaded episodes",
+                        checked = deleteAfter,
+                        onCheckedChange = { deleteAfter = it; viewModel.setDeleteAfterWatching(it) },
+                    )
+                }
+            }
+
+            // Active downloads
+            if (active.isNotEmpty()) {
+                item {
+                    SettingsGroupCard(title = "Downloading (${active.size})") {
+                        active.forEach { entry ->
+                            DownloadRow(
+                                title = entry.title,
+                                subtitle = "${entry.progress}%",
+                                progress = entry.progress,
+                                status = entry.status,
+                                onCancel = { viewModel.cancelDownload(entry.id) },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Completed
+            if (completed.isNotEmpty()) {
+                item {
+                    SettingsGroupCard(title = "Completed (${completed.size})") {
+                        completed.forEach { entry ->
+                            DownloadRow(
+                                title = entry.title,
+                                subtitle = "Downloaded",
+                                progress = 100,
+                                status = DownloadStatus.COMPLETED,
+                                onRemove = { viewModel.removeDownload(entry.id) },
+                            )
+                        }
+                        TextButton(onClick = { viewModel.clearCompleted() }, modifier = Modifier.padding(8.dp)) {
+                            Text("Clear all completed")
+                        }
+                    }
+                }
+            }
+
+            // Failed
+            if (failed.isNotEmpty()) {
+                item {
+                    SettingsGroupCard(title = "Failed (${failed.size})") {
+                        failed.forEach { entry ->
+                            DownloadRow(
+                                title = entry.title,
+                                subtitle = entry.error ?: "Failed",
+                                progress = entry.progress,
+                                status = DownloadStatus.FAILED,
+                                onRemove = { viewModel.removeDownload(entry.id) },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Empty state
+            if (queue.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(8.dp))
+                            Text("No downloads yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Long-press an episode to download", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DownloadRow(
+    title: String,
+    subtitle: String,
+    progress: Int,
+    status: DownloadStatus,
+    onCancel: (() -> Unit)? = null,
+    onRemove: (() -> Unit)? = null,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (status == DownloadStatus.DOWNLOADING && progress >= 0) {
+            Spacer(Modifier.height(4.dp))
+            LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
+        }
+        if (onCancel != null || onRemove != null) {
+            Row(Modifier.padding(top = 4.dp)) {
+                if (onCancel != null) {
+                    TextButton(onClick = onCancel) { Text("Cancel") }
+                }
+                if (onRemove != null) {
+                    TextButton(onClick = onRemove) { Text("Remove") }
+                }
+            }
         }
     }
 }

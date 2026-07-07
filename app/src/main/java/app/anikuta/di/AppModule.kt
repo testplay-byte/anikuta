@@ -17,7 +17,11 @@ import app.anikuta.data.supabase.SupabaseClient
 import app.anikuta.player.PlayerPreferences
 import app.anikuta.player.WatchProgressStore
 import app.anikuta.ui.library.LibraryStore
+import app.anikuta.data.tracker.AniListTracker
 import app.anikuta.source.bridge.AniyomiSourceBridge
+import app.anikuta.download.DownloadPreferences
+import app.anikuta.download.DownloadStore
+import app.anikuta.download.DownloadManager
 import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.UpdateAnimeExtensionRepo
@@ -66,7 +70,12 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { AniyomiSourceBridge(get<AnimeSourceManager>()) }
 
         // AniList tracker (OAuth + progress sync)
-        addSingletonFactory { app.anikuta.data.tracker.AniListTracker(get<PreferenceStore>()) }
+        addSingletonFactory { AniListTracker(get<PreferenceStore>()) }
+
+        // Download manager (Phase 6 Section 5)
+        addSingletonFactory { DownloadPreferences(get<PreferenceStore>()) }
+        addSingletonFactory { DownloadStore(get<PreferenceStore>(), get<Context>()) }
+        addSingletonFactory { DownloadManager(get<Context>(), get(), get()) }
 
         // AniList client
         addSingletonFactory { AniListRepository(get()) }

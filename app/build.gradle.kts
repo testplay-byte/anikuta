@@ -109,6 +109,9 @@ dependencies {
     // declares the same dependency (gradle/aniyomi.versions.toml: ffmpeg-kit).
     implementation(libs.ffmpeg.kit)
 
+    // WorkManager (download manager)
+    implementation(libs.work.runtime)
+
     // Testing
     testImplementation(libs.junit)
 }

@@ -34,7 +34,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.anikuta.R
 import app.anikuta.player.controls.PlayerControls
-import app.anikata.ui.theme.AnikutaTheme
+import app.anikuta.ui.theme.AnikutaTheme
 import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.launch
 import uy.kohesive.injekt.api.get
