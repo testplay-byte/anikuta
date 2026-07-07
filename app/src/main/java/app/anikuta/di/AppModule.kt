@@ -41,6 +41,16 @@ class AppModule(val app: Application) : InjektModule {
         addSingleton(app)
         addSingleton<Context>(app)
 
+        // JSON serializer — extensions (via keiyoushi.utils) call Injekt.get<Json>()
+        // in static initializers. Without this, any extension that uses JSON parsing
+        // crashes with ExceptionInInitializerError → InjektionException.
+        addSingletonFactory {
+            kotlinx.serialization.json.Json {
+                ignoreUnknownKeys = true
+                explicitNulls = false
+            }
+        }
+
         // Preferences
         addSingletonFactory { AndroidPreferenceStore(get<Context>()) as PreferenceStore }
         addSingletonFactory { NetworkPreferences(get<PreferenceStore>()) }
