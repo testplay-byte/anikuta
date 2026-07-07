@@ -53,6 +53,20 @@ class PlayerViewModel(
     private val _controlsVisible = MutableStateFlow(true)
     val controlsVisible: StateFlow<Boolean> = _controlsVisible.asStateFlow()
 
+    /** Shows "Do you want to start over?" overlay for 10s after resume (Q8). */
+    private val _showStartOverOverlay = MutableStateFlow(false)
+    val showStartOverOverlay: StateFlow<Boolean> = _showStartOverOverlay.asStateFlow()
+
+    /** Set by the Activity when playback resumes from a saved position. */
+    fun triggerStartOverOverlay() {
+        _showStartOverOverlay.value = true
+    }
+
+    /** Called when the overlay auto-dismisses (10s) or the user taps "start over". */
+    fun dismissStartOverOverlay() {
+        _showStartOverOverlay.value = false
+    }
+
     // ---- State mutations called from the Activity's MPV observer ----
 
     fun onFileLoaded() {

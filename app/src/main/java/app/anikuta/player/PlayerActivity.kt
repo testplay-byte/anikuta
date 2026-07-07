@@ -10,10 +10,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.anikuta.R
@@ -155,7 +162,8 @@ class PlayerActivity : ComponentActivity() {
             try {
                 MPVLib.command(arrayOf("set", "start", "${pos.positionSeconds}"))
                 viewModel?.onPositionUpdate(pos.positionSeconds)
-                android.widget.Toast.makeText(this, "Resumed from ${formatTime(pos.positionSeconds)}", android.widget.Toast.LENGTH_SHORT).show()
+                // Trigger the "start over?" overlay (Q8 — auto-dismisses in 10s)
+                viewModel?.triggerStartOverOverlay()
                 Log.d(TAG, "Resumed from ${pos.positionSeconds}s")
             } catch (e: Exception) {
                 Log.w(TAG, "Could not seek to saved position", e)
@@ -315,5 +323,58 @@ private fun PlayerScreen(
                 }
             },
         )
+
+        // ---- Loading overlay (task 6.26) ----
+        // Shows a centered spinner + "Loading…" while MPV loads the stream.
+        // Replaces the blank black screen during initial load.
+        val loadingState by viewModel.loadingState.collectAsState()
+        if (loadingState != app.anikuta.player.PlayerLoadingState.READY) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    androidx.compose.material3.CircularProgressIndicator(color = Color.White)
+                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(12.dp))
+                    androidx.compose.material3.Text(
+                        "Loading…",
+                        color = Color.White,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+
+        // ---- Resume "start over?" overlay (task 6.27, Q8) ----
+        // Shows for 10 seconds after resuming from a saved position.
+        // Auto-dismisses. Tapping → seeks to 0:00.
+        val showStartOver by viewModel.showStartOverOverlay.collectAsState()
+        if (showStartOver) {
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(10_000)
+                viewModel.dismissStartOverOverlay()
+            }
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 100.dp)
+                    .clickable {
+                        mpvView?.timePos = 0
+                        viewModel.onPositionUpdate(0)
+                        viewModel.dismissStartOverOverlay()
+                    },
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                color = Color.Black.copy(alpha = 0.8f),
+            ) {
+                androidx.compose.material3.Text(
+                    "Do you want to start over? Click to start over.",
+                    color = Color.White,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+        }
     }
 }
