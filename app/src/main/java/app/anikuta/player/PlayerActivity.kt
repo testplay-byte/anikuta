@@ -127,6 +127,9 @@ class PlayerActivity : ComponentActivity() {
         }
 
         viewModel = PlayerViewModel(videoUrl, title)
+        // Read video headers from intent — needed by the Composable to set
+        // http-header-fields on MPV before loadfile.
+        val videoHeaders = intent.getStringExtra(EXTRA_VIDEO_HEADERS) ?: ""
 
         // Landscape + fullscreen + keep screen on.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -155,6 +158,7 @@ class PlayerActivity : ComponentActivity() {
                         observer = observer,
                         onBack = { finish() },
                         onViewCreated = { view -> mpvViewRef = view },
+                        videoHeaders = videoHeaders,
                     )
                 }
             }
@@ -352,6 +356,7 @@ private fun PlayerScreen(
     observer: PlayerObserver,
     onBack: () -> Unit,
     onViewCreated: (AnikutaMPVView) -> Unit = {},
+    videoHeaders: String = "",
 ) {
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
 
@@ -389,13 +394,10 @@ private fun PlayerScreen(
 
                 // Set HTTP headers before loadfile — many streaming servers
                 // require Referer + User-Agent headers or return 403 Forbidden.
-                // aniyomi does the same in setHttpOptions().
-                val videoHeaders = intent.getStringExtra(EXTRA_VIDEO_HEADERS)
-                if (!videoHeaders.isNullOrBlank()) {
+                if (videoHeaders.isNotBlank()) {
                     MPVLib.setOptionString("http-header-fields", videoHeaders)
                     Log.d("PlayerActivity", "Set HTTP headers: $videoHeaders")
                 } else {
-                    // Set a default User-Agent so servers don't block us
                     MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                     Log.d("PlayerActivity", "Set default User-Agent header")
                 }
