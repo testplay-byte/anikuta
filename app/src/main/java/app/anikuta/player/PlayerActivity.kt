@@ -151,6 +151,18 @@ class PlayerActivity : ComponentActivity() {
                 viewModel?.onFileLoaded()
                 // Resume from saved position (task 5.5).
                 seekToSavedPosition()
+                // Auto-play: the file is loaded, start playing immediately.
+                // MPV starts paused (we set pause=true in initOptions), so we
+                // need to explicitly unpause here. Without this, the loading
+                // overlay disappears but the video doesn't start — the user
+                // has to tap play.
+                try {
+                    MPVLib.setPropertyBoolean("pause", false)
+                    viewModel?.onPauseChanged(false)
+                    Log.d(TAG, "Auto-play started")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not auto-play", e)
+                }
             }
             MPVLib.mpvEventId.MPV_EVENT_SEEK -> viewModel?.onBufferingChanged(true)
             MPVLib.mpvEventId.MPV_EVENT_PLAYBACK_RESTART -> viewModel?.onBufferingChanged(false)

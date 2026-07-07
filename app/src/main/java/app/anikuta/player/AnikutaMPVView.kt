@@ -84,16 +84,25 @@ class AnikutaMPVView(
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString(
             "hwdec",
-            if (playerPreferences.tryHWDecoding().get()) "auto-safe" else "no",
+            if (playerPreferences.tryHWDecoding().get()) "auto" else "no",
         )
         MPVLib.setOptionString("msg-level", "all=warn")
 
         // Force a video window even when paused/before first frame — without
         // this, some devices never attach the decoded frames to the surface
-        // (symptom: decoder runs, renderFps=0, blank video). aniyomi's
-        // BaseMPVView sets force-window in its own init, but being explicit
-        // here ensures it's applied regardless of lib version.
+        // (symptom: decoder runs, renderFps=0, blank video).
         MPVLib.setOptionString("force-window", "yes")
+
+        // Force the video track to be selected + displayed. Some HLS streams
+        // don't auto-select the video track, causing audio-only playback with
+        // a blank screen.
+        MPVLib.setOptionString("vid", "1")
+
+        // Enable demuxer cache so the stream can buffer ahead. Without this,
+        // HLS streams from extension proxies (localhost:PORT/variant/...) can
+        // stutter or fail to render the first frame.
+        MPVLib.setOptionString("cache", "yes")
+        MPVLib.setOptionString("cache-secs", "10")
 
         // Keep the file loaded so seeking works after EOF.
         MPVLib.setPropertyBoolean("keep-open", true)

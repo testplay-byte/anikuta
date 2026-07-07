@@ -232,20 +232,37 @@ fun DetailScreen(
                                 )
                             }
                             is EpisodeState.Loaded -> {
-                                Text(
-                                    "${es.episodeList.size} episodes · from ${es.sourceName}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "${es.episodeList.size} episodes",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                    ) {
+                                        Text(
+                                            es.sourceName,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        )
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(8.dp))
-                                // Episode list — scrollable, capped height
-                                Column(
+                                // Episode list — proper LazyColumn with max height
+                                androidx.compose.foundation.lazy.LazyColumn(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .heightIn(max = 400.dp)
-                                        .verticalScroll(rememberScrollState()),
+                                        .heightIn(max = 400.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
                                 ) {
-                                    es.episodeList.forEach { episode ->
+                                    items(es.episodeList, key = { it.url }) { episode ->
                                         EpisodeRow(
                                             episode = episode,
                                             onClick = { viewModel.playEpisode(episode) },
@@ -495,46 +512,66 @@ private fun EpisodeRow(
 ) {
     Surface(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surface,
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         onClick = onClick,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Episode number badge
+            // Episode number — circular badge
             Surface(
-                shape = RoundedCornerShape(6.dp),
+                shape = androidx.compose.foundation.shape.CircleShape,
                 color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(36.dp, 24.dp),
+                modifier = Modifier.size(40.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = if (episode.episode_number % 1f == 0f) episode.episode_number.toInt().toString()
                         else episode.episode_number.toString(),
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = episode.name.ifBlank { "Episode ${episode.episode_number}" },
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                Icons.Filled.PlayArrow,
-                contentDescription = "Play",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
+            Spacer(modifier = Modifier.width(12.dp))
+            // Episode title
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = episode.name.ifBlank { "Episode ${episode.episode_number}" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (episode.scanlator?.isNotBlank() == true) {
+                    Text(
+                        text = episode.scanlator!!,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            // Play icon
+            Surface(
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = "Play",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
         }
     }
 }
