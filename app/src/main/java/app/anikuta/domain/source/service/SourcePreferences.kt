@@ -23,4 +23,26 @@ class SourcePreferences(
 
     fun animeExtensionUpdatesCount(): Preference<Int> =
         preferenceStore.getInt("anime_extension_updates_count", 0)
+
+    /**
+     * User-selected primary anime extension package (highest-priority source
+     * for the AniyomiSourceBridge to try when matching an anime).
+     *
+     * Empty string = auto-pick best match (current default behavior — the
+     * bridge scores all installed sources and picks the highest-fidelity
+     * match). Setting a value here pins the bridge to that single extension
+     * first; if it has no match the bridge falls back to [secondaryExtensionPkgs]
+     * and finally to the auto-pick path.
+     *
+     * Phase 6 tasks 6.1-6.6 — wired into the bridge in a follow-up task.
+     */
+    fun primaryExtensionPkg(): Preference<String> =
+        preferenceStore.getString("primary_extension_pkg", "")
+
+    /**
+     * Ordered fallback set of anime extension package names tried after the
+     * primary (if set) fails to match. Empty by default (auto-pick path).
+     */
+    fun secondaryExtensionPkgs(): Preference<Set<String>> =
+        preferenceStore.getStringSet("secondary_extension_pkgs", emptySet())
 }

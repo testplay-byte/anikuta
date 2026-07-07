@@ -3,6 +3,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Required to install downloaded extension APKs on Android 8+ (API 26+).
+         Without this, ACTION_VIEW on a content:// URI to an .apk silently
+         fails. aniyomi declares the same permission. Safe for sideloaded apps;
+         Google Play restricts it but we don't distribute via Play. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Required to discover installed anime extensions on Android 11+ (API 30+).
          Without this, PackageManager.getInstalledPackages() only returns packages
          with a matching <queries> declaration, so installed extensions are invisible
@@ -53,6 +58,20 @@
             android:exported="false"
             android:launchMode="singleTask"
             android:theme="@style/Theme.Anikuta" />
+
+        <!-- FileProvider for sharing downloaded extension APKs with the system
+             package installer (ExtensionsViewModel.installExtension). The
+             authority is "${applicationId}.fileprovider" — matches the runtime
+             lookup `Context.packageName + ".fileprovider"`. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>
