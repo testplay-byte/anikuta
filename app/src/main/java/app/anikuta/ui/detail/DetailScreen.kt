@@ -3,6 +3,7 @@ package app.anikuta.ui.detail
 import android.content.Intent
 import android.graphics.BlurMaskFilter
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -34,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import app.anikuta.data.anilist.model.AniListAnime
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,11 +58,14 @@ fun DetailScreen(
     var expandedDescription by remember { mutableStateOf(false) }
 
     // Phase 7.5: Episode display settings
-    val playerPrefs = remember { try { uy.kohesive.injekt.Injekt.get<app.anikuta.player.PlayerPreferences>() } catch (e: Exception) { null } }
-    val showTitles = playerPrefs?.showEpisodeTitles()?.get() ?: true
-    val showSummaries = playerPrefs?.showEpisodeSummaries()?.get() ?: true
-    val showThumbnails = playerPrefs?.showEpisodeThumbnails()?.get() ?: true
-    val showDates = playerPrefs?.showEpisodeDates()?.get() ?: true
+    val playerPrefs = remember {
+        try { uy.kohesive.injekt.Injekt.get<app.anikuta.player.PlayerPreferences>() }
+        catch (e: Exception) { null }
+    }
+    val showTitles = remember { playerPrefs?.showEpisodeTitles()?.get() ?: true }
+    val showSummaries = remember { playerPrefs?.showEpisodeSummaries()?.get() ?: true }
+    val showThumbnails = remember { playerPrefs?.showEpisodeThumbnails()?.get() ?: true }
+    val showDates = remember { playerPrefs?.showEpisodeDates()?.get() ?: true }
 
     // Observe play requests from the ViewModel → launch the player.
     androidx.compose.runtime.LaunchedEffect(playRequest) {
