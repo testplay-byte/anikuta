@@ -54,6 +54,7 @@ fun DetailScreen(
     val resolvingEpisode by viewModel.resolvingEpisode.collectAsState()
     val videoPicker by viewModel.videoPicker.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val isEnrichingMetadata by viewModel.isEnrichingMetadata.collectAsState()
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
 
@@ -242,7 +243,36 @@ fun DetailScreen(
                 // Episodes
                 item(key = "episodes") {
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text("Episodes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Episodes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            // Metadata enrichment indicator
+                            if (isEnrichingMetadata) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(12.dp),
+                                            strokeWidth = 1.5.dp,
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            "Fetching metadata…",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         when (val es = episodeState) {
                             is EpisodeState.Idle, is EpisodeState.Searching -> {

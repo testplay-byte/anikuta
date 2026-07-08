@@ -77,6 +77,10 @@ class DetailViewModel(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    /** True while in-app episode metadata is being fetched (Jikan/AniList). */
+    private val _isEnrichingMetadata = MutableStateFlow(false)
+    val isEnrichingMetadata: StateFlow<Boolean> = _isEnrichingMetadata.asStateFlow()
+
     /** Videos available for the current episode — shown in the quality picker. */
     private val _videoPicker = MutableStateFlow<VideoPickerState>(VideoPickerState.Hidden)
     val videoPicker: StateFlow<VideoPickerState> = _videoPicker.asStateFlow()
@@ -373,6 +377,7 @@ class DetailViewModel(
             return
         }
 
+        _isEnrichingMetadata.value = true
         viewModelScope.launch {
             try {
                 val fetcher = app.anikuta.data.metadata.EpisodeMetadataFetcher()
@@ -422,6 +427,8 @@ class DetailViewModel(
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "In-app metadata enrichment failed (keeping original data)", e)
+            } finally {
+                _isEnrichingMetadata.value = false
             }
         }
     }
