@@ -66,6 +66,10 @@ fun DetailScreen(
     val showSummaries = remember { playerPrefs?.showEpisodeSummaries()?.get() ?: true }
     val showThumbnails = remember { playerPrefs?.showEpisodeThumbnails()?.get() ?: true }
     val showDates = remember { playerPrefs?.showEpisodeDates()?.get() ?: true }
+    val showEpisodeNumber = remember { playerPrefs?.showEpisodeNumber()?.get() ?: true }
+    val showAudioPills = remember { playerPrefs?.showAudioPills()?.get() ?: true }
+    val synopsisPosition = remember { playerPrefs?.synopsisPosition()?.get() ?: "right" }
+    val datePosition = remember { playerPrefs?.datePosition()?.get() ?: "right" }
 
     // Observe play requests from the ViewModel → launch the player.
     androidx.compose.runtime.LaunchedEffect(playRequest) {
@@ -283,6 +287,10 @@ fun DetailScreen(
                                             showSummaries = showSummaries,
                                             showTitles = showTitles,
                                             showDates = showDates,
+                                            showEpisodeNumber = showEpisodeNumber,
+                                            showAudioPills = showAudioPills,
+                                            synopsisPosition = synopsisPosition,
+                                            datePosition = datePosition,
                                         )
                                     }
                                 }
@@ -487,6 +495,10 @@ private fun EpisodeRow(
     showSummaries: Boolean = true,
     showTitles: Boolean = true,
     showDates: Boolean = true,
+    showEpisodeNumber: Boolean = true,
+    showAudioPills: Boolean = true,
+    synopsisPosition: String = "right",
+    datePosition: String = "right",
 ) {
     val hasThumbnail = showThumbnails && !episode.preview_url.isNullOrBlank()
     val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
@@ -499,9 +511,12 @@ private fun EpisodeRow(
         onClick = onClick,
     ) {
         if (isRich) {
-            EpisodeRowRich(episode, hasThumbnail, hasSummary, showTitles, showDates)
+            EpisodeRowRich(
+                episode, hasThumbnail, hasSummary, showTitles, showDates,
+                showEpisodeNumber, showAudioPills, synopsisPosition, datePosition,
+            )
         } else {
-            EpisodeRowSimple(episode, showTitles)
+            EpisodeRowSimple(episode, showTitles, showEpisodeNumber)
         }
     }
 }
@@ -514,6 +529,7 @@ private fun EpisodeRow(
 private fun EpisodeRowSimple(
     episode: app.anikuta.source.api.model.SEpisode,
     showTitles: Boolean,
+    showEpisodeNumber: Boolean,
 ) {
     Row(
         modifier = Modifier
@@ -522,21 +538,23 @@ private fun EpisodeRowSimple(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Episode number — circular badge
-        Surface(
-            shape = androidx.compose.foundation.shape.CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.size(40.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = EpisodeTitleParser.formatEpisodeNumber(episode.episode_number),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        if (showEpisodeNumber) {
+            Surface(
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = EpisodeTitleParser.formatEpisodeNumber(episode.episode_number),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+            Spacer(modifier = Modifier.width(12.dp))
         }
-        Spacer(modifier = Modifier.width(12.dp))
         // Episode title with background
         Surface(
             shape = RoundedCornerShape(8.dp),
@@ -561,10 +579,22 @@ private fun EpisodeRowSimple(
 
 /**
  * Rich episode row — with thumbnail and/or summary.
- * Layout:
- *   [Thumbnail]  [Title (background, 1 line)]
- *   [Date pill] [SUB pill] [DUB pill]
- *   [Synopsis (background, 3 lines expandable)]
+ *
+ * Layout (default 'right' position):
+ *   ┌──────────┬───────────────────────────────┐
+ *   │          │ [EP N] Title (1 line, bg)      │
+ *   │ Thumbnail│ Synopsis (3 lines, bg)         │
+ *   │  (bg)    │ [Date pill] [SUB] [DUB]        │
+ *   └──────────┴───────────────────────────────┘
+ *
+ * Layout ('below' position for synopsis/date):
+ *   ┌──────────┬───────────────────────────────┐
+ *   │          │ [EP N] Title (1 line, bg)      │
+ *   │ Thumbnail│                                │
+ *   │  (bg)    │                                │
+ *   └──────────┴───────────────────────────────┘
+ *   Synopsis (full width, bg)
+ *   [Date pill] [SUB] [DUB]
  *
  * No play button — tapping the row plays the episode.
  */
@@ -575,20 +605,164 @@ private fun EpisodeRowRich(
     hasSummary: Boolean,
     showTitles: Boolean,
     showDates: Boolean,
+    showEpisodeNumber: Boolean,
+    showAudioPills: Boolean,
+    synopsisPosition: String,
+    datePosition: String,
 ) {
     var summaryExpanded by remember { mutableStateOf(false) }
+
+    // Detect audio availability from episode name
+    val nameUpper = episode.name.uppercase()
+    val hasSub = nameUpper.contains("SUB")
+    val hasDub = nameUpper.contains("DUB")
+    val hasHsub = nameUpper.contains("HSUB")
+    val hasDate = showDates && episode.date_upload > 0
+
+    // Content that goes on the RIGHT side of the thumbnail
+    @Composable
+    fun RightSideContent(includeSynopsis: Boolean, includeDate: Boolean) {
+        Column(modifier = Modifier.weight(1f)) {
+            // Title row: episode number badge + title
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (showEpisodeNumber) {
+                    Surface(
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = EpisodeTitleParser.formatEpisodeNumber(episode.episode_number),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                // Title with background — 1 line only
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = if (showTitles) {
+                            EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number)
+                        } else {
+                            "Episode ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
+            }
+
+            // Synopsis (if it goes on the right side)
+            if (includeSynopsis && hasSummary) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = episode.summary!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .clickable { summaryExpanded = !summaryExpanded },
+                    )
+                }
+            }
+
+            // Date + audio pills (if they go on the right side)
+            if (includeDate && (hasDate || (showAudioPills && (hasSub || hasDub || hasHsub)))) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (hasDate) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        ) {
+                            Text(
+                                text = formatDate(episode.date_upload),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                    if (showAudioPills && hasSub) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        ) {
+                            Text(
+                                text = "SUB",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                    if (showAudioPills && hasDub) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        ) {
+                            Text(
+                                text = "DUB",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                    if (showAudioPills && hasHsub) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        ) {
+                            Text(
+                                text = "HSUB",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
-        // Top row: thumbnail (left) + title (right)
+        // Top row: thumbnail (left) + right-side content
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,
         ) {
-            // Thumbnail with background
+            // Thumbnail with background (left)
             if (hasThumbnail) {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -607,8 +781,8 @@ private fun EpisodeRowRich(
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-            } else {
-                // No thumbnail — show episode number badge instead
+            } else if (showEpisodeNumber) {
+                // No thumbnail — show episode number badge
                 Surface(
                     shape = androidx.compose.foundation.shape.CircleShape,
                     color = MaterialTheme.colorScheme.surfaceVariant,
@@ -626,116 +800,79 @@ private fun EpisodeRowRich(
                 Spacer(modifier = Modifier.width(12.dp))
             }
 
-            // Title with background — 1 line only, distinct font
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = if (showTitles) {
-                        EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number)
-                    } else {
-                        "Episode ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}"
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                )
-            }
+            // Right side: title + (optionally synopsis + date based on position)
+            val synopsisOnRight = synopsisPosition == "right" || !hasThumbnail
+            val dateOnRight = datePosition == "right" || !hasThumbnail
+            RightSideContent(includeSynopsis = synopsisOnRight, includeDate = dateOnRight)
         }
 
-        // Synopsis with background — directly below the title (before date/pills)
-        if (hasSummary) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = episode.summary!!,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                        .clickable { summaryExpanded = !summaryExpanded },
-                )
+        // Below-thumbnail content (full width)
+        if (hasThumbnail) {
+            // Synopsis below (if position is 'below')
+            if (hasSummary && synopsisPosition == "below") {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = episode.summary!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .clickable { summaryExpanded = !summaryExpanded },
+                    )
+                }
             }
-        }
 
-        // Date pill + audio availability pills (below synopsis, bottom-left)
-        val nameUpper = episode.name.uppercase()
-        val hasDate = showDates && episode.date_upload > 0
-        val hasSub = nameUpper.contains("SUB") || nameUpper.contains("HSUB")
-        val hasDub = nameUpper.contains("DUB")
-        val hasHsub = nameUpper.contains("HSUB")
-        if (hasDate || hasSub || hasDub || hasHsub) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Date pill
-                if (hasDate) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Text(
-                            text = formatDate(episode.date_upload),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
+            // Date + audio pills below (if position is 'below')
+            if (datePosition == "below" && (hasDate || (showAudioPills && (hasSub || hasDub || hasHsub)))) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (hasDate) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        ) {
+                            Text(
+                                text = formatDate(episode.date_upload),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
                     }
-                }
-                // Audio availability pills (SUB/DUB/HSUB)
-                if (hasSub) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Text(
-                            text = "SUB",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
+                    if (showAudioPills && hasSub) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        ) {
+                            Text("SUB", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                        }
                     }
-                }
-                if (hasDub) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Text(
-                            text = "DUB",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
+                    if (showAudioPills && hasDub) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        ) {
+                            Text("DUB", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                        }
                     }
-                }
-                if (hasHsub) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Text(
-                            text = "HSUB",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
+                    if (showAudioPills && hasHsub) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        ) {
+                            Text("HSUB", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                        }
                     }
                 }
             }

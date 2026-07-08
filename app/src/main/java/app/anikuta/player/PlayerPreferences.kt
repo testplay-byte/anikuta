@@ -59,4 +59,26 @@ class PlayerPreferences(
     /** Show episode dates (from SEpisode.date_upload). Default: true. */
     fun showEpisodeDates(): Preference<Boolean> =
         preferenceStore.getBoolean("pref_show_episode_dates", true)
+
+    /** Show episode number badge. Default: true. */
+    fun showEpisodeNumber(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_show_episode_number", true)
+
+    /** Show audio availability pills (SUB/DUB/HSUB). Default: true. */
+    fun showAudioPills(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_show_audio_pills", true)
+
+    /**
+     * Synopsis position: 'right' = right of thumbnail, below title (default).
+     * 'below' = full-width below the thumbnail row.
+     */
+    fun synopsisPosition(): Preference<String> =
+        preferenceStore.getString("pref_synopsis_position", "right")
+
+    /**
+     * Date position: 'right' = right of thumbnail, below title/synopsis (default).
+     * 'below' = full-width below the thumbnail row.
+     */
+    fun datePosition(): Preference<String> =
+        preferenceStore.getString("pref_date_position", "right")
 }
