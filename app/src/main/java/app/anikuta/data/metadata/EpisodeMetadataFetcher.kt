@@ -11,7 +11,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -42,8 +44,8 @@ class EpisodeMetadataFetcher(
     companion object {
         private const val TAG = "EpisodeMetadata"
         private const val JIKAN_BASE = "https://api.jikan.moe/v4"
-        private const val JIKAN_MAX_RETRIES = 3
-        private const val JIKAN_RETRY_DELAY_MS = 2000L
+        private const val JIKAN_MAX_RETRIES = 5
+        private const val JIKAN_RETRY_DELAY_MS = 3000L
     }
 
     data class EpisodeMetadata(
@@ -70,7 +72,7 @@ class EpisodeMetadataFetcher(
         // If idMal is missing from the cached anime object, look it up from AniList
         val malId = anime.idMal ?: lookupMalId(anilistId)
         if (malId == null) {
-            Log.w(TAG, "Could not determine MAL ID — skipping Jikan fetch")
+            Log.w(TAG, "Could not determine MAL ID — skipping Jikan + Kitsu fetch")
         }
 
         coroutineScope {
@@ -97,24 +99,41 @@ class EpisodeMetadataFetcher(
                 }
             }
 
+            // Source 3: Kitsu (thumbnails + descriptions + titles) — needs MAL→Kitsu ID mapping
+            val kitsuResults = async {
+                try {
+                    malId?.let { fetchFromKitsu(it) } ?: run {
+                        Log.w(TAG, "No malId available — skipping Kitsu fetch")
+                        emptyMap()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Kitsu fetch failed", e)
+                    emptyMap()
+                }
+            }
+
             val anilist = anilistResults.await()
             val jikan = jikanResults.await()
+            val kitsu = kitsuResults.await()
 
-            Log.i(TAG, "Sources: AniList=${anilist.size}, Jikan=${jikan.size}, malId=$malId, fallbackThumb=${fallbackThumbnail != null}")
+            Log.i(TAG, "Sources: AniList=${anilist.size}, Jikan=${jikan.size}, Kitsu=${kitsu.size}, malId=$malId, fallbackThumb=${fallbackThumbnail != null}")
 
-            // Merge: Jikan priority for title/airdate, AniList for thumbnail
-            // Only use fallback thumbnail if we have NO other data (no Jikan titles, no AniList thumbnails)
-            val hasAnyRealData = jikan.isNotEmpty() || anilist.isNotEmpty()
+            // Merge priority:
+            // Title: Jikan → Kitsu → AniList
+            // Description: Kitsu (only source with descriptions)
+            // Thumbnail: Kitsu → AniList → fallback (only if real data exists)
+            // Air date: Jikan → Kitsu
+            val hasAnyRealData = jikan.isNotEmpty() || anilist.isNotEmpty() || kitsu.isNotEmpty()
             for (i in 1..episodeCount) {
                 val a = anilist[i]
                 val j = jikan[i]
-                // Only use fallback thumbnail if no real thumbnail exists AND we have other data
-                val thumb = a?.thumbnailUrl ?: if (hasAnyRealData) fallbackThumbnail else null
+                val k = kitsu[i]
+                val thumb = k?.thumbnailUrl ?: a?.thumbnailUrl ?: if (hasAnyRealData) fallbackThumbnail else null
                 results[i] = EpisodeMetadata(
-                    title = j?.title ?: a?.title,
-                    description = j?.description,
+                    title = j?.title ?: k?.title ?: a?.title,
+                    description = k?.description,
                     thumbnailUrl = thumb,
-                    airDate = j?.airDate,
+                    airDate = j?.airDate ?: k?.airDate,
                 )
             }
         }
@@ -187,22 +206,30 @@ class EpisodeMetadataFetcher(
     }
 
     /**
-     * Fetch from Jikan with retry for rate limiting (504/429).
+     * Fetch from Jikan with retry for rate limiting (504/429/empty response).
+     * Jikan sometimes returns HTTP 200 with an empty data array when rate
+     * limited, so we retry on empty results too.
      */
     private suspend fun fetchFromJikanWithRetry(malId: Int): Map<Int, EpisodeMetadata> =
         withContext(Dispatchers.IO) {
             var lastError: Exception? = null
             for (attempt in 1..JIKAN_MAX_RETRIES) {
                 try {
-                    delay(if (attempt > 1) JIKAN_RETRY_DELAY_MS else 500L) // initial delay + retry delay
+                    // Delay before each attempt: 1s initial, 3s retry
+                    delay(if (attempt == 1) 1000L else JIKAN_RETRY_DELAY_MS)
                     val result = fetchFromJikan(malId)
-                    if (result.isNotEmpty()) return@withContext result
-                    // Empty result might mean no data — don't retry
-                    Log.d(TAG, "Jikan returned 0 episodes for malId=$malId (attempt $attempt)")
-                    return@withContext result
+                    if (result.isNotEmpty()) {
+                        Log.d(TAG, "Jikan returned ${result.size} episodes for malId=$malId (attempt $attempt)")
+                        return@withContext result
+                    }
+                    // Empty result — Jikan might be rate limiting with a 200 + empty data
+                    Log.w(TAG, "Jikan returned 0 episodes for malId=$malId (attempt $attempt/$JIKAN_MAX_RETRIES) — will retry")
+                    if (attempt < JIKAN_MAX_RETRIES) {
+                        delay(JIKAN_RETRY_DELAY_MS)
+                    }
                 } catch (e: Exception) {
                     lastError = e
-                    Log.w(TAG, "Jikan attempt $attempt failed: ${e.message}")
+                    Log.w(TAG, "Jikan attempt $attempt/$JIKAN_MAX_RETRIES failed: ${e.message}")
                     if (attempt < JIKAN_MAX_RETRIES) delay(JIKAN_RETRY_DELAY_MS)
                 }
             }
@@ -243,6 +270,95 @@ class EpisodeMetadataFetcher(
             }
 
             Log.d(TAG, "Jikan returned ${results.size} episodes for malId=$malId")
+            results
+        }
+
+    /**
+     * Fetch from Kitsu API.
+     * Step 1: Look up Kitsu ID from MAL ID via mappings endpoint
+     * Step 2: Fetch episodes from Kitsu anime endpoint
+     *
+     * Kitsu provides: titles, descriptions (synopses), thumbnails, and air dates.
+     */
+    private suspend fun fetchFromKitsu(malId: Int): Map<Int, EpisodeMetadata> =
+        withContext(Dispatchers.IO) {
+            delay(500) // Rate limit courtesy
+
+            // Step 1: MAL → Kitsu ID mapping
+            val kitsuHeaders = Headers.Builder()
+                .set("Accept", "application/vnd.api+json")
+                .build()
+            val mappingResponse = networkHelper.client
+                .newCall(
+                    GET(
+                        "https://kitsu.app/api/edge/mappings" +
+                            "?filter%5BexternalSite%5D=myanimelist/anime" +
+                            "&filter%5BexternalId%5D=$malId" +
+                            "&include=item",
+                        headers = kitsuHeaders,
+                    )
+                )
+                .execute()
+
+            if (!mappingResponse.isSuccessful) {
+                Log.w(TAG, "Kitsu mapping HTTP ${mappingResponse.code} for malId=$malId")
+                return@withContext emptyMap()
+            }
+
+            val mappingBody = mappingResponse.body?.string() ?: return@withContext emptyMap()
+            val mappingJson = json.parseToJsonElement(mappingBody).jsonObject
+            val included = mappingJson["included"]?.jsonArray
+            val kitsuId = included?.firstOrNull()?.jsonObject?.get("id")?.toString()?.trim('"')
+            if (kitsuId.isNullOrBlank()) {
+                Log.d(TAG, "Kitsu: no mapping found for malId=$malId")
+                return@withContext emptyMap()
+            }
+
+            Log.d(TAG, "Kitsu: malId=$malId → kitsuId=$kitsuId")
+
+            // Step 2: Fetch episodes
+            delay(500) // Rate limit courtesy
+            val epsResponse = networkHelper.client
+                .newCall(
+                    GET(
+                        "https://kitsu.app/api/edge/anime/$kitsuId/episodes?page%5Blimit%5D=20&sort=number",
+                        headers = kitsuHeaders,
+                    )
+                )
+                .execute()
+
+            if (!epsResponse.isSuccessful) {
+                Log.w(TAG, "Kitsu episodes HTTP ${epsResponse.code} for kitsuId=$kitsuId")
+                return@withContext emptyMap()
+            }
+
+            val epsBody = epsResponse.body?.string() ?: return@withContext emptyMap()
+            val results = mutableMapOf<Int, EpisodeMetadata>()
+
+            try {
+                val epsJson = json.parseToJsonElement(epsBody).jsonObject
+                val dataArray = epsJson["data"]?.jsonArray ?: return@withContext emptyMap()
+
+                dataArray.forEach { item ->
+                    val attrs = item.jsonObject["attributes"]?.jsonObject ?: return@forEach
+                    val number = attrs["number"]?.toString()?.toIntOrNull() ?: return@forEach
+                    val title = attrs["canonicalTitle"]?.toString()?.trim('"')?.takeIf { it.isNotBlank() && it != "null" }
+                    val synopsis = attrs["synopsis"]?.toString()?.trim('"')?.takeIf { it.isNotBlank() && it != "null" }
+                    val thumbnail = attrs["thumbnail"]?.toString()?.trim('"')?.takeIf { it.isNotBlank() && it != "null" }
+                    val airdate = attrs["airdate"]?.toString()?.trim('"')?.takeIf { it.isNotBlank() && it != "null" }
+
+                    results[number] = EpisodeMetadata(
+                        title = title,
+                        description = synopsis,
+                        thumbnailUrl = thumbnail,
+                        airDate = airdate?.let { parseDate("${it}T00:00:00+00:00") },
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Kitsu episode parsing failed", e)
+            }
+
+            Log.d(TAG, "Kitsu returned ${results.size} episodes for kitsuId=$kitsuId")
             results
         }
 

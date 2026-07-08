@@ -642,14 +642,41 @@ class DetailViewModel(
                 }
                 if (sAnime.url.isBlank()) return@launch
                 Log.d(TAG, "Background refresh: fetching episodes from $sourceName...")
-                val eps = withContext(Dispatchers.IO) { source.getEpisodeList(sAnime) }
+                val freshEps = withContext(Dispatchers.IO) { source.getEpisodeList(sAnime) }
+
+                // Preserve enriched metadata from the cached episodes
+                // (background refresh gets fresh episodes from the extension
+                // which don't have the in-app metadata we enriched earlier)
+                val cachedEps = episodeCache[anilistId]?.first
+                if (cachedEps != null) {
+                    freshEps.forEach { fresh ->
+                        val cached = cachedEps.find { it.url == fresh.url }
+                        if (cached != null) {
+                            // Only preserve fields that the extension doesn't provide
+                            if (fresh.preview_url.isNullOrBlank() && !cached.preview_url.isNullOrBlank()) {
+                                fresh.preview_url = cached.preview_url
+                            }
+                            if (fresh.summary.isNullOrBlank() && !cached.summary.isNullOrBlank()) {
+                                fresh.summary = cached.summary
+                            }
+                            // Preserve enriched name if the fresh one is generic
+                            if (fresh.name.matches(Regex("(?i)episode\\s*\\d+")) && !cached.name.matches(Regex("(?i)episode\\s*\\d+"))) {
+                                fresh.name = cached.name
+                            }
+                            if (fresh.date_upload <= 0 && cached.date_upload > 0) {
+                                fresh.date_upload = cached.date_upload
+                            }
+                        }
+                    }
+                }
+
                 // Update cache + UI
-                episodeCache[anilistId] = Pair(eps, sourceName)
+                episodeCache[anilistId] = Pair(freshEps, sourceName)
                 matchedSource = source
                 matchedSAnime = sAnime
-                _episodes.value = EpisodeState.Loaded(eps, sourceName)
+                _episodes.value = EpisodeState.Loaded(freshEps, sourceName)
                 preferenceStore?.getLong("ext_last_refresh_$anilistId", 0L)?.set(now)
-                Log.d(TAG, "Background refresh complete: ${eps.size} episodes")
+                Log.d(TAG, "Background refresh complete: ${freshEps.size} episodes (metadata preserved)")
             } catch (e: Exception) {
                 Log.w(TAG, "Background refresh failed (keeping cached data)", e)
             }

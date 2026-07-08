@@ -265,3 +265,32 @@ Stage Summary:
 - Plans written for future sessions:
   - DOCS/PLAN/STATISTICS-PLAN.md (watch tracking, heatmaps, genre stats)
   - DOCS/PLAN/EPISODE-LIST-ENHANCEMENTS-PLAN.md (thumbnails, titles, summaries, auto-fetch)
+
+---
+
+## Session 28 (Phase 7.5: Episode metadata fetcher + Kitsu + persistence)
+
+Task ID: P7.5-METADATA (Session 28)
+Agent: main (Z.ai Code)
+
+Work Log:
+- Analyzed log: Jikan returned 0 episodes due to rate limiting (200 + empty data)
+- Fixed Jikan retry: now retries on empty results (not just exceptions). 5 retries, 3s delay.
+- Added Kitsu as third metadata source:
+  - Step 1: MAL ID → Kitsu ID via mappings endpoint
+  - Step 2: Fetch episodes from Kitsu (has titles, thumbnails, synopses, air dates)
+  - Tested: Kitsu has rich data for older anime (Witch Hat Atelier: 13 episodes with all fields)
+- Fixed metadata persistence: backgroundRefreshEpisodes was overwriting enriched episodes
+  with fresh non-enriched ones. Now preserves enriched fields (preview_url, summary, name,
+  date_upload) when the fresh episode doesn't have them.
+- idMal lookup: fresh AniList GraphQL query when cached anime doesn't have idMal
+- Fallback thumbnail: only used when real data exists (no more same banner for all episodes)
+
+Stage Summary:
+- 3 metadata sources: AniList streaming → Jikan (MAL) → Kitsu (all in parallel)
+- Kitsu provides: titles, thumbnails, descriptions, air dates
+- Jikan provides: titles, air dates (no thumbnails/descriptions)
+- AniList provides: thumbnails (streaming episodes, rare)
+- Merge priority: Title (Jikan→Kitsu→AniList), Description (Kitsu only),
+  Thumbnail (Kitsu→AniList→banner fallback), Air date (Jikan→Kitsu)
+- Metadata persists across navigation (background refresh preserves enriched fields)
