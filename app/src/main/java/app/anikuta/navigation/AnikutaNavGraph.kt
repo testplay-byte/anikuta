@@ -192,6 +192,7 @@ fun AnikutaNavGraph() {
                     onBack = { navController.popBackStack() },
                 )
             }
+            } // end NavHost
 
             // Floating bottom nav — overlays the content at the bottom.
             // The area around the pill is completely transparent; content
