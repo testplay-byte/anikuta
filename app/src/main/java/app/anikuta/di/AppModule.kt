@@ -23,10 +23,17 @@ import app.anikuta.download.DownloadPreferences
 import app.anikuta.download.DownloadStore
 import app.anikuta.download.DownloadManager
 import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
+import app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo
+import app.anikuta.domain.mihon.extensionrepo.anime.interactor.DeleteAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
+import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepoCount
+import app.anikuta.domain.mihon.extensionrepo.anime.interactor.ReplaceAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.UpdateAnimeExtensionRepo
+import app.anikuta.domain.mihon.extensionrepo.anime.repository.AnimeExtensionRepoRepository
+import app.anikuta.domain.mihon.extensionrepo.service.ExtensionRepoService
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
 import app.anikuta.domain.source.service.SourcePreferences
+import app.anikuta.data.mihon.AnimeExtensionRepoRepositoryImpl
 import app.anikuta.extension.anime.AnimeExtensionManager
 import app.anikuta.extension.anime.util.AnimeExtensionLoader
 import app.anikuta.source.AndroidAnimeSourceManager
@@ -69,9 +76,23 @@ class AppModule(val app: Application) : InjektModule {
 
         // Extension + source management
         addSingletonFactory { SourcePreferences(get<PreferenceStore>()) }
-        addSingletonFactory { TrustAnimeExtension() }
-        addSingletonFactory { GetAnimeExtensionRepo() }
-        addSingletonFactory { UpdateAnimeExtensionRepo() }
+
+        // Extension repo management (Phase 7 — real implementations, replacing
+        // the old stubs that shadowed the domain/ versions).
+        addSingletonFactory<AnimeExtensionRepoRepository> {
+            AnimeExtensionRepoRepositoryImpl(get<AnimeDatabaseHandler>())
+        }
+        addSingletonFactory { ExtensionRepoService(get<NetworkHelper>(), get<Json>()) }
+        addSingletonFactory { CreateAnimeExtensionRepo(get<AnimeExtensionRepoRepository>(), get<ExtensionRepoService>()) }
+        addSingletonFactory { DeleteAnimeExtensionRepo(get<AnimeExtensionRepoRepository>()) }
+        addSingletonFactory { ReplaceAnimeExtensionRepo(get<AnimeExtensionRepoRepository>()) }
+        addSingletonFactory { GetAnimeExtensionRepo(get<AnimeExtensionRepoRepository>()) }
+        addSingletonFactory { GetAnimeExtensionRepoCount(get<AnimeExtensionRepoRepository>()) }
+        addSingletonFactory { UpdateAnimeExtensionRepo(get<AnimeExtensionRepoRepository>(), get<ExtensionRepoService>()) }
+
+        // Trust system (Phase 7 — real implementation with SourcePreferences)
+        addSingletonFactory { TrustAnimeExtension(get<SourcePreferences>()) }
+
         addSingletonFactory { AnimeExtensionLoader(get<Context>()) }
         addSingletonFactory { AnimeExtensionManager(get<Context>(), get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get<Context>(), get()) }

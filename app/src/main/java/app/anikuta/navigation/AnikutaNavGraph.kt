@@ -200,7 +200,13 @@ fun AnikutaNavGraph() {
                 app.anikuta.ui.settings.PlayerSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable("settings/extensions") {
-                app.anikuta.ui.settings.ExtensionsSettingsScreen(onBack = { navController.popBackStack() })
+                app.anikuta.ui.settings.ExtensionsSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onManageRepos = { navController.navigate("extension_repos") },
+                    onOpenExtensionDetails = { pkgName ->
+                        navController.navigate("extension_details/$pkgName")
+                    },
+                )
             }
             composable("settings/downloads") {
                 app.anikuta.ui.settings.DownloadsSettingsScreen(onBack = { navController.popBackStack() })
@@ -212,6 +218,35 @@ fun AnikutaNavGraph() {
                 app.anikuta.ui.settings.AboutSettingsScreen(
                     onBack = { navController.popBackStack() },
                     onOpenDebug = { navController.navigate("debug") },
+                )
+            }
+            // --- Phase 7: Extension management routes ---
+            composable("extension_repos") {
+                app.anikuta.ui.settings.ExtensionReposScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = "extension_details/{pkgName}",
+                arguments = listOf(navArgument("pkgName") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val pkgName = backStackEntry.arguments?.getString("pkgName") ?: ""
+                app.anikuta.ui.settings.ExtensionDetailsScreen(
+                    pkgName = pkgName,
+                    onBack = { navController.popBackStack() },
+                    onOpenSourcePreferences = { sourceId ->
+                        navController.navigate("source_preferences/$sourceId")
+                    },
+                )
+            }
+            composable(
+                route = "source_preferences/{sourceId}",
+                arguments = listOf(navArgument("sourceId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                val sourceId = backStackEntry.arguments?.getLong("sourceId") ?: 0L
+                app.anikuta.ui.settings.SourcePreferencesScreen(
+                    sourceId = sourceId,
+                    onBack = { navController.popBackStack() },
                 )
             }
         }

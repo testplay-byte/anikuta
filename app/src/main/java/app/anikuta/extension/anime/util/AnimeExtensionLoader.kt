@@ -180,6 +180,7 @@ class AnimeExtensionLoader(
         return if (isExtensionTrusted(pkgInfo)) {
             AnimeLoadResult.Success(extension)
         } else {
+            val signatures = getSignatures(pkgInfo)
             Log.w(TAG, "Extension $pkgName is untrusted")
             AnimeLoadResult.Untrusted(
                 AnimeExtension.Untrusted(
@@ -188,7 +189,7 @@ class AnimeExtensionLoader(
                     versionName = extension.versionName,
                     versionCode = extension.versionCode,
                     libVersion = extension.libVersion,
-                    signatureHash = "unknown",
+                    signatureHash = signatures.lastOrNull() ?: "unknown",
                     lang = extension.lang,
                     isNsfw = extension.isNsfw,
                 )
@@ -226,10 +227,27 @@ class AnimeExtensionLoader(
     }
 
     private fun isExtensionTrusted(pkgInfo: PackageInfo): Boolean {
-        val signatures = pkgInfo.signingInfo?.signingCertificateHistory?.map {
-            app.anikuta.util.lang.Hash.sha256(it.toByteArray())
-        } ?: emptyList()
-        return true  // Always trust for now (TrustAnimeExtension stub returns true)
+        return try {
+            trustExtension.isTrusted(pkgInfo.packageName)
+        } catch (e: Exception) {
+            Log.w(TAG, "Trust check failed for ${pkgInfo.packageName}, treating as untrusted", e)
+            false
+        }
+    }
+
+    /**
+     * Computes the SHA-256 hashes of the extension's signing certificates.
+     * Used for the [AnimeExtension.Untrusted.signatureHash] field.
+     */
+    private fun getSignatures(pkgInfo: PackageInfo): List<String> {
+        return try {
+            pkgInfo.signingInfo?.signingCertificateHistory?.map {
+                app.anikuta.util.lang.Hash.sha256(it.toByteArray())
+            } ?: emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not get signatures for ${pkgInfo.packageName}", e)
+            emptyList()
+        }
     }
 
     private fun getSourcesFromPackage(pkgInfo: PackageInfo): List<AnimeSource> {

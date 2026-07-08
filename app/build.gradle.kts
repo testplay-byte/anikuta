@@ -112,6 +112,9 @@ dependencies {
     // WorkManager (download manager)
     implementation(libs.work.runtime)
 
+    // androidx.preference (extension settings UI — PreferenceFragmentCompat)
+    implementation(libs.preference.ktx)
+
     // Testing
     testImplementation(libs.junit)
 }

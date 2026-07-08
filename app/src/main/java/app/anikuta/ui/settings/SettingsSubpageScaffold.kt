@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 fun SettingsSubpageScaffold(
     title: String,
     onBack: () -> Unit,
+    actions: @Composable () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     androidx.compose.foundation.layout.Column(
@@ -50,7 +51,9 @@ fun SettingsSubpageScaffold(
                 title,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
             )
+            actions()
         }
         // Content
         content()

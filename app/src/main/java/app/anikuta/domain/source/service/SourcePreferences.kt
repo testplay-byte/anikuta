@@ -18,6 +18,17 @@ class SourcePreferences(
     fun trustedExtensions(): Preference<Set<String>> =
         preferenceStore.getStringSet("trusted_extensions", emptySet())
 
+    /**
+     * User-selected "Sources" — the extensions the user has explicitly trusted.
+     * These are the ONLY extensions used for search/resolve/play. Max
+     * [TrustAnimeExtension.MAX_TRUSTED] (2) entries.
+     *
+     * Phase 7 — replaces the old primaryExtensionPkg/secondaryExtensionPkgs
+     * fields with a simpler trust-based model.
+     */
+    fun trustedSources(): Preference<Set<String>> =
+        preferenceStore.getStringSet("trusted_sources", emptySet())
+
     fun extensionUpdatesCount(): Preference<Int> =
         preferenceStore.getInt("extension_updates_count", 0)
 

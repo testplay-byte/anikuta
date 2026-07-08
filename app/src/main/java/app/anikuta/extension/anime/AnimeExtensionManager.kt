@@ -114,5 +114,52 @@ class AnimeExtensionManager(
 
     fun hasUpdates(): Boolean = _installedExtensions.value.any { it.hasUpdate }
 
-    // TODO: install/uninstall methods (need installer system — add later)
+    // ---- Phase 7: Trust management ----
+
+    /**
+     * Trust an extension (move it from Installed/Untrusted to Sources).
+     * Enforces the [TrustAnimeExtension.MAX_TRUSTED] limit.
+     *
+     * @return [TrustResult.Success] or [TrustResult.LimitExceeded] with the
+     *         current trusted package names (for the popup).
+     */
+    fun trust(pkgName: String): TrustResult {
+        val current = trustExtension.getTrusted()
+        if (current.size >= TrustAnimeExtension.MAX_TRUSTED) {
+            Log.w(TAG, "Trust limit reached ($current) — cannot trust $pkgName")
+            return TrustResult.LimitExceeded(current)
+        }
+        trustExtension.trust(pkgName)
+        Log.i(TAG, "Trusted $pkgName — reloading extensions")
+        reload()
+        return TrustResult.Success
+    }
+
+    /**
+     * Revoke trust from an extension (move it from Sources back to Installed/Untrusted).
+     */
+    fun revokeTrust(pkgName: String) {
+        trustExtension.revoke(pkgName)
+        Log.i(TAG, "Revoked trust from $pkgName — reloading extensions")
+        reload()
+    }
+
+    /** Check if an extension package is currently trusted (in Sources). */
+    fun isTrusted(pkgName: String): Boolean = trustExtension.isTrusted(pkgName)
+
+    /** Get the set of currently trusted extension package names. */
+    fun getTrustedSources(): Set<String> = trustExtension.getTrusted()
+}
+
+/**
+ * Result of a [AnimeExtensionManager.trust] call.
+ */
+sealed class TrustResult {
+    /** Extension was successfully trusted and moved to Sources. */
+    data object Success : TrustResult()
+    /**
+     * Trust limit reached — the user must untrust one of these first.
+     * @param currentTrusted package names of the currently trusted extensions.
+     */
+    data class LimitExceeded(val currentTrusted: Set<String>) : TrustResult()
 }
