@@ -116,8 +116,17 @@ class ExtensionsViewModel : ViewModel() {
         viewModelScope.launch {
             extensionManager?.installedExtensions?.collect { installedList ->
                 _sources.value = installedList
+                // Sync the priority list with the current trusted sources.
+                // Add any new trusted sources to the end; remove any that were untrusted.
+                val trustedPkgs = installedList.map { it.pkgName }.toSet()
+                val currentPriority = _sourcePriority.value.filter { it in trustedPkgs }
+                val newPriority = currentPriority + (trustedPkgs - currentPriority.toSet())
+                if (newPriority != _sourcePriority.value) {
+                    _sourcePriority.value = newPriority
+                }
             }
         }
+        loadSourcePriority()
         viewModelScope.launch {
             extensionManager?.untrustedExtensions?.collect { untrusted ->
                 _installed.value = untrusted
@@ -180,6 +189,35 @@ class ExtensionsViewModel : ViewModel() {
     fun setSearchActive(active: Boolean) {
         _isSearchActive.value = active
         if (!active) _searchQuery.value = ""
+    }
+
+    // ---- Sources priority (drag-and-drop) ----
+    private val _sourcePriority = MutableStateFlow<List<String>>(emptyList())
+    val sourcePriority: StateFlow<List<String>> = _sourcePriority.asStateFlow()
+
+    fun reorderSourcePriority(from: Int, to: Int) {
+        val list = _sourcePriority.value.toMutableList()
+        if (from in list.indices && to in list.indices) {
+            val item = list.removeAt(from)
+            list.add(to, item)
+            _sourcePriority.value = list
+            // Persist to SourcePreferences
+            try {
+                val prefs = Injekt.get<app.anikuta.domain.source.service.SourcePreferences>()
+                prefs.sourcePriorityOrder().set(list.toMutableList())
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not persist source priority", e)
+            }
+        }
+    }
+
+    private fun loadSourcePriority() {
+        try {
+            val prefs = Injekt.get<app.anikuta.domain.source.service.SourcePreferences>()
+            _sourcePriority.value = prefs.sourcePriorityOrder().get()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not load source priority", e)
+        }
     }
 
     // ---- Filter ----

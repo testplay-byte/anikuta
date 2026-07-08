@@ -136,6 +136,17 @@ fun OnboardingScreen(
                 ExpressiveButton(
                     text = if (state.currentStep == state.totalSteps - 1) "Start Watching" else "Next",
                     onClick = {
+                        // Step 3 (Extension): trust the selected extension on Next.
+                        // The selection is visual only during the step; trust happens here.
+                        if (state.currentStep == 3 && state.primaryExtensionPkg != null) {
+                            try {
+                                val manager = Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
+                                manager.trust(state.primaryExtensionPkg)
+                                Log.i("Onboarding", "Trusted ${state.primaryExtensionPkg} on Next")
+                            } catch (e: Exception) {
+                                Log.e("Onboarding", "Trust on Next failed", e)
+                            }
+                        }
                         if (state.currentStep == state.totalSteps - 1) onComplete()
                         else state = state.next()
                     },
@@ -595,12 +606,9 @@ private fun ExpressiveExtensionStep(
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-    // Load installed extensions (untrusted) from the extension manager.
-    // These are extensions the user has already installed but hasn't trusted yet.
     var installedExtensions by remember { mutableStateOf<List<app.anikuta.extension.anime.model.AnimeExtension.Untrusted>>(emptyList()) }
     var trustedExtensions by remember { mutableStateOf<List<app.anikuta.extension.anime.model.AnimeExtension.Installed>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var showRepoDialog by remember { mutableStateOf(false) }
     var repoUrl by remember { mutableStateOf("") }
     var repoStatus by remember { mutableStateOf<String?>(null) }
 
@@ -609,7 +617,7 @@ private fun ExpressiveExtensionStep(
         try {
             val manager = Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
             manager.reload()
-            kotlinx.coroutines.delay(500)  // give the manager time to scan
+            kotlinx.coroutines.delay(500)
             installedExtensions = manager.untrustedExtensions.value
             trustedExtensions = manager.installedExtensions.value
             Log.d("OnboardingExtension", "Loaded ${installedExtensions.size} untrusted, ${trustedExtensions.size} trusted")
@@ -625,7 +633,8 @@ private fun ExpressiveExtensionStep(
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             "Extensions are how ANI-KUTA finds anime streams.\n" +
-                "Select an installed extension to trust it as your source.",
+                "Select an installed extension to use as your source.\n" +
+                "It will be trusted when you tap Next.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
@@ -638,7 +647,10 @@ private fun ExpressiveExtensionStep(
                 Text("Scanning for installed extensions…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             installedExtensions.isNotEmpty() -> {
-                // Show the list of installed (untrusted) extensions
+                // Show the list of installed (untrusted) extensions.
+                // Tapping only SELECTS (visual) — trust happens on Next.
+                // Selecting one extension deselects any previously selected one
+                // (radio-button behavior — only one primary source).
                 installedExtensions.forEach { ext ->
                     val isSelected = primaryPkg == ext.pkgName
                     Surface(
@@ -648,15 +660,9 @@ private fun ExpressiveExtensionStep(
                         else MaterialTheme.colorScheme.surfaceContainerHigh,
                         tonalElevation = 1.dp,
                         onClick = {
-                            // Trust this extension
-                            try {
-                                val manager = Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
-                                manager.trust(ext.pkgName)
-                                onPrimarySelected(ext.pkgName)
-                                Log.i("OnboardingExtension", "Trusted ${ext.name}")
-                            } catch (e: Exception) {
-                                Log.e("OnboardingExtension", "Trust failed", e)
-                            }
+                            // Only select — don't trust yet. Trust happens on Next.
+                            onPrimarySelected(ext.pkgName)
+                            Log.d("OnboardingExtension", "Selected ${ext.name} (trust deferred to Next)")
                         },
                     ) {
                         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -683,7 +689,7 @@ private fun ExpressiveExtensionStep(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(ext.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Text("v${ext.versionName} · Tap to trust", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("v${ext.versionName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             if (isSelected) {
                                 Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -716,7 +722,6 @@ private fun ExpressiveExtensionStep(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Repo URL input
                 OutlinedTextField(
                     value = repoUrl,
                     onValueChange = { repoUrl = it },

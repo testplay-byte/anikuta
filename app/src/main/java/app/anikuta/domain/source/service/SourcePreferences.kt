@@ -29,6 +29,16 @@ class SourcePreferences(
     fun trustedSources(): Preference<Set<String>> =
         preferenceStore.getStringSet("trusted_sources", emptySet())
 
+    /**
+     * Ordered list of trusted extension package names (highest priority first).
+     * The AniyomiSourceBridge tries them in this order when matching an anime.
+     * Empty = use insertion order (current behavior).
+     *
+     * Phase 7 — sources priority drag-and-drop.
+     */
+    fun sourcePriorityOrder(): Preference<MutableList<String>> =
+        preferenceStore.getString("source_priority_order", "[]") as Preference<MutableList<String>>
+
     fun extensionUpdatesCount(): Preference<Int> =
         preferenceStore.getInt("extension_updates_count", 0)
 

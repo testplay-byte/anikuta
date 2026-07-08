@@ -61,7 +61,27 @@ class AniyomiSourceBridge(
                 Log.w(TAG, "No catalogue sources installed — can't match")
                 return@withContext SourceMatchResult.NoMatch(query)
             }
-            Log.d(TAG, "Searching ${sources.size} source(s) for \"$query\"…")
+
+            // Load source priority order (if set). Sources earlier in the
+            // priority list are preferred when scores are tied.
+            val priorityOrder: List<String> = try {
+                val prefs = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.service.SourcePreferences>()
+                prefs.sourcePriorityOrder().get()
+            } catch (e: Exception) { emptyList() }
+
+            // Build a source→priorityIndex map for sorting
+            val sourcePriorityMap = mutableMapOf<Long, Int>()
+            sources.forEach { source ->
+                val extPkg = try {
+                    uy.kohesive.injekt.Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
+                        .getExtensionPackage(source.id)
+                } catch (e: Exception) { null }
+                if (extPkg != null) {
+                    val idx = priorityOrder.indexOf(extPkg)
+                    sourcePriorityMap[source.id] = if (idx == -1) Int.MAX_VALUE else idx
+                }
+            }
+            Log.d(TAG, "Searching ${sources.size} source(s) for \"$query\"… (priority: ${sourcePriorityMap.size} mapped)")
 
             // Search every source in parallel, collect scored candidates.
             val candidates = coroutineScope {
@@ -75,10 +95,13 @@ class AniyomiSourceBridge(
                 return@withContext SourceMatchResult.NoMatch(query)
             }
 
-            // Sort by score descending. Keep all ≥ threshold.
+            // Sort by score descending, then by source priority (lower index = higher priority).
             val scored = candidates
                 .filter { it.score >= TitleMatcher.THRESHOLD }
-                .sortedByDescending { it.score }
+                .sortedWith(
+                    compareByDescending<ScoredCandidate> { it.score }
+                        .thenBy { sourcePriorityMap[it.source.id] ?: Int.MAX_VALUE },
+                )
 
             if (scored.isEmpty()) {
                 Log.d(TAG, "Found ${candidates.size} candidate(s) but none ≥ ${TitleMatcher.THRESHOLD}")
