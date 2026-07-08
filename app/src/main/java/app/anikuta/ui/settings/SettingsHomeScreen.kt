@@ -67,6 +67,7 @@ fun SettingsHomeScreen(
     val categories = listOf(
         SettingsCategory("settings/general", "General", "Clear cache, storage", Icons.Default.CleaningServices, "emerald"),
         SettingsCategory("settings/player", "Player", "Speed, hardware decoding, audio", Icons.Default.PlayCircle, "violet"),
+        SettingsCategory("settings/details", "Details", "Episode list display, thumbnails, titles", Icons.Default.Info, "indigo"),
         SettingsCategory("settings/extensions", "Extensions", "Install, manage, primary source", Icons.Default.Extension, "amber"),
         SettingsCategory("settings/downloads", "Downloads", "Queue, quality, offline", Icons.Default.CloudDownload, "sky"),
         SettingsCategory("settings/tracking", "Tracking", "AniList login + sync", Icons.Default.TrackChanges, "rose"),

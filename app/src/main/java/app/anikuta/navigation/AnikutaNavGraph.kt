@@ -216,6 +216,9 @@ fun AnikutaNavGraph() {
             composable("settings/player") {
                 app.anikuta.ui.settings.PlayerSettingsScreen(onBack = { navController.popBackStack() })
             }
+            composable("settings/details") {
+                app.anikuta.ui.settings.DetailsSettingsScreen(onBack = { navController.popBackStack() })
+            }
             composable("settings/extensions") {
                 app.anikuta.ui.settings.ExtensionsSettingsScreen(
                     onBack = { navController.popBackStack() },
