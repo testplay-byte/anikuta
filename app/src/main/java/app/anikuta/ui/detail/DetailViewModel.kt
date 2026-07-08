@@ -597,6 +597,7 @@ class DetailViewModel(
 
     /** Called by the 3-stage pull-to-refresh when the user releases. */
     fun onRefreshStage(stage: RefreshStage) {
+        Log.i(TAG, "onRefreshStage: $stage — initiating refresh")
         when (stage) {
             RefreshStage.Episodes -> refreshEpisodesOnly()
             RefreshStage.Details -> refreshDetailsOnly()
@@ -670,5 +671,5 @@ enum class RefreshStage(val label: String) {
     Idle(""),
     Episodes("Release to refresh episodes"),
     Details("Release to refresh details"),
-    Everything("Release to refresh everything"),
+    Everything("Release to refresh everything (details + episodes + cover)"),
 }

@@ -635,26 +635,47 @@ private fun ExpressiveExtensionStep(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Select Extension", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(8.dp))
-            // Refresh button — lets the user re-scan for installed extensions
-            IconButton(onClick = {
-                isLoading = true
-                scope.launch {
-                    try {
-                        val manager = Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
-                        manager.reload()
-                        kotlinx.coroutines.delay(500)
-                        installedExtensions = manager.untrustedExtensions.value
-                        trustedExtensions = manager.installedExtensions.value
-                        Log.d("OnboardingExtension", "Refreshed: ${installedExtensions.size} untrusted")
-                    } catch (e: Exception) {
-                        Log.e("OnboardingExtension", "Refresh failed", e)
-                    } finally {
-                        isLoading = false
+            Spacer(Modifier.width(12.dp))
+            // Refresh button — more prominent with a surface background
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                onClick = {
+                    isLoading = true
+                    scope.launch {
+                        try {
+                            val manager = Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
+                            manager.reload()
+                            kotlinx.coroutines.delay(500)
+                            installedExtensions = manager.untrustedExtensions.value
+                            trustedExtensions = manager.installedExtensions.value
+                            Log.d("OnboardingExtension", "Refreshed: ${installedExtensions.size} untrusted")
+                        } catch (e: Exception) {
+                            Log.e("OnboardingExtension", "Refresh failed", e)
+                        } finally {
+                            isLoading = false
+                        }
                     }
+                },
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "Refresh",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "Refresh",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
                 }
-            }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
             }
         }
         Spacer(modifier = Modifier.height(24.dp))

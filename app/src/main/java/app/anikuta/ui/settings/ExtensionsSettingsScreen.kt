@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -184,6 +185,7 @@ fun ExtensionsSettingsScreen(
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = { viewModel.refresh() },
+                modifier = Modifier.weight(1f),
             ) {
                 ExtensionsListContent(
                     sources = filteredSources,
@@ -244,14 +246,21 @@ private fun ExtensionsListContent(
                         EmptySectionBody("No trusted sources. Install an extension, then tap Trust to add it here.")
                     } else {
                         // Drag-and-drop reorderable list for source priority.
-                        // Uses a Column (not LazyColumn) since there are at most
-                        // 2 trusted sources — no need for lazy scrolling.
+                        // Uses a LazyColumn with heightIn(max) so it doesn't
+                        // scroll unnecessarily (max 2 items = ~128dp) but
+                        // still supports ReorderableItem drag-and-drop.
                         val lazyListState = rememberLazyListState()
                         val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
                             onReorderPriority(from.index, to.index)
                         }
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            sortedSources.forEach { ext ->
+                        LazyColumn(
+                            state = lazyListState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = (sortedSources.size * 72).dp),
+                            userScrollEnabled = false,  // disable scroll — just for layout
+                        ) {
+                            items(sortedSources, key = { it.pkgName }) { ext ->
                                 ReorderableItem(reorderableState, key = ext.pkgName) {
                                     SourceExtensionRow(
                                         ext = ext,

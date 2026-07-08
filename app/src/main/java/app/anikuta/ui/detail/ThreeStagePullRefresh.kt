@@ -73,6 +73,10 @@ fun ThreeStagePullRefresh(
         else -> RefreshStage.Idle
     }
 
+    // Track whether we've already fired the refresh for this pull gesture
+    // to avoid double-firing in onPreFling + onPostFling.
+    var refreshFired by remember { mutableFloatStateOf(0f) }
+
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -102,16 +106,24 @@ fun ThreeStagePullRefresh(
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                // On release: if past stage 1, fire the action.
-                if (pullDistance >= stage1Px) {
-                    onRefresh(currentStage)
+                // On release: if past stage 1 and we haven't already fired,
+                // fire the refresh action.
+                if (pullDistance >= stage1Px && refreshFired == 0f) {
+                    refreshFired = 1f  // mark as fired
+                    val stage = when {
+                        pullDistance >= stage3Px -> RefreshStage.Everything
+                        pullDistance >= stage2Px -> RefreshStage.Details
+                        else -> RefreshStage.Episodes
+                    }
+                    onRefresh(stage)
                 }
                 return Velocity.Zero
             }
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                // Reset the pull distance after the fling completes.
+                // Reset the pull distance + fired flag after the fling completes.
                 pullDistance = 0f
+                refreshFired = 0f
                 return Velocity.Zero
             }
         }

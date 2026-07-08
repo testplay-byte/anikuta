@@ -67,10 +67,9 @@ fun AnikutaNavGraph() {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
-                // Floating pill-style bottom nav — matches the top bar aesthetic.
-                // A rounded Surface floats above the content with padding, holding
-                // all 5 nav icons. The selected icon gets a secondaryContainer
-                // background pill + spring scale animation.
+                // Floating pill-style bottom nav — the area behind the pill
+                // is completely transparent so the content scrolls under it.
+                // Only the pill Surface itself has a background.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -80,7 +79,7 @@ fun AnikutaNavGraph() {
                     Surface(
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
                         color = MaterialTheme.colorScheme.surfaceContainer,
-                        tonalElevation = 3.dp,
+                        tonalElevation = 0.dp,
                         shadowElevation = 8.dp,
                     ) {
                         Row(
