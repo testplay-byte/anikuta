@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -20,12 +21,15 @@ import uy.kohesive.injekt.api.get
  * multiple sources in parallel, for extensions that don't provide this data.
  *
  * Sources (priority order):
- * 1. AniList streaming episodes (thumbnails + titles) — already available
- *    from the anime details query
- * 2. Jikan (MAL API) — episode titles + air dates + synopses
+ * 1. AniList streaming episodes (thumbnails + titles) — already in anime object
+ * 2. Jikan/MAL API (titles + air dates) — free, no auth, has rate limiting
+ * 3. AniList banner image — fallback thumbnail (same for all episodes)
  *
- * The fetcher enriches SEpisode objects that are missing preview_url,
- * summary, or have a generic name (e.g. "Episode 5").
+ * Merge priority:
+ * - Title: Jikan → AniList streaming
+ * - Thumbnail: AniList streaming → AniList banner (fallback)
+ * - Description: Jikan (rarely available) → null
+ * - Air date: Jikan
  */
 class EpisodeMetadataFetcher(
     private val networkHelper: NetworkHelper = Injekt.get(),
@@ -34,6 +38,8 @@ class EpisodeMetadataFetcher(
     companion object {
         private const val TAG = "EpisodeMetadata"
         private const val JIKAN_BASE = "https://api.jikan.moe/v4"
+        private const val JIKAN_MAX_RETRIES = 3
+        private const val JIKAN_RETRY_DELAY_MS = 2000L
     }
 
     data class EpisodeMetadata(
@@ -46,15 +52,18 @@ class EpisodeMetadataFetcher(
     /**
      * Fetch episode metadata for an anime.
      *
-     * @param anime The AniList anime (must have idMal for Jikan, streamingEpisodes for AniList)
+     * @param anime The AniList anime (uses idMal for Jikan, streamingEpisodes + bannerImage for AniList)
      * @param episodeCount Number of episodes to fetch metadata for
      * @return Map<episodeNumber (1-based), EpisodeMetadata>
      */
     suspend fun fetch(anime: AniListAnime, episodeCount: Int): Map<Int, EpisodeMetadata> {
         val results = mutableMapOf<Int, EpisodeMetadata>()
 
+        // Fallback thumbnail: use the anime's banner or cover image
+        val fallbackThumbnail = anime.bannerImage ?: anime.coverImage.best()
+
         coroutineScope {
-            // Source 1: AniList streaming episodes (thumbnails + titles)
+            // Source 1: AniList streaming episodes (already in the anime object)
             val anilistResults = async {
                 try {
                     fetchFromAniList(anime)
@@ -64,10 +73,13 @@ class EpisodeMetadataFetcher(
                 }
             }
 
-            // Source 2: Jikan (MAL API) — episode titles + air dates + synopses
+            // Source 2: Jikan/MAL API (titles + air dates) — with retry for rate limiting
             val jikanResults = async {
                 try {
-                    anime.idMal?.let { fetchFromJikan(it) } ?: emptyMap()
+                    anime.idMal?.let { fetchFromJikanWithRetry(it) } ?: run {
+                        Log.w(TAG, "No idMal available — skipping Jikan fetch")
+                        emptyMap()
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Jikan fetch failed", e)
                     emptyMap()
@@ -77,19 +89,20 @@ class EpisodeMetadataFetcher(
             val anilist = anilistResults.await()
             val jikan = jikanResults.await()
 
-            // Merge: Jikan takes priority for title/description, AniList for thumbnail
+            Log.i(TAG, "Sources: AniList=${anilist.size}, Jikan=${jikan.size}, fallbackThumb=${fallbackThumbnail != null}")
+
+            // Merge: Jikan priority for title/airdate, AniList for thumbnail, banner as last resort
             for (i in 1..episodeCount) {
                 val a = anilist[i]
                 val j = jikan[i]
+                val thumb = a?.thumbnailUrl ?: fallbackThumbnail
                 results[i] = EpisodeMetadata(
                     title = j?.title ?: a?.title,
                     description = j?.description,
-                    thumbnailUrl = a?.thumbnailUrl ?: j?.thumbnailUrl,
+                    thumbnailUrl = thumb,
                     airDate = j?.airDate,
                 )
             }
-
-            Log.i(TAG, "Fetched metadata for ${results.size} episodes (AniList=${anilist.size}, Jikan=${jikan.size})")
         }
 
         return results
@@ -109,8 +122,35 @@ class EpisodeMetadataFetcher(
                 airDate = null,
             )
         }
+        if (results.isNotEmpty()) {
+            Log.d(TAG, "AniList streaming: ${results.size} episodes")
+        }
         return results
     }
+
+    /**
+     * Fetch from Jikan with retry for rate limiting (504/429).
+     */
+    private suspend fun fetchFromJikanWithRetry(malId: Int): Map<Int, EpisodeMetadata> =
+        withContext(Dispatchers.IO) {
+            var lastError: Exception? = null
+            for (attempt in 1..JIKAN_MAX_RETRIES) {
+                try {
+                    delay(if (attempt > 1) JIKAN_RETRY_DELAY_MS else 500L) // initial delay + retry delay
+                    val result = fetchFromJikan(malId)
+                    if (result.isNotEmpty()) return@withContext result
+                    // Empty result might mean no data — don't retry
+                    Log.d(TAG, "Jikan returned 0 episodes for malId=$malId (attempt $attempt)")
+                    return@withContext result
+                } catch (e: Exception) {
+                    lastError = e
+                    Log.w(TAG, "Jikan attempt $attempt failed: ${e.message}")
+                    if (attempt < JIKAN_MAX_RETRIES) delay(JIKAN_RETRY_DELAY_MS)
+                }
+            }
+            Log.e(TAG, "Jikan failed after $JIKAN_MAX_RETRIES attempts for malId=$malId", lastError)
+            emptyMap()
+        }
 
     /**
      * Fetch from Jikan (MAL API).
@@ -119,33 +159,32 @@ class EpisodeMetadataFetcher(
     private suspend fun fetchFromJikan(malId: Int): Map<Int, EpisodeMetadata> =
         withContext(Dispatchers.IO) {
             val results = mutableMapOf<Int, EpisodeMetadata>()
-            try {
-                val response = networkHelper.client
-                    .newCall(GET("$JIKAN_BASE/anime/$malId/episodes"))
-                    .execute()
+            val response = networkHelper.client
+                .newCall(GET("$JIKAN_BASE/anime/$malId/episodes"))
+                .execute()
 
-                if (!response.isSuccessful) {
-                    Log.w(TAG, "Jikan returned HTTP ${response.code}")
-                    return@withContext results
+            if (!response.isSuccessful) {
+                Log.w(TAG, "Jikan HTTP ${response.code} for malId=$malId")
+                if (response.code == 429 || response.code == 504) {
+                    throw Exception("Jikan rate limited: HTTP ${response.code}")
                 }
-
-                val body = response.body?.string() ?: return@withContext results
-                val jikanResponse = json.decodeFromString<JikanEpisodesResponse>(body)
-
-                jikanResponse.data.forEach { ep ->
-                    val epNum = ep.malId ?: return@forEach
-                    results[epNum] = EpisodeMetadata(
-                        title = ep.title,
-                        description = ep.synopsis,
-                        thumbnailUrl = null,
-                        airDate = ep.aired?.let { parseDate(it) },
-                    )
-                }
-
-                Log.d(TAG, "Jikan returned ${results.size} episodes for malId=$malId")
-            } catch (e: Exception) {
-                Log.e(TAG, "Jikan fetch failed for malId=$malId", e)
+                return@withContext results
             }
+
+            val body = response.body?.string() ?: return@withContext results
+            val jikanResponse = json.decodeFromString<JikanEpisodesResponse>(body)
+
+            jikanResponse.data.forEach { ep ->
+                val epNum = ep.malId ?: return@forEach
+                results[epNum] = EpisodeMetadata(
+                    title = ep.title,
+                    description = null, // Jikan v4 episodes endpoint doesn't provide synopsis
+                    thumbnailUrl = null,
+                    airDate = ep.aired?.let { parseDate(it) },
+                )
+            }
+
+            Log.d(TAG, "Jikan returned ${results.size} episodes for malId=$malId")
             results
         }
 
@@ -176,7 +215,6 @@ class EpisodeMetadataFetcher(
     private data class JikanEpisode(
         val malId: Int? = null,
         val title: String? = null,
-        val synopsis: String? = null,
         val aired: String? = null,
     )
 }
