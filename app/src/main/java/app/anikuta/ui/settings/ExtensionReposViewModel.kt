@@ -3,25 +3,32 @@ package app.anikuta.ui.settings
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.anikuta.data.mihon.AnimeExtensionRepoRepositoryImpl
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.DeleteAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.GetAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.UpdateAnimeExtensionRepo
+import app.anikuta.domain.mihon.extensionrepo.anime.repository.AnimeExtensionRepoRepository
 import app.anikuta.domain.mihon.extensionrepo.model.ExtensionRepo
+import app.anikuta.domain.mihon.extensionrepo.service.ExtensionRepoService
+import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 
 /**
  * Phase 7 — ViewModel for the Extension Repositories settings screen.
  *
- * Uses LAZY initialization for the interactors (not constructor-time) so that
- * if one interactor fails to resolve, the others still work and we can log
- * the actual exception instead of silently nulled-out fields.
+ * Robust DI: tries Injekt.get() first, and if that fails, manually constructs
+ * the interactor from its dependencies (which are more likely to be registered).
+ * This catches the case where a specific interactor fails to resolve due to
+ * a transitive dependency issue.
  */
 class ExtensionReposViewModel : ViewModel() {
 
@@ -29,11 +36,10 @@ class ExtensionReposViewModel : ViewModel() {
         private const val TAG = "ExtReposViewModel"
     }
 
-    // Lazy init — resolves on first use, not at construction time.
-    private val getExtensionRepo: GetAnimeExtensionRepo? by lazy { safeGet { Injekt.get<GetAnimeExtensionRepo>() } }
-    private val createRepo: CreateAnimeExtensionRepo? by lazy { safeGet { Injekt.get<CreateAnimeExtensionRepo>() } }
-    private val deleteRepo: DeleteAnimeExtensionRepo? by lazy { safeGet { Injekt.get<DeleteAnimeExtensionRepo>() } }
-    private val updateRepo: UpdateAnimeExtensionRepo? by lazy { safeGet { Injekt.get<UpdateAnimeExtensionRepo>() } }
+    private val getExtensionRepo: GetAnimeExtensionRepo? by lazy { resolveGetRepo() }
+    private val createRepo: CreateAnimeExtensionRepo? by lazy { resolveCreateRepo() }
+    private val deleteRepo: DeleteAnimeExtensionRepo? by lazy { resolveDeleteRepo() }
+    private val updateRepo: UpdateAnimeExtensionRepo? by lazy { resolveUpdateRepo() }
 
     private val _repos = MutableStateFlow<List<ExtensionRepo>>(emptyList())
     val repos: StateFlow<List<ExtensionRepo>> = _repos.asStateFlow()
@@ -44,14 +50,76 @@ class ExtensionReposViewModel : ViewModel() {
     private val _createResult = MutableStateFlow<CreateResult>(CreateResult.Idle)
     val createResult: StateFlow<CreateResult> = _createResult.asStateFlow()
 
-    private fun <T> safeGet(block: () -> T): T? {
+    // ---- Manual construction fallbacks ----
+
+    private fun resolveRepository(): AnimeExtensionRepoRepository? {
         return try {
-            block().also {
-                Log.d(TAG, "✅ ${it?.javaClass?.simpleName} resolved from DI")
-            }
+            Injekt.get<AnimeExtensionRepoRepository>()
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to resolve from DI", e)
-            null
+            Log.e(TAG, "Injekt.get<AnimeExtensionRepoRepository> failed, trying manual construction", e)
+            try {
+                val handler = Injekt.get<AnimeDatabaseHandler>()
+                AnimeExtensionRepoRepositoryImpl(handler)
+            } catch (e2: Exception) {
+                Log.e(TAG, "Manual AnimeExtensionRepoRepositoryImpl construction also failed", e2)
+                null
+            }
+        }
+    }
+
+    private fun resolveService(): ExtensionRepoService? {
+        return try {
+            Injekt.get<ExtensionRepoService>()
+        } catch (e: Exception) {
+            Log.e(TAG, "Injekt.get<ExtensionRepoService> failed, trying manual construction", e)
+            try {
+                val networkHelper = Injekt.get<NetworkHelper>()
+                val json = Injekt.get<Json>()
+                ExtensionRepoService(networkHelper, json)
+            } catch (e2: Exception) {
+                Log.e(TAG, "Manual ExtensionRepoService construction also failed", e2)
+                null
+            }
+        }
+    }
+
+    private fun resolveGetRepo(): GetAnimeExtensionRepo? {
+        return try {
+            Injekt.get<GetAnimeExtensionRepo>()
+        } catch (e: Exception) {
+            Log.e(TAG, "Injekt.get<GetAnimeExtensionRepo> failed, trying manual", e)
+            resolveRepository()?.let { GetAnimeExtensionRepo(it) }
+        }
+    }
+
+    private fun resolveCreateRepo(): CreateAnimeExtensionRepo? {
+        return try {
+            Injekt.get<CreateAnimeExtensionRepo>()
+        } catch (e: Exception) {
+            Log.e(TAG, "Injekt.get<CreateAnimeExtensionRepo> failed, trying manual", e)
+            val repo = resolveRepository() ?: return null
+            val service = resolveService() ?: return null
+            CreateAnimeExtensionRepo(repo, service)
+        }
+    }
+
+    private fun resolveDeleteRepo(): DeleteAnimeExtensionRepo? {
+        return try {
+            Injekt.get<DeleteAnimeExtensionRepo>()
+        } catch (e: Exception) {
+            Log.e(TAG, "Injekt.get<DeleteAnimeExtensionRepo> failed, trying manual", e)
+            resolveRepository()?.let { DeleteAnimeExtensionRepo(it) }
+        }
+    }
+
+    private fun resolveUpdateRepo(): UpdateAnimeExtensionRepo? {
+        return try {
+            Injekt.get<UpdateAnimeExtensionRepo>()
+        } catch (e: Exception) {
+            Log.e(TAG, "Injekt.get<UpdateAnimeExtensionRepo> failed, trying manual", e)
+            val repo = resolveRepository() ?: return null
+            val service = resolveService() ?: return null
+            UpdateAnimeExtensionRepo(repo, service)
         }
     }
 
@@ -64,13 +132,10 @@ class ExtensionReposViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Add a new repo. Accepts URLs with or without /index.min.json suffix.
-     */
     fun createRepo(url: String) {
         val interactor = createRepo ?: run {
-            Log.e(TAG, "createRepo: CreateAnimeExtensionRepo is null (DI failed)")
-            _createResult.value = CreateResult.Error("Internal error: repo service unavailable. Restart the app.")
+            Log.e(TAG, "createRepo: CreateAnimeExtensionRepo is null (DI + manual both failed)")
+            _createResult.value = CreateResult.Error("Internal error: could not initialize repo service. Check logcat for ExtReposViewModel.")
             return
         }
         viewModelScope.launch {

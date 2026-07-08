@@ -95,19 +95,21 @@ class SourcePreferencesFragment : PreferenceFragmentCompat() {
             try {
                 preferenceManager.preferenceDataStore =
                     SourcePreferenceDataStore(source.sourcePreferences())
-                source.setupPreferenceScreen(preferenceManager.createPreferenceScreen(requireContext()))
-                Log.i(TAG, "Preference screen built successfully")
+                val screen = preferenceManager.createPreferenceScreen(requireContext())
+                source.setupPreferenceScreen(screen)
+                // CRITICAL: setPreferenceScreen must be called to attach the
+                // screen to the fragment. Without this, the screen is built
+                // but never displayed (blank page).
+                preferenceScreen = screen
+                Log.i(TAG, "Preference screen built + attached. Preference count: ${screen.preferenceCount}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to build preference screen", e)
             }
         } else {
             Log.w(TAG, "Source is NOT ConfigurableAnimeSource — no settings to show")
-            // Show a "no settings" message via a simple text preference
+            // Build an empty screen — the Compose layer shows the back button.
             val screen = preferenceManager.createPreferenceScreen(requireContext())
-            // No items — the empty screen is shown. The Compose layer above
-            // could show a message, but PreferenceFragmentCompat with an empty
-            // screen just shows blank. That's acceptable — the user sees the
-            // back button and can return.
+            preferenceScreen = screen
         }
     }
 

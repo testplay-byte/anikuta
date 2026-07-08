@@ -1,8 +1,10 @@
 package app.anikuta.ui.detail
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -128,13 +131,20 @@ private fun VideoPickerBottomSheet(
     onPickVideo: (Video) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Don't skip partially expanded — allows the sheet to sit at a natural
+    // height instead of jumping to full-screen (which caused the auto-close
+    // glitch when the user tried to drag it down).
+    val sheetState = rememberModalBottomSheetState()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
-        Column(modifier = Modifier.padding(bottom = 24.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(bottom = 24.dp)
+                .animateContentSize(),  // smooth height changes when servers expand/collapse
+        ) {
             // Header: title + refreshing badge
             Row(
                 modifier = Modifier
@@ -164,17 +174,16 @@ private fun VideoPickerBottomSheet(
                 }
             }
 
-            // Scrollable list
+            // Scrollable list — heightIn(max) so it shrinks when content is
+            // small (all collapsed) and grows up to the max when expanded.
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(520.dp),
+                    .heightIn(max = 420.dp),
             ) {
                 serverSections.forEach { section ->
-                    // Default: collapsed. Only expanded if in the set.
                     val isExpanded = section.serverName in expandedServers
 
-                    // Server header (top-level, collapsible) with audio tag chips
                     item(key = "server_${section.serverName}") {
                         ServerHeader(
                             serverName = section.serverName,
@@ -184,17 +193,15 @@ private fun VideoPickerBottomSheet(
                         )
                     }
 
-                    // Audio sections + videos (only when server is expanded)
+                    // Animated expand/collapse for the audio + video rows
                     if (isExpanded) {
                         section.audioSections.forEach { audioSection ->
-                            // Audio sub-header
                             item(key = "audio_${section.serverName}_${audioSection.audio.name}") {
                                 AudioSubHeader(
                                     audio = audioSection.audio,
                                     videoCount = audioSection.videos.size,
                                 )
                             }
-                            // Video rows (quality chip on the RIGHT)
                             items(audioSection.videos, key = { v -> v.videoUrl + v.videoTitle }) { video ->
                                 VideoRow(
                                     video = video,
@@ -249,8 +256,10 @@ private fun ServerHeader(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
-            // Audio tag chips (SUB / DUB / HSUB)
-            audioTags.forEach { audio ->
+            // Audio tag chips — order: HSUB leftmost, DUB middle, SUB rightmost
+            // (reversed from the default SUB-first order so SUB is on the right
+            // per the user's preference).
+            audioTags.reversed().forEach { audio ->
                 Surface(
                     shape = RoundedCornerShape(4.dp),
                     color = MaterialTheme.colorScheme.outlineVariant,

@@ -156,6 +156,7 @@ fun ExtensionsSettingsScreen(
                                 installed.forEachIndexed { idx, ext ->
                                     UntrustedExtensionRow(
                                         ext = ext,
+                                        onClick = { onOpenExtensionDetails(ext.pkgName) },
                                         onTrust = { viewModel.trustExtension(ext) },
                                         onDelete = { viewModel.uninstallExtension(ext.pkgName) },
                                     )
@@ -298,12 +299,14 @@ private fun SourceExtensionRow(
 @Composable
 private fun UntrustedExtensionRow(
     ext: AnimeExtension.Untrusted,
+    onClick: () -> Unit,
     onTrust: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
