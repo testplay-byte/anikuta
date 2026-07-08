@@ -11,6 +11,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -53,14 +54,21 @@ class EpisodeMetadataFetcher(
      * Fetch episode metadata for an anime.
      *
      * @param anime The AniList anime (uses idMal for Jikan, streamingEpisodes + bannerImage for AniList)
+     * @param anilistId The AniList anime ID (used to look up idMal if not in the anime object)
      * @param episodeCount Number of episodes to fetch metadata for
      * @return Map<episodeNumber (1-based), EpisodeMetadata>
      */
-    suspend fun fetch(anime: AniListAnime, episodeCount: Int): Map<Int, EpisodeMetadata> {
+    suspend fun fetch(anime: AniListAnime, anilistId: Int, episodeCount: Int): Map<Int, EpisodeMetadata> {
         val results = mutableMapOf<Int, EpisodeMetadata>()
 
         // Fallback thumbnail: use the anime's banner or cover image
         val fallbackThumbnail = anime.bannerImage ?: anime.coverImage.best()
+
+        // If idMal is missing from the cached anime object, look it up from AniList
+        val malId = anime.idMal ?: lookupMalId(anilistId)
+        if (malId == null) {
+            Log.w(TAG, "Could not determine MAL ID — skipping Jikan fetch")
+        }
 
         coroutineScope {
             // Source 1: AniList streaming episodes (already in the anime object)
@@ -76,8 +84,8 @@ class EpisodeMetadataFetcher(
             // Source 2: Jikan/MAL API (titles + air dates) — with retry for rate limiting
             val jikanResults = async {
                 try {
-                    anime.idMal?.let { fetchFromJikanWithRetry(it) } ?: run {
-                        Log.w(TAG, "No idMal available — skipping Jikan fetch")
+                    malId?.let { fetchFromJikanWithRetry(it) } ?: run {
+                        Log.w(TAG, "No malId available — skipping Jikan fetch")
                         emptyMap()
                     }
                 } catch (e: Exception) {
@@ -89,13 +97,16 @@ class EpisodeMetadataFetcher(
             val anilist = anilistResults.await()
             val jikan = jikanResults.await()
 
-            Log.i(TAG, "Sources: AniList=${anilist.size}, Jikan=${jikan.size}, fallbackThumb=${fallbackThumbnail != null}")
+            Log.i(TAG, "Sources: AniList=${anilist.size}, Jikan=${jikan.size}, malId=$malId, fallbackThumb=${fallbackThumbnail != null}")
 
-            // Merge: Jikan priority for title/airdate, AniList for thumbnail, banner as last resort
+            // Merge: Jikan priority for title/airdate, AniList for thumbnail
+            // Only use fallback thumbnail if we have NO other data (no Jikan titles, no AniList thumbnails)
+            val hasAnyRealData = jikan.isNotEmpty() || anilist.isNotEmpty()
             for (i in 1..episodeCount) {
                 val a = anilist[i]
                 val j = jikan[i]
-                val thumb = a?.thumbnailUrl ?: fallbackThumbnail
+                // Only use fallback thumbnail if no real thumbnail exists AND we have other data
+                val thumb = a?.thumbnailUrl ?: if (hasAnyRealData) fallbackThumbnail else null
                 results[i] = EpisodeMetadata(
                     title = j?.title ?: a?.title,
                     description = j?.description,
@@ -107,6 +118,52 @@ class EpisodeMetadataFetcher(
 
         return results
     }
+
+    /**
+     * Look up the MAL ID for an anime from AniList GraphQL API.
+     * Used when the cached anime object doesn't have idMal.
+     */
+    private suspend fun lookupMalId(anilistId: Int): Int? =
+        withContext(Dispatchers.IO) {
+            try {
+                val query = """
+                    query {
+                      Media(id: $anilistId, type: ANIME) {
+                        idMal
+                      }
+                    }
+                """.trimIndent()
+                val requestBody = okhttp3.RequestBody.create(
+                    okhttp3.MediaType.get("application/json"),
+                    """{"query":"${query.replace("\"", "\\\"").replace("\n", " ")}"}"""
+                )
+                val response = networkHelper.client
+                    .newCall(
+                        okhttp3.Request.Builder()
+                            .url("https://graphql.anilist.co")
+                            .post(requestBody)
+                            .header("Content-Type", "application/json")
+                            .header("Accept", "application/json")
+                            .build()
+                    )
+                    .execute()
+
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "AniList idMal lookup failed: HTTP ${response.code}")
+                    return@withContext null
+                }
+
+                val body = response.body?.string() ?: return@withContext null
+                val root = json.parseToJsonElement(body).jsonObject
+                val media = root["data"]?.jsonObject?.get("Media")?.jsonObject
+                val idMal = media?.get("idMal")?.toString()?.toIntOrNull()
+                Log.d(TAG, "AniList idMal lookup for anilistId=$anilistId → $idMal")
+                idMal
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to look up idMal for anilistId=$anilistId", e)
+                null
+            }
+        }
 
     /**
      * Fetch from AniList streaming episodes (already in the anime object).

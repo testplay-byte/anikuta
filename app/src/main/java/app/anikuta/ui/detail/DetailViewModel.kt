@@ -14,6 +14,7 @@ import app.anikuta.source.api.model.SEpisode
 import app.anikuta.source.api.model.Video
 import app.anikuta.ui.library.LibraryStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -381,10 +382,11 @@ class DetailViewModel(
         viewModelScope.launch {
             try {
                 val fetcher = app.anikuta.data.metadata.EpisodeMetadataFetcher()
-                val metadata = fetcher.fetch(anime, episodes.size)
+                val metadata = fetcher.fetch(anime, anilistId, episodes.size)
 
                 if (metadata.isEmpty()) {
                     Log.d(TAG, "No metadata found from Jikan/AniList")
+                    delay(500) // brief delay so the indicator is visible
                     return@launch
                 }
 
