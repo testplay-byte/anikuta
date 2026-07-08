@@ -12,6 +12,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -133,10 +136,8 @@ class EpisodeMetadataFetcher(
                       }
                     }
                 """.trimIndent()
-                val requestBody = okhttp3.RequestBody.create(
-                    okhttp3.MediaType.get("application/json"),
-                    """{"query":"${query.replace("\"", "\\\"").replace("\n", " ")}"}"""
-                )
+                val requestBody = """{"query":"query { Media(id: $anilistId, type: ANIME) { idMal } }"}"""
+                    .toRequestBody("application/json".toMediaTypeOrNull())
                 val response = networkHelper.client
                     .newCall(
                         okhttp3.Request.Builder()
