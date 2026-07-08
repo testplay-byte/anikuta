@@ -621,8 +621,8 @@ private fun EpisodeRowRich(
 
     // Content that goes on the RIGHT side of the thumbnail
     @Composable
-    fun RightSideContent(includeSynopsis: Boolean, includeDate: Boolean) {
-        Column(modifier = Modifier.weight(1f)) {
+    fun RightSideContent(includeSynopsis: Boolean, includeDate: Boolean, modifier: Modifier) {
+        Column(modifier = modifier) {
             // Title row: episode number badge + title
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (showEpisodeNumber) {
@@ -803,7 +803,11 @@ private fun EpisodeRowRich(
             // Right side: title + (optionally synopsis + date based on position)
             val synopsisOnRight = synopsisPosition == "right" || !hasThumbnail
             val dateOnRight = datePosition == "right" || !hasThumbnail
-            RightSideContent(includeSynopsis = synopsisOnRight, includeDate = dateOnRight)
+            RightSideContent(
+                includeSynopsis = synopsisOnRight,
+                includeDate = dateOnRight,
+                modifier = Modifier.weight(1f),
+            )
         }
 
         // Below-thumbnail content (full width)
