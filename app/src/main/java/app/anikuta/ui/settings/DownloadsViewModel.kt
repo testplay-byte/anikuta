@@ -51,6 +51,13 @@ class DownloadsViewModel : ViewModel() {
     private val _audioFallback = MutableStateFlow(AudioFallback.NEXT)
     val audioFallback: StateFlow<AudioFallback> = _audioFallback.asStateFlow()
 
+    // ---- Toggles (StateFlow so the UI updates live) ----
+    private val _downloadOverWifiOnly = MutableStateFlow(true)
+    val downloadOverWifiOnly: StateFlow<Boolean> = _downloadOverWifiOnly.asStateFlow()
+
+    private val _deleteAfterWatching = MutableStateFlow(false)
+    val deleteAfterWatching: StateFlow<Boolean> = _deleteAfterWatching.asStateFlow()
+
     init {
         // Migrate old single-value prefs if needed
         prefs?.migrateFromPhase6()
@@ -113,13 +120,7 @@ class DownloadsViewModel : ViewModel() {
         prefs?.audioFallbackMode()?.set(mode.value)
     }
 
-    // ---- Toggles (StateFlow so the UI updates live) ----
-    private val _downloadOverWifiOnly = MutableStateFlow(true)
-    val downloadOverWifiOnly: StateFlow<Boolean> = _downloadOverWifiOnly.asStateFlow()
-
-    private val _deleteAfterWatching = MutableStateFlow(false)
-    val deleteAfterWatching: StateFlow<Boolean> = _deleteAfterWatching.asStateFlow()
-
+    // ---- Toggles setters (StateFlow declarations are above, near the others) ----
     fun setDownloadOverWifiOnly(v: Boolean) {
         _downloadOverWifiOnly.value = v
         prefs?.downloadOverWifiOnly()?.set(v)

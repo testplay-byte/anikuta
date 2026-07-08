@@ -30,12 +30,10 @@ class ExtensionReposViewModel : ViewModel() {
     }
 
     // Lazy init — resolves on first use, not at construction time.
-    // This way if DI has a transient issue, we get the actual error when
-    // the action is attempted, not a silent null at startup.
-    private val getExtensionRepo: GetAnimeExtensionRepo? by lazy { safeGet("GetAnimeExtensionRepo") }
-    private val createRepo: CreateAnimeExtensionRepo? by lazy { safeGet("CreateAnimeExtensionRepo") }
-    private val deleteRepo: DeleteAnimeExtensionRepo? by lazy { safeGet("DeleteAnimeExtensionRepo") }
-    private val updateRepo: UpdateAnimeExtensionRepo? by lazy { safeGet("UpdateAnimeExtensionRepo") }
+    private val getExtensionRepo: GetAnimeExtensionRepo? by lazy { safeGet { Injekt.get<GetAnimeExtensionRepo>() } }
+    private val createRepo: CreateAnimeExtensionRepo? by lazy { safeGet { Injekt.get<CreateAnimeExtensionRepo>() } }
+    private val deleteRepo: DeleteAnimeExtensionRepo? by lazy { safeGet { Injekt.get<DeleteAnimeExtensionRepo>() } }
+    private val updateRepo: UpdateAnimeExtensionRepo? by lazy { safeGet { Injekt.get<UpdateAnimeExtensionRepo>() } }
 
     private val _repos = MutableStateFlow<List<ExtensionRepo>>(emptyList())
     val repos: StateFlow<List<ExtensionRepo>> = _repos.asStateFlow()
@@ -46,14 +44,13 @@ class ExtensionReposViewModel : ViewModel() {
     private val _createResult = MutableStateFlow<CreateResult>(CreateResult.Idle)
     val createResult: StateFlow<CreateResult> = _createResult.asStateFlow()
 
-    private fun <T> safeGet(name: String): T? {
+    private fun <T> safeGet(block: () -> T): T? {
         return try {
-            @Suppress("UNCHECKED_CAST")
-            Injekt.get<T>().also {
-                Log.d(TAG, "✅ $name resolved from DI")
+            block().also {
+                Log.d(TAG, "✅ ${it?.javaClass?.simpleName} resolved from DI")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to resolve $name from DI", e)
+            Log.e(TAG, "❌ Failed to resolve from DI", e)
             null
         }
     }
