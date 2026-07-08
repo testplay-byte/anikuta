@@ -283,10 +283,7 @@ private fun ExtensionsListContent(
                     } else {
                         // Drag-and-drop reorderable list for source priority
                         val lazyListState = rememberLazyListState()
-                        val reorderableState = rememberReorderableLazyListState(
-                            lazyListState = lazyListState,
-                            paddingValues = PaddingValues(0.dp),
-                        ) { from, to ->
+                        val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
                             onReorderPriority(from.index, to.index)
                         }
                         LazyColumn(
