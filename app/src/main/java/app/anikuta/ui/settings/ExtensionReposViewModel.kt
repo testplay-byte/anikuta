@@ -59,21 +59,38 @@ class ExtensionReposViewModel : ViewModel() {
     }
 
     /**
-     * Add a new repo. The URL must end with `/index.min.json`.
+     * Add a new repo. Accepts URLs with or without /index.min.json suffix.
      * On success, the repo is inserted into the DB and the Flow auto-updates.
+     * On error, sets [createResult] so the UI shows an error dialog.
      */
     fun createRepo(url: String) {
-        val interactor = createRepo ?: return
+        val interactor = createRepo ?: run {
+            _createResult.value = CreateResult.Error("DI not initialized")
+            return
+        }
         viewModelScope.launch {
             _createResult.value = CreateResult.Loading
             try {
+                Log.i(TAG, "createRepo: attempting to add '$url'")
                 val result = interactor.await(url)
                 _createResult.value = when (result) {
-                    is CreateAnimeExtensionRepo.Result.Success -> CreateResult.Success
-                    is CreateAnimeExtensionRepo.Result.InvalidUrl -> CreateResult.Error("Invalid URL. Must end with /index.min.json")
-                    is CreateAnimeExtensionRepo.Result.RepoAlreadyExists -> CreateResult.Error("Repository already exists")
+                    is CreateAnimeExtensionRepo.Result.Success -> {
+                        Log.i(TAG, "createRepo: SUCCESS — repo added")
+                        CreateResult.Success
+                    }
+                    is CreateAnimeExtensionRepo.Result.InvalidUrl -> {
+                        Log.w(TAG, "createRepo: InvalidUrl")
+                        CreateResult.Error("Invalid URL. Must be an HTTPS URL ending with /index.min.json (or just the base URL).")
+                    }
+                    is CreateAnimeExtensionRepo.Result.RepoAlreadyExists -> {
+                        Log.w(TAG, "createRepo: RepoAlreadyExists")
+                        CreateResult.Error("Repository already exists")
+                    }
                     is CreateAnimeExtensionRepo.Result.DuplicateFingerprint -> CreateResult.DuplicateFingerprint(result.oldRepo, result.newRepo)
-                    is CreateAnimeExtensionRepo.Result.Error -> CreateResult.Error("Failed to add repository")
+                    is CreateAnimeExtensionRepo.Result.Error -> {
+                        Log.e(TAG, "createRepo: Error")
+                        CreateResult.Error("Failed to add repository")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "createRepo failed", e)

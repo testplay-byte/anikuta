@@ -70,5 +70,7 @@ sealed class AnimeExtension {
         val signatureHash: String,
         override val lang: String? = null,
         override val isNsfw: Boolean = false,
+        /** Phase 7: app icon (loaded from the package manager). */
+        val icon: Drawable? = null,
     ) : AnimeExtension()
 }

@@ -112,7 +112,7 @@ class DetailViewModel(
         private const val VIDEO_CACHE_TTL_MS = 10 * 60 * 1000L  // 10 minutes
         private val episodeCache = mutableMapOf<Int, Pair<List<SEpisode>, String>>()
         /** Phase 7: short-TTL video cache. Keyed by episode.url. */
-        private data class CachedVideoData(val audioSections: List<AudioSection>, val timestamp: Long)
+        private data class CachedVideoData(val serverSections: List<ServerSection>, val timestamp: Long)
         private val videoCache = mutableMapOf<String, CachedVideoData>()
     }
 
@@ -315,9 +315,9 @@ class DetailViewModel(
         val cached = videoCache[episode.url]
         val now = System.currentTimeMillis()
         if (cached != null && now - cached.timestamp < VIDEO_CACHE_TTL_MS) {
-            Log.d(TAG, "Video cache hit (age=${(now - cached.timestamp) / 1000}s): ${cached.audioSections.size} audio sections")
+            Log.d(TAG, "Video cache hit (age=${(now - cached.timestamp) / 1000}s): ${cached.serverSections.size} server sections")
             // Show picker instantly with cached data + refreshing badge
-            _videoPicker.value = VideoPickerState.Cached(episode, cached.audioSections, isRefreshing = true)
+            _videoPicker.value = VideoPickerState.Cached(episode, cached.serverSections, isRefreshing = true)
             // Background re-resolve for smooth update
             backgroundResolveVideos(episode, source)
             return
@@ -332,8 +332,8 @@ class DetailViewModel(
                 if (audioSections.isEmpty()) {
                     _videoPicker.value = VideoPickerState.Hidden
                     _playRequest.value = PlayRequest.Error("No playable video found for this episode")
-                } else if (audioSections.flatMap { it.servers }.flatMap { it.videos }.size == 1) {
-                    val v = audioSections.first().servers.first().videos.first()
+                } else if (audioSections.flatMap { it.audioSections }.flatMap { it.videos }.size == 1) {
+                    val v = audioSections.first().audioSections.first().videos.first()
                     _videoPicker.value = VideoPickerState.Hidden
                     _playRequest.value = PlayRequest.Play(
                         url = v.videoUrl,
@@ -344,8 +344,8 @@ class DetailViewModel(
                         videoHeaders = buildHeaders(v),
                     )
                 } else {
-                    val allVideos = audioSections.flatMap { it.servers }.flatMap { it.videos }
-                    Log.d(TAG, "${allVideos.size} videos in ${audioSections.size} audio section(s) — showing picker")
+                    val allVideos = audioSections.flatMap { it.audioSections }.flatMap { it.videos }
+                    Log.d(TAG, "${allVideos.size} videos in ${audioSections.size} server section(s) — showing picker")
                     // Cache the result
                     videoCache[episode.url] = CachedVideoData(audioSections, now)
                     _videoPicker.value = VideoPickerState.Show(episode, audioSections)
@@ -374,13 +374,13 @@ class DetailViewModel(
                 // the UI won't visibly change. If different, new qualities/servers
                 // appear in their sorted positions.
                 _videoPicker.value = VideoPickerState.Show(episode, newSections)
-                Log.d(TAG, "Background re-resolve complete: ${newSections.size} audio sections")
+                Log.d(TAG, "Background re-resolve complete: ${newSections.size} server sections")
             } catch (e: Exception) {
                 Log.w(TAG, "Background re-resolve failed (keeping cached data)", e)
                 // Keep showing the cached data — just remove the refreshing badge
                 val cached = videoCache[episode.url]
                 if (cached != null) {
-                    _videoPicker.value = VideoPickerState.Show(episode, cached.audioSections)
+                    _videoPicker.value = VideoPickerState.Show(episode, cached.serverSections)
                 }
             }
         }
@@ -402,7 +402,7 @@ class DetailViewModel(
             val flat = withContext(Dispatchers.IO) { source.getVideoList(episode) }
             flat.filter { it.videoUrl.isNotBlank() }
         }
-        return groupVideosByAudio(allVideos)
+        return groupVideosByServer(allVideos)
     }
 
     /** User picked a specific video from the quality picker → launch the player. */
@@ -636,12 +636,9 @@ sealed class PlayRequest {
  */
 sealed class VideoPickerState {
     data object Hidden : VideoPickerState()
-    /** First-time resolve (no cache) — shows the "Resolving video…" overlay. */
     data class Resolving(val episode: SEpisode) : VideoPickerState()
-    /** Cache hit — shows the picker instantly with a "Refreshing…" badge. */
-    data class Cached(val episode: SEpisode, val audioSections: List<AudioSection>, val isRefreshing: Boolean) : VideoPickerState()
-    /** Fresh resolve complete — shows the picker. */
-    data class Show(val episode: SEpisode, val audioSections: List<AudioSection>) : VideoPickerState()
+    data class Cached(val episode: SEpisode, val serverSections: List<ServerSection>, val isRefreshing: Boolean) : VideoPickerState()
+    data class Show(val episode: SEpisode, val serverSections: List<ServerSection>) : VideoPickerState()
 }
 
 /**

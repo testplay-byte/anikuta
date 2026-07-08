@@ -192,6 +192,7 @@ class AnimeExtensionLoader(
                     signatureHash = signatures.lastOrNull() ?: "unknown",
                     lang = extension.lang,
                     isNsfw = extension.isNsfw,
+                    icon = extension.icon,
                 )
             )
         }

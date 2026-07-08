@@ -73,39 +73,51 @@ fun ExtensionDetailsScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Header card
+            // Header card — centered icon, name, pkg, version/lang
             item {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
+                        // Centered icon
                         ExtensionIconSlot(drawable = extension?.icon, iconUrl = null, contentDescription = extension?.name ?: "")
-                        Spacer(Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = extension?.name ?: untrustedExt?.name ?: "Unknown",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(12.dp))
+                        // App name
+                        Text(
+                            text = extension?.name ?: untrustedExt?.name ?: "Unknown",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        // Package identifier
+                        Text(
+                            text = pkgName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        // Version + language
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text(
                                 text = "v${extension?.versionName ?: untrustedExt?.versionName ?: "?"}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = pkgName,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             val lang = extension?.lang ?: untrustedExt?.lang
                             if (!lang.isNullOrBlank()) {
                                 Text(
-                                    text = "Language: ${langLabel(lang)}",
+                                    text = "· ${langLabel(lang)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -115,7 +127,7 @@ fun ExtensionDetailsScreen(
                 }
             }
 
-            // Actions
+            // Actions — single line, text doesn't wrap
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -125,21 +137,28 @@ fun ExtensionDetailsScreen(
                         OutlinedButton(
                             onClick = { viewModel.revokeTrust(extension) },
                             modifier = Modifier.weight(1f),
-                        ) { Text("Remove from Sources") }
+                            content = {
+                                Text("Remove from Sources", maxLines = 1, softWrap = false)
+                            },
+                        )
                     } else if (untrustedExt != null) {
                         Button(
                             onClick = { viewModel.trustExtension(untrustedExt) },
                             modifier = Modifier.weight(1f),
-                        ) { Text("Add to Sources") }
+                            content = {
+                                Text("Add to Sources", maxLines = 1, softWrap = false)
+                            },
+                        )
                     }
                     OutlinedButton(
                         onClick = { viewModel.uninstallExtension(pkgName) },
                         modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Uninstall")
-                    }
+                        content = {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Uninstall", maxLines = 1, softWrap = false)
+                        },
+                    )
                 }
             }
 

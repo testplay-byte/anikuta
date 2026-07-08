@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.HorizontalDivider
@@ -53,124 +55,118 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
     val audioFallback by viewModel.audioFallback.collectAsState()
 
     SettingsSubpageScaffold(title = "Downloads", onBack = onBack) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+        // Use a scrollable Column (NOT LazyColumn) so the inner ReorderableLazyColumn
+        // doesn't get infinite-height constraints. Nested LazyColumns crash; a
+        // scrollable Column wrapping a LazyColumn is fine because the Column
+        // provides bounded height.
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // ---- Quality priority (drag-and-drop) ----
-            item(key = "quality_section") {
-                SettingsGroupCard(title = "Preferred quality (drag to reorder)") {
-                    if (qualityOrder.isEmpty()) {
-                        Text(
-                            "No qualities set. Default: 1080p → 720p → 360p",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp),
-                        )
-                    } else {
-                        ReorderableStringList(
-                            items = qualityOrder,
-                            onReorder = { from, to -> viewModel.reorderQuality(from, to) },
-                        )
-                    }
+            SettingsGroupCard(title = "Preferred quality (drag to reorder)") {
+                if (qualityOrder.isEmpty()) {
+                    Text(
+                        "No qualities set. Default: 1080p → 720p → 360p",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                } else {
+                    ReorderableStringList(
+                        items = qualityOrder,
+                        onReorder = { from, to -> viewModel.reorderQuality(from, to) },
+                    )
                 }
             }
 
             // ---- Audio priority (drag-and-drop) ----
-            item(key = "audio_section") {
-                SettingsGroupCard(title = "Preferred audio (drag to reorder)") {
-                    if (audioOrder.isEmpty()) {
-                        Text(
-                            "No audio versions set. Default: Sub → Dub",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp),
-                        )
-                    } else {
-                        ReorderableStringList(
-                            items = audioOrder,
-                            onReorder = { from, to -> viewModel.reorderAudio(from, to) },
-                        )
-                    }
+            SettingsGroupCard(title = "Preferred audio (drag to reorder)") {
+                if (audioOrder.isEmpty()) {
+                    Text(
+                        "No audio versions set. Default: Sub → Dub",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                } else {
+                    ReorderableStringList(
+                        items = audioOrder,
+                        onReorder = { from, to -> viewModel.reorderAudio(from, to) },
+                    )
                 }
             }
 
             // ---- Quality vs Audio priority ----
-            item(key = "priority_toggle") {
-                SettingsGroupCard(title = "Priority mode") {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        PriorityRadioButton(
-                            label = "Quality first",
-                            subtitle = "Match quality, then audio version",
-                            selected = priorityMode == PriorityMode.QUALITY_FIRST,
-                            onClick = { viewModel.setPriorityMode(PriorityMode.QUALITY_FIRST) },
-                        )
-                        PriorityRadioButton(
-                            label = "Audio first",
-                            subtitle = "Match audio version, then quality",
-                            selected = priorityMode == PriorityMode.AUDIO_FIRST,
-                            onClick = { viewModel.setPriorityMode(PriorityMode.AUDIO_FIRST) },
-                        )
-                    }
+            SettingsGroupCard(title = "Priority mode") {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    PriorityRadioButton(
+                        label = "Quality first",
+                        subtitle = "Match quality, then audio version",
+                        selected = priorityMode == PriorityMode.QUALITY_FIRST,
+                        onClick = { viewModel.setPriorityMode(PriorityMode.QUALITY_FIRST) },
+                    )
+                    PriorityRadioButton(
+                        label = "Audio first",
+                        subtitle = "Match audio version, then quality",
+                        selected = priorityMode == PriorityMode.AUDIO_FIRST,
+                        onClick = { viewModel.setPriorityMode(PriorityMode.AUDIO_FIRST) },
+                    )
                 }
             }
 
             // ---- Audio fallback mode ----
-            item(key = "audio_fallback") {
-                SettingsGroupCard(title = "Audio not available") {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        PriorityRadioButton(
-                            label = "Download next available audio",
-                            subtitle = "Fall back to the next audio version in your priority list",
-                            selected = audioFallback == AudioFallback.NEXT,
-                            onClick = { viewModel.setAudioFallback(AudioFallback.NEXT) },
-                        )
-                        PriorityRadioButton(
-                            label = "Show error (don't download)",
-                            subtitle = "Skip this episode if the preferred audio isn't available",
-                            selected = audioFallback == AudioFallback.FAIL,
-                            onClick = { viewModel.setAudioFallback(AudioFallback.FAIL) },
-                        )
-                    }
+            SettingsGroupCard(title = "Audio not available") {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    PriorityRadioButton(
+                        label = "Download next available audio",
+                        subtitle = "Fall back to the next audio version in your priority list",
+                        selected = audioFallback == AudioFallback.NEXT,
+                        onClick = { viewModel.setAudioFallback(AudioFallback.NEXT) },
+                    )
+                    PriorityRadioButton(
+                        label = "Show error (don't download)",
+                        subtitle = "Skip this episode if the preferred audio isn't available",
+                        selected = audioFallback == AudioFallback.FAIL,
+                        onClick = { viewModel.setAudioFallback(AudioFallback.FAIL) },
+                    )
                 }
             }
 
             // ---- Server priority (drag-and-drop) ----
-            item(key = "server_section") {
-                SettingsGroupCard(title = "Preferred servers (drag to reorder)") {
-                    if (serverOrder.isEmpty()) {
-                        Text(
-                            "No server priority set. Auto-picks the first available server.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp),
-                        )
-                    } else {
-                        ReorderableStringList(
-                            items = serverOrder,
-                            onReorder = { from, to -> viewModel.reorderServer(from, to) },
-                        )
-                    }
+            SettingsGroupCard(title = "Preferred servers (drag to reorder)") {
+                if (serverOrder.isEmpty()) {
+                    Text(
+                        "No server priority set. Auto-picks the first available server.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                } else {
+                    ReorderableStringList(
+                        items = serverOrder,
+                        onReorder = { from, to -> viewModel.reorderServer(from, to) },
+                    )
                 }
             }
 
             // ---- Toggles ----
-            item(key = "toggles") {
-                SettingsGroupCard(title = "General") {
-                    Column {
-                        ToggleRow(
-                            label = "Download over WiFi only",
-                            checked = viewModel.downloadOverWifiOnly(),
-                            onCheckedChange = { viewModel.setDownloadOverWifiOnly(it) },
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        ToggleRow(
-                            label = "Delete after watching",
-                            checked = viewModel.deleteAfterWatching(),
-                            onCheckedChange = { viewModel.setDeleteAfterWatching(it) },
-                        )
-                    }
+            SettingsGroupCard(title = "General") {
+                Column {
+                    ToggleRow(
+                        label = "Download over WiFi only",
+                        checked = viewModel.downloadOverWifiOnly(),
+                        onCheckedChange = { viewModel.setDownloadOverWifiOnly(it) },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    ToggleRow(
+                        label = "Delete after watching",
+                        checked = viewModel.deleteAfterWatching(),
+                        onCheckedChange = { viewModel.setDeleteAfterWatching(it) },
+                    )
                 }
             }
         }
@@ -179,12 +175,17 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
 
 /**
  * A drag-and-drop reorderable list of strings. Uses [sh.calvin.reorderable].
+ *
+ * Uses a LazyColumn with a calculated height (items × rowHeight) because a
+ * LazyColumn inside a verticalScroll Column needs bounded height constraints.
+ * The items are few (3-5), so the height is small.
  */
 @Composable
 private fun ReorderableStringList(
     items: List<String>,
     onReorder: (from: Int, to: Int) -> Unit,
 ) {
+    val rowHeight = 48.dp
     val lazyListState = rememberLazyListState()
     val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
         onReorder(from.index, to.index)
@@ -192,10 +193,12 @@ private fun ReorderableStringList(
 
     LazyColumn(
         state = lazyListState,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(rowHeight * items.size),
     ) {
         items(items, key = { it }) { item ->
-            ReorderableItem(reorderableState, item) {
+            ReorderableItem(reorderableState, key = item) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

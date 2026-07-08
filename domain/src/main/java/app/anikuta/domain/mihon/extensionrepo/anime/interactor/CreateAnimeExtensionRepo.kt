@@ -15,13 +15,42 @@ class CreateAnimeExtensionRepo(
     private val repoRegex = """^https://.*/index\.min\.json$""".toRegex()
 
     suspend fun await(indexUrl: String): Result {
-        val formattedIndexUrl = indexUrl.toHttpUrlOrNull()
+        // Normalize: accept URLs with or without /index.min.json suffix.
+        // If the user pasted just the base URL, append /index.min.json.
+        val normalizedUrl = indexUrl.trim().let { url ->
+            if (url.endsWith("/index.min.json")) url
+            else if (url.endsWith("/")) url + "index.min.json"
+            else "$url/index.min.json"
+        }
+
+        val formattedIndexUrl = normalizedUrl.toHttpUrlOrNull()
             ?.toString()
             ?.takeIf { it.matches(repoRegex) }
             ?: return Result.InvalidUrl
 
         val baseUrl = formattedIndexUrl.removeSuffix("/index.min.json")
-        return service.fetchRepoDetails(baseUrl)?.let { insert(it) } ?: Result.InvalidUrl
+
+        // Try to fetch /repo.json for the repo metadata (name, signing fingerprint).
+        // If it doesn't exist (404) or fails, still insert the repo with a
+        // default name derived from the hostname. ANI-KUTA's trust model is
+        // per-package, so we don't strictly need the signing fingerprint.
+        val repo = service.fetchRepoDetails(baseUrl)
+        return if (repo != null) {
+            insert(repo)
+        } else {
+            logcat(LogPriority.WARN) { "repo.json not found at $baseUrl — inserting with default name" }
+            val defaultName = baseUrl.toHttpUrlOrNull()?.host?.substringAfter(".")?.substringBefore(".")?.replaceFirstChar { it.uppercase() }
+                ?: "Extension Repo"
+            insert(
+                ExtensionRepo(
+                    baseUrl = baseUrl,
+                    name = defaultName,
+                    shortName = null,
+                    website = baseUrl,
+                    signingKeyFingerprint = "NOFINGERPRINT",
+                ),
+            )
+        }
     }
 
     private suspend fun insert(repo: ExtensionRepo): Result {

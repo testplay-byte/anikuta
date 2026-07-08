@@ -88,51 +88,59 @@ object VideoTitleParser {
 }
 
 /**
- * Groups a flat list of videos into audio-version sections, each containing
- * server sections (collapsible), each containing videos sorted by quality
- * descending (1080p top, 360p bottom).
+ * Groups a flat list of videos into **server** sections (top level), each
+ * containing **audio** sections (expandable), each containing videos sorted
+ * by quality descending (1080p top, 360p bottom).
  *
- * This is the data structure the picker UI renders.
+ * Hierarchy (per user's Phase 7 feedback):
+ *   ServerSection (top-level header, collapsible)
+ *     └─ AudioSubSection (expandable within server)
+ *          └─ Video (quality desc, resolution chip on the right)
  */
-data class AudioSection(
-    val audio: AudioVersion,
-    val servers: List<ServerSection>,
-)
-
 data class ServerSection(
     val serverName: String,
+    val audioSections: List<AudioSubSection>,
+)
+
+data class AudioSubSection(
+    val audio: AudioVersion,
     val videos: List<Video>,  // sorted by quality descending
 )
 
 /**
- * Build [AudioSection] list from a flat list of videos.
+ * Build [ServerSection] list from a flat list of videos.
  *
- * Parsing + grouping happens here so the UI can be pure presentation.
- * Videos with unknown audio go into the ANY section. Videos with unknown
- * quality sort to the bottom of their server section.
+ * Groups by server (top level), then by audio within each server, then sorts
+ * by quality descending within each audio section.
  */
-fun groupVideosByAudio(videos: List<Video>): List<AudioSection> {
+fun groupVideosByServer(videos: List<Video>): List<ServerSection> {
     val parsed = videos.map { VideoTitleParser.parse(it) }
 
-    // Group by audio version, then by server within each audio
-    val byAudio = parsed.groupBy { it.audio }
+    // Group by server, then by audio within each server
+    val byServer = parsed.groupBy { it.server }
 
-    return byAudio.entries
-        .sortedBy { audioOrder.indexOf(it.key) }
-        .map { (audio, parsedVideos) ->
-            val byServer = parsedVideos.groupBy { it.server }
-            val servers = byServer.entries
-                .sortedBy { it.key }
-                .map { (serverName, vids) ->
-                    ServerSection(
-                        serverName = serverName,
+    return byServer.entries
+        .sortedBy { it.key }
+        .map { (serverName, parsedVideos) ->
+            val byAudio = parsedVideos.groupBy { it.audio }
+            val audioSections = byAudio.entries
+                .sortedBy { audioOrder.indexOf(it.key) }
+                .map { (audio, vids) ->
+                    AudioSubSection(
+                        audio = audio,
                         videos = vids.sortedByDescending { it.quality ?: 0 }
                             .map { it.video },
                     )
                 }
-            AudioSection(audio = audio, servers = servers)
+            ServerSection(serverName = serverName, audioSections = audioSections)
         }
 }
+
+// Keep the old AudioSection grouping for backward compatibility (unused now).
+data class AudioSection(
+    val audio: AudioVersion,
+    val servers: List<ServerSection>,
+)
 
 /** Display order for audio versions in the picker. */
 private val audioOrder = listOf(AudioVersion.SUB, AudioVersion.DUB, AudioVersion.HSUB, AudioVersion.ANY)

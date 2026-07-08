@@ -307,7 +307,7 @@ private fun UntrustedExtensionRow(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ExtensionIconSlot(drawable = null, iconUrl = null, contentDescription = ext.name)
+        ExtensionIconSlot(drawable = ext.icon, iconUrl = null, contentDescription = ext.name)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -320,16 +320,14 @@ private fun UntrustedExtensionRow(
             ExtensionMetaRow(ext.versionName, 0, ext.lang)
         }
         Spacer(Modifier.width(8.dp))
-        OutlinedButton(onClick = onTrust) {
+        // Compact Trust button (IconButton with shield icon)
+        IconButton(onClick = onTrust) {
             Icon(
                 imageVector = Icons.Default.VerifiedUser,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
+                contentDescription = "Trust ${ext.name}",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.width(4.dp))
-            Text("Trust")
         }
-        Spacer(Modifier.width(4.dp))
         IconButton(onClick = onDelete) {
             Icon(
                 imageVector = Icons.Default.Delete,

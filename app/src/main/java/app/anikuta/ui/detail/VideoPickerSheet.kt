@@ -1,5 +1,8 @@
 package app.anikuta.ui.detail
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +33,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -39,16 +46,15 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import app.anikuta.source.api.model.SEpisode
 
 /**
- * Phase 7 — Redesigned video picker bottom sheet.
+ * Phase 7 (revised) — Video picker with Server → Audio → Quality hierarchy.
  *
- * Key improvements over the old picker:
- *  1. **Scrollable** — uses `LazyColumn` (fixes the "can't scroll to bottom" bug).
- *  2. **Collapsible servers** — tap a server header to expand/collapse its videos.
- *  3. **Audio-version grouping** — dedicated sections for SUB / DUB / HSUB.
- *  4. **Quality descending sort** — 1080p at top, 360p at bottom within each server.
- *  5. **Cached state** — shows instantly with a "Refreshing…" badge on cache hit.
+ * Per user feedback:
+ *  - **Servers** are the top-level sections (collapsible).
+ *  - Inside each server, **audio versions** (SUB/DUB/HSUB) are expandable sub-sections.
+ *  - Inside each audio, **qualities** are listed with the resolution chip on the RIGHT.
+ *  - No blue colors — uses surfaceVariant/onSurfaceVariant for audio chips.
  *
- * Data structure: [AudioSection] → [ServerSection] (collapsible) → [Video] (sorted desc).
+ * Uses LazyColumn so the list scrolls when long (fixes the original scroll bug).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,7 +67,6 @@ fun VideoPickerSheet(
 ) {
     when (state) {
         is VideoPickerState.Resolving -> {
-            // Full-screen resolving overlay (no bottom sheet yet)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -89,7 +94,7 @@ fun VideoPickerSheet(
         is VideoPickerState.Cached -> {
             VideoPickerBottomSheet(
                 episode = state.episode,
-                audioSections = state.audioSections,
+                serverSections = state.serverSections,
                 isRefreshing = state.isRefreshing,
                 expandedServers = expandedServers,
                 onToggleServer = onToggleServer,
@@ -100,7 +105,7 @@ fun VideoPickerSheet(
         is VideoPickerState.Show -> {
             VideoPickerBottomSheet(
                 episode = state.episode,
-                audioSections = state.audioSections,
+                serverSections = state.serverSections,
                 isRefreshing = false,
                 expandedServers = expandedServers,
                 onToggleServer = onToggleServer,
@@ -108,7 +113,7 @@ fun VideoPickerSheet(
                 onDismiss = onDismiss,
             )
         }
-        VideoPickerState.Hidden -> { /* nothing to show */ }
+        VideoPickerState.Hidden -> { /* nothing */ }
     }
 }
 
@@ -116,7 +121,7 @@ fun VideoPickerSheet(
 @Composable
 private fun VideoPickerBottomSheet(
     episode: SEpisode,
-    audioSections: List<AudioSection>,
+    serverSections: List<ServerSection>,
     isRefreshing: Boolean,
     expandedServers: Set<String>,
     onToggleServer: (String) -> Unit,
@@ -130,7 +135,7 @@ private fun VideoPickerBottomSheet(
         sheetState = sheetState,
     ) {
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
-            // Header row: title + refreshing badge
+            // Header: title + refreshing badge
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -159,39 +164,43 @@ private fun VideoPickerBottomSheet(
                 }
             }
 
-            // Scrollable list — LazyColumn fixes the "can't scroll to bottom" bug
+            // Scrollable list
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(480.dp),
+                    .height(520.dp),
             ) {
-                audioSections.forEach { section ->
-                    // Audio version header (SUB / DUB / HSUB)
-                    item(key = "audio_${section.audio.name}") {
-                        AudioHeader(section.audio, section.servers.size)
-                    }
-                    // Server sections within this audio version
-                    section.servers.forEach { serverSection ->
-                        val expandKey = "${section.audio.name}_${serverSection.serverName}"
-                        val isExpanded = expandKey !in expandedServers  // default expanded
+                serverSections.forEach { section ->
+                    val isExpanded = section.serverName !in expandedServers  // default expanded
 
-                        item(key = "server_$expandKey") {
-                            ServerHeader(
-                                serverName = serverSection.serverName,
-                                videoCount = serverSection.videos.size,
-                                isExpanded = isExpanded,
-                                onClick = { onToggleServer(expandKey) },
-                            )
-                        }
-                        // Videos (quality sorted descending) — only show when expanded
-                        if (isExpanded) {
-                            items(serverSection.videos, key = { v -> v.videoUrl + v.videoTitle }) { video ->
+                    // Server header (top-level, collapsible)
+                    item(key = "server_${section.serverName}") {
+                        ServerHeader(
+                            serverName = section.serverName,
+                            audioCount = section.audioSections.size,
+                            isExpanded = isExpanded,
+                            onClick = { onToggleServer(section.serverName) },
+                        )
+                    }
+
+                    // Audio sections + videos (only when server is expanded)
+                    if (isExpanded) {
+                        section.audioSections.forEach { audioSection ->
+                            // Audio sub-header (expandable)
+                            item(key = "audio_${section.serverName}_${audioSection.audio.name}") {
+                                AudioSubHeader(
+                                    audio = audioSection.audio,
+                                    videoCount = audioSection.videos.size,
+                                )
+                            }
+                            // Video rows (quality chip on the RIGHT)
+                            items(audioSection.videos, key = { v -> v.videoUrl + v.videoTitle }) { video ->
                                 VideoRow(
                                     video = video,
                                     onClick = { onPickVideo(video) },
                                 )
                                 HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                                 )
                             }
                         }
@@ -202,104 +211,133 @@ private fun VideoPickerBottomSheet(
     }
 }
 
+/**
+ * Server header — top-level collapsible section. Shows the server name +
+ * number of audio versions. Tap to expand/collapse.
+ */
 @Composable
-private fun AudioHeader(audio: AudioVersion, serverCount: Int) {
+private fun ServerHeader(
+    serverName: String,
+    audioCount: Int,
+    isExpanded: Boolean,
+    onClick: () -> Unit,
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = audio.label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "$serverCount server${if (serverCount != 1) "s" else ""}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                text = serverName,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
             )
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            ) {
+                Text(
+                    text = "$audioCount audio",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
         }
     }
 }
 
+/**
+ * Audio sub-header — shows the audio version (SUB/DUB/HSUB) + video count.
+ * Uses surfaceVariant (NOT blue/primary) per user's request.
+ */
 @Composable
-private fun ServerHeader(
-    serverName: String,
+private fun AudioSubHeader(
+    audio: AudioVersion,
     videoCount: Int,
-    isExpanded: Boolean,
-    onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 40.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-            contentDescription = if (isExpanded) "Collapse" else "Expand",
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+        ) {
+            Text(
+                text = audio.label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        }
         Spacer(Modifier.width(8.dp))
         Text(
-            text = serverName,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = "$videoCount",
+            text = "$videoCount quality${if (videoCount != 1) "s" else ""}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
+/**
+ * Video row — shows the video title on the left, quality chip on the RIGHT.
+ */
 @Composable
 private fun VideoRow(
     video: Video,
     onClick: () -> Unit,
 ) {
     val parsed = VideoTitleParser.parse(video)
+    val qualityLabel = parsed.quality?.let { "${it}p" } ?: "Unknown"
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 48.dp, vertical = 12.dp),
+            .padding(horizontal = 56.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Quality chip (e.g. "1080p")
-        val qualityLabel = parsed.quality?.let { "${it}p" } ?: "Unknown"
+        Text(
+            text = qualityLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+        )
+        // Quality chip on the RIGHT side (per user's request)
         Surface(
             shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer,
+            color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Text(
                 text = qualityLabel,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
             )
         }
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = video.videoTitle.ifBlank { qualityLabel },
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-        )
+        Spacer(Modifier.width(8.dp))
         Icon(
             imageVector = Icons.Default.PlayArrow,
             contentDescription = "Play",

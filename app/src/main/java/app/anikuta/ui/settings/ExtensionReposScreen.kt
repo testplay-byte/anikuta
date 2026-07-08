@@ -186,6 +186,8 @@ fun ExtensionReposScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add repository")
             }

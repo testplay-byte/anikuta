@@ -1,12 +1,13 @@
 package app.anikuta.ui.settings
 
 import android.os.Bundle
-import android.view.View
-import android.widget.FrameLayout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.FragmentActivity
 import androidx.preference.PreferenceFragmentCompat
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
@@ -21,8 +22,12 @@ import uy.kohesive.injekt.api.get
  * Hosts a [PreferenceFragmentCompat] inside a Compose [AndroidView]. The
  * fragment calls [ConfigurableAnimeSource.setupPreferenceScreen] to let the
  * extension build its own settings UI. Values persist to the source's
- * `"source_$id"` SharedPreferences and are read by the extension on-demand
- * during network work, so they apply throughout automatically.
+ * `"source_$id"` SharedPreferences and are read by the extension on-demand.
+ *
+ * CRITICAL: the fragment container must use a STABLE resource ID (not
+ * View.generateViewId()) and the fragment transaction must run in the
+ * `update` block (not `factory`) so the container is already attached to
+ * the view hierarchy when FragmentManager looks for it.
  *
  * Source: REFERENCE/app/.../ui/browse/anime/extension/details/AnimeSourcePreferencesScreen.kt
  */
@@ -35,13 +40,24 @@ fun SourcePreferencesScreen(
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
-                FrameLayout(ctx).apply {
-                    id = View.generateViewId()
+                FragmentContainerView(ctx).apply {
+                    // Must use a stable resource ID, not View.generateViewId().
+                    id = R.id.source_preferences_container
+                }
+            },
+            update = { container ->
+                val activity = container.context as? FragmentActivity ?: return@AndroidView
+                val fm = activity.supportFragmentManager
+                // Guard: only add the fragment once per sourceId. If the fragment
+                // is already there (same tag), don't re-add — this avoids
+                // "Fragment already added" exceptions on recomposition.
+                val tag = "source_prefs_$sourceId"
+                val existing = fm.findFragmentByTag(tag)
+                if (existing == null) {
                     val fragment = SourcePreferencesFragment.newInstance(sourceId)
-                    (ctx as? FragmentActivity)?.supportFragmentManager
-                        ?.beginTransaction()
-                        ?.replace(id, fragment, "source_prefs_$sourceId")
-                        ?.commitNowAllowingStateLoss()
+                    fm.beginTransaction()
+                        .replace(R.id.source_preferences_container, fragment, tag)
+                        .commitAllowingStateLoss()
                 }
             },
         )
@@ -50,9 +66,6 @@ fun SourcePreferencesScreen(
 
 /**
  * The PreferenceFragmentCompat that hosts the extension's preference screen.
- * Created with a sourceId argument. Looks up the source from
- * [AnimeSourceManager], and if it's a [ConfigurableAnimeSource], calls
- * [ConfigurableAnimeSource.setupPreferenceScreen] to build the UI.
  */
 class SourcePreferencesFragment : PreferenceFragmentCompat() {
 
@@ -62,7 +75,6 @@ class SourcePreferencesFragment : PreferenceFragmentCompat() {
         val source = sourceManager.getOrStub(sourceId)
 
         if (source is ConfigurableAnimeSource) {
-            // Wire the source's SharedPreferences as the backing store.
             preferenceManager.preferenceDataStore =
                 SourcePreferenceDataStore(source.sourcePreferences())
             source.setupPreferenceScreen(preferenceManager.createPreferenceScreen(requireContext()))
