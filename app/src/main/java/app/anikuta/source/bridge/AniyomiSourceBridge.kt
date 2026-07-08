@@ -11,6 +11,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * Bridges AniList (discovery) ↔ extension sources (streaming).
@@ -65,9 +67,9 @@ class AniyomiSourceBridge(
             // Load source priority order (if set). Sources earlier in the
             // priority list are preferred when scores are tied.
             val priorityOrder: List<String> = try {
-                val prefs = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.service.SourcePreferences>()
+                val prefs = Injekt.get<app.anikuta.domain.source.service.SourcePreferences>()
                 val json = prefs.sourcePriorityOrder().get()
-                kotlinx.serialization.json.Json.decodeFromString(json)
+                kotlinx.serialization.json.Json.decodeFromString<List<String>>(json)
             } catch (e: Exception) { emptyList() }
 
             // Build a source→priorityIndex map for sorting

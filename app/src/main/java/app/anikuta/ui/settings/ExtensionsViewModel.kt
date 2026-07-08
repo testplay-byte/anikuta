@@ -216,7 +216,7 @@ class ExtensionsViewModel : ViewModel() {
             val prefs = Injekt.get<app.anikuta.domain.source.service.SourcePreferences>()
             val json = prefs.sourcePriorityOrder().get()
             _sourcePriority.value = try {
-                kotlinx.serialization.json.Json.decodeFromString(json)
+                kotlinx.serialization.json.Json.decodeFromString<List<String>>(json)
             } catch (e: Exception) { emptyList() }
         } catch (e: Exception) {
             Log.w(TAG, "Could not load source priority", e)
