@@ -69,6 +69,14 @@ class DetailViewModel(
     private val _resolvingEpisode = MutableStateFlow(false)
     val resolvingEpisode: StateFlow<Boolean> = _resolvingEpisode.asStateFlow()
 
+    /** Current pull-to-refresh stage (for the 3-stage indicator). */
+    private val _refreshStage = MutableStateFlow<RefreshStage>(RefreshStage.Idle)
+    val refreshStage: StateFlow<RefreshStage> = _refreshStage.asStateFlow()
+
+    /** True while any refresh is in progress. */
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     /** Videos available for the current episode — shown in the quality picker. */
     private val _videoPicker = MutableStateFlow<VideoPickerState>(VideoPickerState.Hidden)
     val videoPicker: StateFlow<VideoPickerState> = _videoPicker.asStateFlow()
@@ -83,9 +91,14 @@ class DetailViewModel(
      * that re-opening the detail page re-fetched the entire episode list,
      * which was slow + wasted network. Now we cache it in a companion object
      * (survives ViewModel destruction when navigating away + back).
+     *
+     * Phase 7: on cache hit, we now ALSO launch a background soft-refresh
+     * to check for new episodes. The cached list is shown instantly; if the
+     * background refresh finds changes, the UI updates smoothly.
      */
     companion object {
         private const val TAG = "DetailViewModel"
+        private const val REFRESH_GUARD_MS = 5 * 60 * 1000L  // 5 minutes
         private val episodeCache = mutableMapOf<Int, Pair<List<SEpisode>, String>>()
     }
 
@@ -129,12 +142,17 @@ class DetailViewModel(
      * Search installed extensions for a matching source via the bridge.
      * On match, fetch the episode list. On no-match / not-aired, set the
      * appropriate state so the UI shows the right message.
+     *
+     * Phase 7: on in-memory cache hit, we now ALSO launch a background
+     * soft-refresh to check for new episodes.
      */
     private fun findEpisodeSource(anime: AniListAnime) {
         // Check in-memory cache first (survives navigation, not app restart)
         episodeCache[anilistId]?.let { (eps, sourceName) ->
             Log.d(TAG, "Episode cache hit (in-memory): ${eps.size} episodes from $sourceName")
             _episodes.value = EpisodeState.Loaded(eps, sourceName)
+            // Phase 7: launch background soft-refresh (guarded by 5-min TTL)
+            backgroundRefreshEpisodes(anime, sourceName)
             return
         }
         val bridge = sourceBridge ?: run {
@@ -410,8 +428,121 @@ class DetailViewModel(
         Log.d(TAG, "Save toggled: $nowSaved (anilistId=$anilistId)")
     }
 
-    fun refresh() {
-        loadAnimeDetails()
+    /**
+     * Phase 7: Background soft-refresh of the episode list.
+     * Guarded by [REFRESH_GUARD_MS] (5 min) per anime to avoid hammering.
+     * If the refreshed list differs from cached, updates the UI smoothly.
+     */
+    private fun backgroundRefreshEpisodes(anime: AniListAnime, sourceName: String) {
+        val lastRefresh = preferenceStore?.getLong("ext_last_refresh_$anilistId", 0L)?.get() ?: 0L
+        val now = System.currentTimeMillis()
+        if (now - lastRefresh < REFRESH_GUARD_MS) {
+            Log.d(TAG, "Background refresh skipped (within ${REFRESH_GUARD_MS}ms guard)")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val mgr = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>()
+                val source = mgr.getCatalogueSources().find { it.name == sourceName } ?: return@launch
+                val sAnime = matchedSAnime ?: app.anikuta.source.api.model.SAnime.create().apply {
+                    url = preferenceStore?.getString("ext_sanime_url_$anilistId", "")?.get() ?: ""
+                    title = anime.title.preferred()
+                }
+                if (sAnime.url.isBlank()) return@launch
+                Log.d(TAG, "Background refresh: fetching episodes from $sourceName...")
+                val eps = withContext(Dispatchers.IO) { source.getEpisodeList(sAnime) }
+                // Update cache + UI
+                episodeCache[anilistId] = Pair(eps, sourceName)
+                matchedSource = source
+                matchedSAnime = sAnime
+                _episodes.value = EpisodeState.Loaded(eps, sourceName)
+                preferenceStore?.getLong("ext_last_refresh_$anilistId", 0L)?.set(now)
+                Log.d(TAG, "Background refresh complete: ${eps.size} episodes")
+            } catch (e: Exception) {
+                Log.w(TAG, "Background refresh failed (keeping cached data)", e)
+            }
+        }
+    }
+
+    // ---- Phase 7: 3-stage pull-to-refresh methods ----
+
+    /** Stage 1: Refresh episodes only (re-fetch from matched source). */
+    fun refreshEpisodesOnly() {
+        val anime = (_anime.value as? DetailState.Success)?.anime ?: return
+        val sourceName = (episodeCache[anilistId]?.second) ?: return
+        _isRefreshing.value = true
+        viewModelScope.launch {
+            try {
+                val mgr = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>()
+                val source = mgr.getCatalogueSources().find { it.name == sourceName }
+                val sAnime = matchedSAnime ?: return@launch
+                if (source != null) {
+                    val eps = withContext(Dispatchers.IO) { source.getEpisodeList(sAnime) }
+                    episodeCache[anilistId] = Pair(eps, sourceName)
+                    matchedSource = source
+                    _episodes.value = EpisodeState.Loaded(eps, sourceName)
+                    preferenceStore?.getLong("ext_last_refresh_$anilistId", 0L)?.set(System.currentTimeMillis())
+                    Log.d(TAG, "Refresh episodes: ${eps.size} episodes")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Refresh episodes failed", e)
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    /** Stage 2: Refresh details only (re-fetch AniList metadata, bypass cache). */
+    fun refreshDetailsOnly() {
+        _isRefreshing.value = true
+        viewModelScope.launch {
+            try {
+                val repo = anilistRepo ?: return@launch
+                val data = withContext(Dispatchers.IO) { repo.getAnimeDetails(anilistId) }
+                if (data != null) {
+                    _anime.value = DetailState.Success(data)
+                    Log.d(TAG, "Refresh details: ${data.title.preferred()}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Refresh details failed", e)
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    /** Stage 3: Refresh everything (episodes + details + source re-match). */
+    fun refreshEverything() {
+        _isRefreshing.value = true
+        // Clear caches to force full re-fetch
+        episodeCache.remove(anilistId)
+        preferenceStore?.getString("ext_match_$anilistId", "")?.set("")
+        preferenceStore?.getString("ext_sanime_url_$anilistId", "")?.set("")
+        viewModelScope.launch {
+            try {
+                val repo = anilistRepo ?: return@launch
+                val data = withContext(Dispatchers.IO) { repo.getAnimeDetails(anilistId) }
+                if (data != null) {
+                    _anime.value = DetailState.Success(data)
+                    findEpisodeSource(data)
+                    Log.d(TAG, "Refresh everything: re-fetching details + episodes")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Refresh everything failed", e)
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    /** Called by the 3-stage pull-to-refresh when the user releases. */
+    fun onRefreshStage(stage: RefreshStage) {
+        when (stage) {
+            RefreshStage.Episodes -> refreshEpisodesOnly()
+            RefreshStage.Details -> refreshDetailsOnly()
+            RefreshStage.Everything -> refreshEverything()
+            RefreshStage.Idle -> {}
+        }
     }
 }
 
@@ -469,3 +600,14 @@ data class ServerGroup(
     val serverName: String,
     val videos: List<Video>,
 )
+
+/**
+ * Phase 7 — 3-stage pull-to-refresh stages.
+ * The user pulls down with increasing distance to unlock higher stages.
+ */
+enum class RefreshStage(val label: String) {
+    Idle(""),
+    Episodes("Release to refresh episodes"),
+    Details("Release to refresh details"),
+    Everything("Release to refresh everything"),
+}

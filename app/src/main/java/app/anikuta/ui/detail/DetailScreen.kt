@@ -50,6 +50,7 @@ fun DetailScreen(
     val playRequest by viewModel.playRequest.collectAsState()
     val resolvingEpisode by viewModel.resolvingEpisode.collectAsState()
     val videoPicker by viewModel.videoPicker.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
 
@@ -98,7 +99,7 @@ fun DetailScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                TextButton(onClick = { viewModel.refresh() }) { Text("Retry") }
+                TextButton(onClick = { viewModel.refreshEverything() }) { Text("Retry") }
                 Spacer(modifier = Modifier.height(8.dp))
                 TextButton(onClick = onBack) { Text("Go back") }
             }
@@ -117,6 +118,10 @@ fun DetailScreen(
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
+            ThreeStagePullRefresh(
+                isRefreshing = isRefreshing,
+                onRefresh = { stage -> viewModel.onRefreshStage(stage) },
+            ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 24.dp),
@@ -405,6 +410,7 @@ fun DetailScreen(
                     }
                 }
             }
+            } // end ThreeStagePullRefresh
             } // end Box
         }
     }
