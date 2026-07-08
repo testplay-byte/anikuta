@@ -1,200 +1,175 @@
 package app.anikuta.ui.settings
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.HighQuality
-import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import app.anikuta.download.AudioVersion
-import app.anikuta.download.DownloadQuality
-import app.anikuta.download.DownloadStatus
+import app.anikuta.download.AudioFallback
+import app.anikuta.download.PriorityMode
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 /**
- * Phase 6 task 6.21 — Downloads settings subpage.
- * Quality + audio version + server priority + WiFi-only + delete after watch.
+ * Phase 7 — Downloads settings screen with drag-and-drop priority lists.
+ *
+ * 3 reorderable lists (quality, audio, server) + quality-vs-audio priority
+ * toggle + audio fallback radio + WiFi/delete toggles.
  */
 @Composable
 fun DownloadsSettingsScreen(onBack: () -> Unit) {
     val viewModel: DownloadsViewModel = viewModel()
-    val queue by viewModel.queue.collectAsState()
-
-    val active = queue.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }
-    val completed = queue.filter { it.status == DownloadStatus.COMPLETED }
-    val failed = queue.filter { it.status == DownloadStatus.FAILED }
+    val qualityOrder by viewModel.qualityOrder.collectAsState()
+    val audioOrder by viewModel.audioOrder.collectAsState()
+    val serverOrder by viewModel.serverOrder.collectAsState()
+    val priorityMode by viewModel.priorityMode.collectAsState()
+    val audioFallback by viewModel.audioFallback.collectAsState()
 
     SettingsSubpageScaffold(title = "Downloads", onBack = onBack) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Download preferences
-            item {
-                var quality by remember { mutableStateOf(viewModel.preferredQuality()) }
-                var audioVersion by remember { mutableStateOf(viewModel.preferredAudioVersion()) }
-                var preferredServer by remember { mutableStateOf(viewModel.preferredServer()) }
-                var wifiOnly by remember { mutableStateOf(viewModel.downloadOverWifiOnly()) }
-                var deleteAfter by remember { mutableStateOf(viewModel.deleteAfterWatching()) }
-                var qualityExpanded by remember { mutableStateOf(false) }
-                var audioExpanded by remember { mutableStateOf(false) }
-
-                SettingsGroupCard(title = "Download preferences") {
-                    // Quality dropdown
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            LeadingIcon(Icons.Default.HighQuality)
-                            Text("Preferred quality", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Box {
-                            OutlinedButton(onClick = { qualityExpanded = true }) {
-                                Text(DownloadQuality.fromValue(quality).label)
-                            }
-                            DropdownMenu(expanded = qualityExpanded, onDismissRequest = { qualityExpanded = false }) {
-                                DownloadQuality.entries.forEach { q ->
-                                    DropdownMenuItem(
-                                        text = { Text(q.label) },
-                                        onClick = { quality = q.value; viewModel.setPreferredQuality(q.value); qualityExpanded = false },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    HorizontalDivider()
-                    // Audio version dropdown
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            LeadingIcon(Icons.Default.RecordVoiceOver)
-                            Text("Preferred audio version", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Box {
-                            OutlinedButton(onClick = { audioExpanded = true }) {
-                                Text(AudioVersion.fromValue(audioVersion).label)
-                            }
-                            DropdownMenu(expanded = audioExpanded, onDismissRequest = { audioExpanded = false }) {
-                                AudioVersion.entries.forEach { a ->
-                                    DropdownMenuItem(
-                                        text = { Text(a.label) },
-                                        onClick = { audioVersion = a.value; viewModel.setPreferredAudioVersion(a.value); audioExpanded = false },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    HorizontalDivider()
-                    // Preferred server (text field)
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            LeadingIcon(Icons.Default.Storage)
-                            Text("Preferred server", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        OutlinedTextField(
-                            value = preferredServer,
-                            onValueChange = { preferredServer = it; viewModel.setPreferredServer(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            placeholder = { Text("Auto (first available)") },
+            // ---- Quality priority (drag-and-drop) ----
+            item(key = "quality_section") {
+                SettingsGroupCard(title = "Preferred quality (drag to reorder)") {
+                    if (qualityOrder.isEmpty()) {
+                        Text(
+                            "No qualities set. Default: 1080p → 720p → 360p",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    } else {
+                        ReorderableStringList(
+                            items = qualityOrder,
+                            onReorder = { from, to -> viewModel.reorderQuality(from, to) },
                         )
                     }
-                    HorizontalDivider()
-                    SwitchSettingsRow(
-                        icon = Icons.Default.Wifi,
-                        title = "Download over WiFi only",
-                        subtitle = "Save mobile data",
-                        checked = wifiOnly,
-                        onCheckedChange = { wifiOnly = it; viewModel.setDownloadOverWifiOnly(it) },
-                    )
-                    HorizontalDivider()
-                    SwitchSettingsRow(
-                        icon = Icons.Default.Delete,
-                        title = "Delete after watching",
-                        subtitle = "Auto-remove downloaded episodes",
-                        checked = deleteAfter,
-                        onCheckedChange = { deleteAfter = it; viewModel.setDeleteAfterWatching(it) },
-                    )
                 }
             }
 
-            // Active downloads
-            if (active.isNotEmpty()) {
-                item {
-                    SettingsGroupCard(title = "Downloading (${active.size})") {
-                        active.forEach { entry ->
-                            DownloadRow(
-                                title = entry.title,
-                                subtitle = "${entry.progress}%",
-                                progress = entry.progress,
-                                status = entry.status,
-                                onCancel = { viewModel.cancelDownload(entry.id) },
-                            )
-                        }
+            // ---- Audio priority (drag-and-drop) ----
+            item(key = "audio_section") {
+                SettingsGroupCard(title = "Preferred audio (drag to reorder)") {
+                    if (audioOrder.isEmpty()) {
+                        Text(
+                            "No audio versions set. Default: Sub → Dub",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    } else {
+                        ReorderableStringList(
+                            items = audioOrder,
+                            onReorder = { from, to -> viewModel.reorderAudio(from, to) },
+                        )
                     }
                 }
             }
 
-            // Completed
-            if (completed.isNotEmpty()) {
-                item {
-                    SettingsGroupCard(title = "Completed (${completed.size})") {
-                        completed.forEach { entry ->
-                            DownloadRow(
-                                title = entry.title,
-                                subtitle = "Downloaded",
-                                progress = 100,
-                                status = DownloadStatus.COMPLETED,
-                                onRemove = { viewModel.removeDownload(entry.id) },
-                            )
-                        }
-                        TextButton(onClick = { viewModel.clearCompleted() }, modifier = Modifier.padding(8.dp)) {
-                            Text("Clear all completed")
-                        }
+            // ---- Quality vs Audio priority ----
+            item(key = "priority_toggle") {
+                SettingsGroupCard(title = "Priority mode") {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        PriorityRadioButton(
+                            label = "Quality first",
+                            subtitle = "Match quality, then audio version",
+                            selected = priorityMode == PriorityMode.QUALITY_FIRST,
+                            onClick = { viewModel.setPriorityMode(PriorityMode.QUALITY_FIRST) },
+                        )
+                        PriorityRadioButton(
+                            label = "Audio first",
+                            subtitle = "Match audio version, then quality",
+                            selected = priorityMode == PriorityMode.AUDIO_FIRST,
+                            onClick = { viewModel.setPriorityMode(PriorityMode.AUDIO_FIRST) },
+                        )
                     }
                 }
             }
 
-            // Failed
-            if (failed.isNotEmpty()) {
-                item {
-                    SettingsGroupCard(title = "Failed (${failed.size})") {
-                        failed.forEach { entry ->
-                            DownloadRow(
-                                title = entry.title,
-                                subtitle = entry.error ?: "Failed",
-                                progress = entry.progress,
-                                status = DownloadStatus.FAILED,
-                                onRemove = { viewModel.removeDownload(entry.id) },
-                            )
-                        }
+            // ---- Audio fallback mode ----
+            item(key = "audio_fallback") {
+                SettingsGroupCard(title = "Audio not available") {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        PriorityRadioButton(
+                            label = "Download next available audio",
+                            subtitle = "Fall back to the next audio version in your priority list",
+                            selected = audioFallback == AudioFallback.NEXT,
+                            onClick = { viewModel.setAudioFallback(AudioFallback.NEXT) },
+                        )
+                        PriorityRadioButton(
+                            label = "Show error (don't download)",
+                            subtitle = "Skip this episode if the preferred audio isn't available",
+                            selected = audioFallback == AudioFallback.FAIL,
+                            onClick = { viewModel.setAudioFallback(AudioFallback.FAIL) },
+                        )
                     }
                 }
             }
 
-            // Empty state
-            if (queue.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(8.dp))
-                            Text("No downloads yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Long-press an episode to download", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+            // ---- Server priority (drag-and-drop) ----
+            item(key = "server_section") {
+                SettingsGroupCard(title = "Preferred servers (drag to reorder)") {
+                    if (serverOrder.isEmpty()) {
+                        Text(
+                            "No server priority set. Auto-picks the first available server.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    } else {
+                        ReorderableStringList(
+                            items = serverOrder,
+                            onReorder = { from, to -> viewModel.reorderServer(from, to) },
+                        )
+                    }
+                }
+            }
+
+            // ---- Toggles ----
+            item(key = "toggles") {
+                SettingsGroupCard(title = "General") {
+                    Column {
+                        ToggleRow(
+                            label = "Download over WiFi only",
+                            checked = viewModel.downloadOverWifiOnly(),
+                            onCheckedChange = { viewModel.setDownloadOverWifiOnly(it) },
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        ToggleRow(
+                            label = "Delete after watching",
+                            checked = viewModel.deleteAfterWatching(),
+                            onCheckedChange = { viewModel.setDeleteAfterWatching(it) },
+                        )
                     }
                 }
             }
@@ -202,31 +177,97 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
     }
 }
 
+/**
+ * A drag-and-drop reorderable list of strings. Uses [sh.calvin.reorderable].
+ */
 @Composable
-private fun DownloadRow(
-    title: String,
-    subtitle: String,
-    progress: Int,
-    status: DownloadStatus,
-    onCancel: (() -> Unit)? = null,
-    onRemove: (() -> Unit)? = null,
+private fun ReorderableStringList(
+    items: List<String>,
+    onReorder: (from: Int, to: Int) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (status == DownloadStatus.DOWNLOADING && progress >= 0) {
-            Spacer(Modifier.height(4.dp))
-            LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
-        }
-        if (onCancel != null || onRemove != null) {
-            Row(Modifier.padding(top = 4.dp)) {
-                if (onCancel != null) {
-                    TextButton(onClick = onCancel) { Text("Cancel") }
-                }
-                if (onRemove != null) {
-                    TextButton(onClick = onRemove) { Text("Remove") }
+    val lazyListState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        onReorder(from.index, to.index)
+    }
+
+    LazyColumn(
+        state = lazyListState,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        items(items, key = { it }) { item ->
+            ReorderableItem(reorderableState, item) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .draggableHandle()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DragHandle,
+                        contentDescription = "Drag to reorder",
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.size(12.dp))
+                    Text(
+                        text = item,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PriorityRadioButton(
+    label: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Spacer(Modifier.size(8.dp))
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

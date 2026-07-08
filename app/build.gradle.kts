@@ -115,6 +115,9 @@ dependencies {
     // androidx.preference (extension settings UI — PreferenceFragmentCompat)
     implementation(libs.preference.ktx)
 
+    // Reorderable LazyColumn (Phase 7 — drag-and-drop priority lists)
+    implementation(libs.reorderable)
+
     // Testing
     testImplementation(libs.junit)
 }
