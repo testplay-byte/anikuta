@@ -13,11 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,8 +25,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,9 +35,11 @@ import app.anikuta.ui.detail.EpisodeTitleParser
 /**
  * Phase 7.5 — Demo live preview of an episode row.
  *
- * Renders a sample episode row with dummy data (demo thumbnail, title,
- * synopsis, date, audio pills) using the same layout logic as the real
- * EpisodeRowRich. Updates live as the user changes settings.
+ * Renders a sample episode row with dummy data using the same layout logic
+ * as the real EpisodeRowRich. Updates live as the user changes settings.
+ *
+ * The preview is a standalone card (not wrapped in SettingsGroupCard) so
+ * it looks exactly like a real episode row on the detail page.
  */
 @Composable
 fun EpisodeRowPreview(
@@ -55,14 +53,16 @@ fun EpisodeRowPreview(
     datePosition: String,
     thumbnailSize: String,
     titlePosition: String,
+    episodeNumberPosition: String = "overlay",
+    thumbnailPosition: String = "left",
 ) {
-    // Demo data
     val demoTitle = "The Dragon's Labyrinth"
     val demoSynopsis = "A young adventurer discovers a hidden labyrinth beneath the ancient city, where a mysterious dragon guards a long-forgotten secret that could change the fate of the realm forever."
     val demoDate = "Mar 15, 2024"
     val demoAudioVersions = setOf("SUB", "DUB")
     val demoEpisodeNumber = 5f
-    val hasThumbnail = showThumbnails  // always show thumbnail in preview
+
+    val hasThumbnail = showThumbnails
     val hasSummary = showSummaries
 
     val (thumbWidth, thumbHeight) = when (thumbnailSize) {
@@ -77,6 +77,60 @@ fun EpisodeRowPreview(
     val hasAnyPills = hasDate || (showAudioPills && (hasSub || hasDub))
 
     var summaryExpanded by remember { mutableStateOf(false) }
+
+    // Gradient colors for demo thumbnail
+    val gradientColors = listOf(
+        MaterialTheme.colorScheme.primaryContainer,
+        MaterialTheme.colorScheme.secondaryContainer,
+        MaterialTheme.colorScheme.tertiaryContainer,
+    )
+
+    @Composable
+    fun DemoThumbnail() {
+        Box(
+            modifier = Modifier
+                .width(thumbWidth)
+                .height(thumbHeight)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Brush.linearGradient(gradientColors)),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Episode number overlay on thumbnail
+            if (showEpisodeNumber && episodeNumberPosition == "overlay") {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color.Black.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(4.dp),
+                ) {
+                    Text(
+                        text = "EP ${EpisodeTitleParser.formatEpisodeNumber(demoEpisodeNumber)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun EpisodeNumberBadge() {
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Text(
+                text = "EP ${EpisodeTitleParser.formatEpisodeNumber(demoEpisodeNumber)}",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            )
+        }
+    }
 
     @Composable
     fun DateAudioPillsRow() {
@@ -126,135 +180,111 @@ fun EpisodeRowPreview(
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-        ) {
-            Row(
+    @Composable
+    fun TitleContent() {
+        if (showTitles) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer,
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
             ) {
-                // Thumbnail with episode number overlay
-                if (hasThumbnail) {
-                    Box(
-                        modifier = Modifier
-                            .width(thumbWidth)
-                            .height(thumbHeight),
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            // Demo thumbnail — a colored placeholder
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                                    .clip(RoundedCornerShape(10.dp)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text("📷", style = MaterialTheme.typography.titleLarge)
-                            }
-                        }
-                        if (showEpisodeNumber) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color.Black.copy(alpha = 0.7f),
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(4.dp),
-                            ) {
-                                Text(
-                                    text = "EP ${EpisodeTitleParser.formatEpisodeNumber(demoEpisodeNumber)}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                }
-
-                // Right side content (if title position is 'right')
-                if (titlePosition == "right" || !hasThumbnail) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        // Title
-                        if (showTitles) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    text = demoTitle,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                )
-                            }
-                        }
-
-                        // Date above synopsis
-                        if (datePosition == "right_above_synopsis" && hasAnyPills) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            DateAudioPillsRow()
-                        }
-
-                        // Synopsis on right
-                        if ((synopsisPosition == "right" || !hasThumbnail) && hasSummary) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            SynopsisContent()
-                        }
-
-                        // Date below synopsis
-                        if (datePosition == "right_below_synopsis" && hasAnyPills) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            DateAudioPillsRow()
-                        }
-                    }
-                }
-            }
-
-            // Title below thumbnail (if position is 'below')
-            if (titlePosition == "below" && hasThumbnail && showTitles) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier.fillMaxWidth(),
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // Episode number badge (if position is 'badge' and no thumbnail, or always when not overlay)
+                    if (showEpisodeNumber && episodeNumberPosition == "badge") {
+                        EpisodeNumberBadge()
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     Text(
                         text = demoTitle,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
+        }
+    }
 
-            // Synopsis below (if position is 'below')
-            if (hasThumbnail && hasSummary && synopsisPosition == "below") {
-                Spacer(modifier = Modifier.height(8.dp))
-                SynopsisContent()
+    // The episode row card — standalone, looks like a real episode row
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+        ) {
+            // Top row: thumbnail + right-side content
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+            ) {
+                // Thumbnail (left or right based on thumbnailPosition)
+                if (hasThumbnail && thumbnailPosition == "left") {
+                    DemoThumbnail()
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+
+                // Right side content — ALWAYS renders (even if title is "below")
+                Column(modifier = Modifier.weight(1f)) {
+                    // Title on right (if position is 'right')
+                    if (titlePosition == "right" || !hasThumbnail) {
+                        TitleContent()
+                    }
+
+                    // Date above synopsis (right side)
+                    if (datePosition == "right_above_synopsis" && hasAnyPills) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        DateAudioPillsRow()
+                    }
+
+                    // Synopsis on right side
+                    if ((synopsisPosition == "right" || !hasThumbnail) && hasSummary) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        SynopsisContent()
+                    }
+
+                    // Date below synopsis (right side)
+                    if (datePosition == "right_below_synopsis" && hasAnyPills) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        DateAudioPillsRow()
+                    }
+                }
+
+                // Thumbnail on right
+                if (hasThumbnail && thumbnailPosition == "right") {
+                    Spacer(modifier = Modifier.width(12.dp))
+                    DemoThumbnail()
+                }
             }
 
-            // Date below (if position is 'below')
-            if (hasThumbnail && datePosition == "below" && hasAnyPills) {
-                Spacer(modifier = Modifier.height(8.dp))
-                DateAudioPillsRow()
+            // Below-thumbnail content (full width, only when thumbnail is present)
+            if (hasThumbnail) {
+                // Title below
+                if (titlePosition == "below" && showTitles) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TitleContent()
+                }
+
+                // Synopsis below
+                if (synopsisPosition == "below" && hasSummary) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SynopsisContent()
+                }
+
+                // Date below (full width)
+                if (datePosition == "below" && hasAnyPills) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DateAudioPillsRow()
+                }
             }
         }
     }

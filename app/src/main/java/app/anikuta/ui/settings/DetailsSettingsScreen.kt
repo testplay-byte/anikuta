@@ -35,6 +35,12 @@ import uy.kohesive.injekt.api.get
 
 /**
  * Phase 7.5 — Details page settings with live preview.
+ *
+ * Layout order:
+ *  1. Episode list display toggles
+ *  2. Live preview (reflects toggle + position changes)
+ *  3. Layout positions (title, synopsis, date, episode number, thumbnail)
+ *  4. Thumbnail size
  */
 @Composable
 fun DetailsSettingsScreen(onBack: () -> Unit) {
@@ -50,6 +56,8 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
     val datePos by prefs.datePosition().stateIn(scope).collectAsState()
     val thumbSize by prefs.thumbnailSize().stateIn(scope).collectAsState()
     val titlePos by prefs.titlePosition().stateIn(scope).collectAsState()
+    val epNumPos by prefs.episodeNumberPosition().stateIn(scope).collectAsState()
+    val thumbPos by prefs.thumbnailPosition().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Details", onBack = onBack) {
         LazyColumn(
@@ -57,33 +65,13 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // ---- LIVE PREVIEW ----
-            item {
-                SettingsGroupCard(title = "Live preview") {
-                    Column(Modifier.padding(12.dp)) {
-                        EpisodeRowPreview(
-                            showThumbnails = showThumbnails,
-                            showSummaries = showSummaries,
-                            showTitles = showTitles,
-                            showDates = showDates,
-                            showEpisodeNumber = showEpisodeNumber,
-                            showAudioPills = showAudioPills,
-                            synopsisPosition = synopsisPos,
-                            datePosition = datePos,
-                            thumbnailSize = thumbSize,
-                            titlePosition = titlePos,
-                        )
-                    }
-                }
-            }
-
-            // ---- Show/hide toggles ----
+            // ---- 1. Show/hide toggles ----
             item {
                 SettingsGroupCard(title = "Episode list display") {
                     SwitchSettingsRow(
                         icon = Icons.Default.Numbers,
                         title = "Show episode number",
-                        subtitle = "Display the episode number (overlaid on thumbnail)",
+                        subtitle = "Display the episode number",
                         checked = showEpisodeNumber,
                         onCheckedChange = { prefs.showEpisodeNumber().set(it) },
                     )
@@ -123,21 +111,41 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                     SwitchSettingsRow(
                         icon = Icons.Default.RecordVoiceOver,
                         title = "Show audio availability pills",
-                        subtitle = "Display SUB/DUB/HSUB tags (from resolved videos)",
+                        subtitle = "Display SUB/DUB/HSUB tags",
                         checked = showAudioPills,
                         onCheckedChange = { prefs.showAudioPills().set(it) },
                     )
                 }
             }
 
-            // ---- Layout positions ----
+            // ---- 2. Live preview (below toggles, above positions) ----
+            item {
+                SettingsGroupCard(title = "Live preview") {
+                    Column(Modifier.padding(8.dp)) {
+                        EpisodeRowPreview(
+                            showThumbnails = showThumbnails,
+                            showSummaries = showSummaries,
+                            showTitles = showTitles,
+                            showDates = showDates,
+                            showEpisodeNumber = showEpisodeNumber,
+                            showAudioPills = showAudioPills,
+                            synopsisPosition = synopsisPos,
+                            datePosition = datePos,
+                            thumbnailSize = thumbSize,
+                            titlePosition = titlePos,
+                            episodeNumberPosition = epNumPos,
+                            thumbnailPosition = thumbPos,
+                        )
+                    }
+                }
+            }
+
+            // ---- 3. Layout positions ----
             item {
                 SettingsGroupCard(title = "Layout positions") {
                     // Title position
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text("Title position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(4.dp))
-                        Text("Where to show the episode title", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         SingleChoiceSegmentedButtonRow {
                             SegmentedButton(
@@ -156,8 +164,6 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                     // Synopsis position
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text("Synopsis position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(4.dp))
-                        Text("Where to show the episode synopsis", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         SingleChoiceSegmentedButtonRow {
                             SegmentedButton(
@@ -176,8 +182,6 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                     // Date position — 3 options
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text("Date & audio pills position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(4.dp))
-                        Text("Where to show the date and audio pills", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         SingleChoiceSegmentedButtonRow {
                             SegmentedButton(
@@ -197,10 +201,46 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                             ) { Text("Full") }
                         }
                     }
+                    HorizontalDivider()
+                    // Episode number position
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text("Episode number position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(8.dp))
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(
+                                selected = epNumPos == "overlay",
+                                onClick = { prefs.episodeNumberPosition().set("overlay") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            ) { Text("Overlay") }
+                            SegmentedButton(
+                                selected = epNumPos == "badge",
+                                onClick = { prefs.episodeNumberPosition().set("badge") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            ) { Text("Badge") }
+                        }
+                    }
+                    HorizontalDivider()
+                    // Thumbnail position
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text("Thumbnail position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(8.dp))
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(
+                                selected = thumbPos == "left",
+                                onClick = { prefs.thumbnailPosition().set("left") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            ) { Text("Left") }
+                            SegmentedButton(
+                                selected = thumbPos == "right",
+                                onClick = { prefs.thumbnailPosition().set("right") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            ) { Text("Right") }
+                        }
+                    }
                 }
             }
 
-            // ---- Thumbnail size ----
+            // ---- 4. Thumbnail size ----
             item {
                 SettingsGroupCard(title = "Thumbnail size") {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {

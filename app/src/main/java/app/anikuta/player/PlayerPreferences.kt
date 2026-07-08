@@ -95,4 +95,18 @@ class PlayerPreferences(
      */
     fun titlePosition(): Preference<String> =
         preferenceStore.getString("pref_title_position", "right")
+
+    /**
+     * Episode number position: 'overlay' = overlaid on thumbnail (default).
+     * 'badge' = as a badge next to the title.
+     */
+    fun episodeNumberPosition(): Preference<String> =
+        preferenceStore.getString("pref_ep_num_position", "overlay")
+
+    /**
+     * Thumbnail position: 'left' = thumbnail on left (default).
+     * 'right' = thumbnail on right.
+     */
+    fun thumbnailPosition(): Preference<String> =
+        preferenceStore.getString("pref_thumbnail_position", "left")
 }
