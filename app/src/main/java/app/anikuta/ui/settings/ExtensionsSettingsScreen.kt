@@ -20,9 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -157,7 +154,7 @@ fun ExtensionsSettingsScreen(
                     },
                     singleLine = true,
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .padding(end = 8.dp),
                 )
             } else {
@@ -339,25 +336,30 @@ private fun ExtensionsGridContent(
         // Sources
         if (sources.isNotEmpty()) {
             item(key = "grid_sources_header") { SectionHeader("Sources · ${sources.size}/2") }
-            item(key = "grid_sources") {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.height((sources.size / 2 + sources.size % 2) * 200.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(sources, key = { "src_${it.pkgName}" }) { ext ->
-                        ExtensionGridCard(
-                            name = ext.name,
-                            lang = ext.lang,
-                            iconDrawable = ext.icon,
-                            iconUrl = null,
-                            isDownloading = false,
-                            isInstalled = true,
-                            onClick = { onOpenDetails(ext.pkgName) },
-                            onAction = { onRevoke(ext) },
-                            actionIcon = Icons.Default.VerifiedUser,
-                            actionTint = MaterialTheme.colorScheme.primary,
-                        )
+            // Render as rows of 2 (manual grid, no nested LazyVerticalGrid)
+            sources.chunked(2).forEachIndexed { rowIdx, rowItems ->
+                item(key = "grid_sources_row_$rowIdx") {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        rowItems.forEach { ext ->
+                            ExtensionGridCard(
+                                name = ext.name,
+                                lang = ext.lang,
+                                iconDrawable = ext.icon,
+                                iconUrl = null,
+                                isDownloading = false,
+                                isInstalled = true,
+                                onClick = { onOpenDetails(ext.pkgName) },
+                                onAction = { onRevoke(ext) },
+                                actionIcon = Icons.Default.VerifiedUser,
+                                actionTint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        // Fill empty slot if odd number
+                        if (rowItems.size == 1) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
@@ -366,25 +368,28 @@ private fun ExtensionsGridContent(
         // Installed
         if (installed.isNotEmpty()) {
             item(key = "grid_installed_header") { SectionHeader("Installed · ${installed.size}") }
-            item(key = "grid_installed") {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.height((installed.size / 2 + installed.size % 2) * 200.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(installed, key = { "inst_${it.pkgName}" }) { ext ->
-                        ExtensionGridCard(
-                            name = ext.name,
-                            lang = ext.lang ?: "",
-                            iconDrawable = ext.icon,
-                            iconUrl = null,
-                            isDownloading = false,
-                            isInstalled = false,
-                            onClick = { onOpenDetails(ext.pkgName) },
-                            onAction = { onTrust(ext) },
-                            actionIcon = Icons.Default.VerifiedUser,
-                            actionTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+            installed.chunked(2).forEachIndexed { rowIdx, rowItems ->
+                item(key = "grid_installed_row_$rowIdx") {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        rowItems.forEach { ext ->
+                            ExtensionGridCard(
+                                name = ext.name,
+                                lang = ext.lang ?: "",
+                                iconDrawable = ext.icon,
+                                iconUrl = null,
+                                isDownloading = false,
+                                isInstalled = false,
+                                onClick = { onOpenDetails(ext.pkgName) },
+                                onAction = { onTrust(ext) },
+                                actionIcon = Icons.Default.VerifiedUser,
+                                actionTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (rowItems.size == 1) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
@@ -393,27 +398,30 @@ private fun ExtensionsGridContent(
         // Available
         if (available.isNotEmpty()) {
             item(key = "grid_available_header") { SectionHeader("Available · ${available.size}") }
-            item(key = "grid_available") {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.height((available.size / 2 + available.size % 2) * 200.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(available, key = { "avail_${it.pkgName}" }) { ext ->
-                        val isInstalled = sources.any { it.pkgName == ext.pkgName } ||
-                            installed.any { it.pkgName == ext.pkgName }
-                        ExtensionGridCard(
-                            name = ext.name,
-                            lang = ext.lang,
-                            iconDrawable = null,
-                            iconUrl = ext.iconUrl,
-                            isDownloading = ext.pkgName in downloading,
-                            isInstalled = isInstalled,
-                            onClick = { },
-                            onAction = { onInstall(ext) },
-                            actionIcon = Icons.Default.Download,
-                            actionTint = MaterialTheme.colorScheme.primary,
-                        )
+            available.chunked(2).forEachIndexed { rowIdx, rowItems ->
+                item(key = "grid_available_row_$rowIdx") {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        rowItems.forEach { ext ->
+                            val isInstalled = sources.any { it.pkgName == ext.pkgName } ||
+                                installed.any { it.pkgName == ext.pkgName }
+                            ExtensionGridCard(
+                                name = ext.name,
+                                lang = ext.lang,
+                                iconDrawable = null,
+                                iconUrl = ext.iconUrl,
+                                isDownloading = ext.pkgName in downloading,
+                                isInstalled = isInstalled,
+                                onClick = { },
+                                onAction = { onInstall(ext) },
+                                actionIcon = Icons.Default.Download,
+                                actionTint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (rowItems.size == 1) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
@@ -448,11 +456,12 @@ private fun ExtensionGridCard(
     onAction: () -> Unit,
     actionIcon: androidx.compose.ui.graphics.vector.ImageVector,
     actionTint: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        modifier = Modifier
+        modifier = modifier
             .height(180.dp)
             .clickable(onClick = onClick),
     ) {
