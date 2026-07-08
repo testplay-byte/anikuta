@@ -127,6 +127,20 @@ class DetailViewModel(
         private val videoCache = mutableMapOf<String, CachedVideoData>()
     }
 
+    /**
+     * Phase 7.5: Get available audio versions for an episode from the video cache.
+     * Returns a set of audio version names (e.g. "SUB", "DUB", "HSUB") if the
+     * episode's videos have been resolved before. Empty if not cached yet.
+     */
+    fun getAvailableAudioVersions(episodeUrl: String): Set<String> {
+        val cached = videoCache[episodeUrl] ?: return emptySet()
+        return cached.serverSections
+            .flatMap { it.audioSections }
+            .map { it.audio.name }  // "SUB", "DUB", "HSUB", "ANY"
+            .filter { it != "ANY" }
+            .toSet()
+    }
+
     private val preferenceStore: app.anikuta.core.preference.PreferenceStore? = try { Injekt.get() } catch (e: Exception) { null }
 
     init {

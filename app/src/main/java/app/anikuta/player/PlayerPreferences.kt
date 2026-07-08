@@ -76,9 +76,16 @@ class PlayerPreferences(
         preferenceStore.getString("pref_synopsis_position", "right")
 
     /**
-     * Date position: 'right' = right of thumbnail, below title/synopsis (default).
+     * Date position: 'right_below_synopsis' = right of thumbnail, below synopsis (default).
+     * 'right_above_synopsis' = right of thumbnail, above synopsis (between title and synopsis).
      * 'below' = full-width below the thumbnail row.
      */
     fun datePosition(): Preference<String> =
-        preferenceStore.getString("pref_date_position", "right")
+        preferenceStore.getString("pref_date_position", "right_below_synopsis")
+
+    /**
+     * Thumbnail size: 'small' (100dp), 'medium' (120dp, default), 'large' (160dp).
+     */
+    fun thumbnailSize(): Preference<String> =
+        preferenceStore.getString("pref_thumbnail_size", "medium")
 }

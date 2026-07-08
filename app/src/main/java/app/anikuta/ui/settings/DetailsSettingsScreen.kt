@@ -35,11 +35,6 @@ import uy.kohesive.injekt.api.get
 
 /**
  * Phase 7.5 — Details page settings.
- *
- * Controls how the anime detail page renders episode lists:
- *  - Show/hide: episode titles, summaries, thumbnails, dates, episode number, audio pills
- *  - Layout: synopsis position (right of thumbnail / below thumbnail)
- *  - Layout: date position (right of thumbnail / below thumbnail)
  */
 @Composable
 fun DetailsSettingsScreen(onBack: () -> Unit) {
@@ -53,6 +48,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
     val showAudioPills by prefs.showAudioPills().stateIn(scope).collectAsState()
     val synopsisPos by prefs.synopsisPosition().stateIn(scope).collectAsState()
     val datePos by prefs.datePosition().stateIn(scope).collectAsState()
+    val thumbSize by prefs.thumbnailSize().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Details", onBack = onBack) {
         LazyColumn(
@@ -66,7 +62,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                     SwitchSettingsRow(
                         icon = Icons.Default.Numbers,
                         title = "Show episode number",
-                        subtitle = "Display the episode number badge",
+                        subtitle = "Display the episode number (overlaid on thumbnail)",
                         checked = showEpisodeNumber,
                         onCheckedChange = { prefs.showEpisodeNumber().set(it) },
                     )
@@ -74,7 +70,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                     SwitchSettingsRow(
                         icon = Icons.Default.Title,
                         title = "Show episode titles",
-                        subtitle = "Display parsed episode titles (strips 'Episode N - ' prefix)",
+                        subtitle = "Display parsed episode titles",
                         checked = showTitles,
                         onCheckedChange = { prefs.showEpisodeTitles().set(it) },
                     )
@@ -82,7 +78,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                     SwitchSettingsRow(
                         icon = Icons.Default.Subtitles,
                         title = "Show episode summaries",
-                        subtitle = "Display episode descriptions (when provided by the extension)",
+                        subtitle = "Display episode descriptions",
                         checked = showSummaries,
                         onCheckedChange = { prefs.showEpisodeSummaries().set(it) },
                     )
@@ -90,7 +86,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                     SwitchSettingsRow(
                         icon = Icons.Default.Image,
                         title = "Show episode thumbnails",
-                        subtitle = "Display preview images (when provided by the extension)",
+                        subtitle = "Display preview images",
                         checked = showThumbnails,
                         onCheckedChange = { prefs.showEpisodeThumbnails().set(it) },
                     )
@@ -98,7 +94,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                     SwitchSettingsRow(
                         icon = Icons.Default.CalendarMonth,
                         title = "Show episode dates",
-                        subtitle = "Display air dates (when provided by the extension)",
+                        subtitle = "Display air dates",
                         checked = showDates,
                         onCheckedChange = { prefs.showEpisodeDates().set(it) },
                     )
@@ -106,7 +102,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                     SwitchSettingsRow(
                         icon = Icons.Default.RecordVoiceOver,
                         title = "Show audio availability pills",
-                        subtitle = "Display SUB/DUB/HSUB tags (derived from episode name)",
+                        subtitle = "Display SUB/DUB/HSUB tags (from resolved videos)",
                         checked = showAudioPills,
                         onCheckedChange = { prefs.showAudioPills().set(it) },
                     )
@@ -120,7 +116,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text("Synopsis position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                         Spacer(Modifier.height(4.dp))
-                        Text("Where to show the episode synopsis relative to the thumbnail", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Where to show the episode synopsis", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         SingleChoiceSegmentedButtonRow {
                             SegmentedButton(
@@ -136,24 +132,62 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                         }
                     }
                     HorizontalDivider()
-                    // Date position
+                    // Date position — 3 options
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text("Date & audio pills position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                         Spacer(Modifier.height(4.dp))
-                        Text("Where to show the date and audio pills relative to the thumbnail", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Where to show the date and audio pills", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         SingleChoiceSegmentedButtonRow {
                             SegmentedButton(
-                                selected = datePos == "right",
-                                onClick = { prefs.datePosition().set("right") },
-                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            ) { Text("Right") }
+                                selected = datePos == "right_above_synopsis",
+                                onClick = { prefs.datePosition().set("right_above_synopsis") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                            ) { Text("Above") }
+                            SegmentedButton(
+                                selected = datePos == "right_below_synopsis",
+                                onClick = { prefs.datePosition().set("right_below_synopsis") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                            ) { Text("Below") }
                             SegmentedButton(
                                 selected = datePos == "below",
                                 onClick = { prefs.datePosition().set("below") },
-                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            ) { Text("Below") }
+                                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                            ) { Text("Full") }
                         }
+                        Spacer(Modifier.height(4.dp))
+                        Text("Above = right of thumbnail, above synopsis · Below = right of thumbnail, below synopsis · Full = full-width below thumbnail row", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            // ---- Thumbnail size ----
+            item {
+                SettingsGroupCard(title = "Thumbnail size") {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text("Thumbnail size", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Size of the episode preview thumbnail", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(
+                                selected = thumbSize == "small",
+                                onClick = { prefs.thumbnailSize().set("small") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                            ) { Text("Small") }
+                            SegmentedButton(
+                                selected = thumbSize == "medium",
+                                onClick = { prefs.thumbnailSize().set("medium") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                            ) { Text("Medium") }
+                            SegmentedButton(
+                                selected = thumbSize == "large",
+                                onClick = { prefs.thumbnailSize().set("large") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                            ) { Text("Large") }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text("Small = 100×56dp · Medium = 120×68dp · Large = 160×90dp", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
