@@ -131,6 +131,7 @@ object AniListQueries {
             status
             studios { nodes { name isAnimationStudio } }
             nextAiringEpisode { airingAt episode timeUntilAiring }
+            streamingEpisodes { title thumbnail url }
             relations {
               edges { relationType node { id title { romaji english } type } }
             }

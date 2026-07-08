@@ -342,9 +342,87 @@ class DetailViewModel(
             preferenceStore?.getString("ext_match_$anilistId", "")?.set(sourceName)
             preferenceStore?.getString("ext_sanime_url_$anilistId", "")?.set(sAnime.url)
             _episodes.value = EpisodeState.Loaded(eps, sourceName)
+
+            // Phase 7.5: In-app metadata enrichment for episodes missing thumbnails/titles/descriptions
+            enrichEpisodesWithMetadata(eps, anime)
         } catch (e: Exception) {
             Log.e(TAG, "Episode list fetch failed", e)
             _episodes.value = EpisodeState.Error(e.message ?: "Failed to load episodes")
+        }
+    }
+
+    /**
+     * Phase 7.5: Enrich episodes with metadata from Jikan (MAL) + AniList
+     * streaming episodes. Only runs if the setting is enabled AND at least
+     * one episode is missing preview_url or summary.
+     */
+    private fun enrichEpisodesWithMetadata(
+        episodes: List<SEpisode>,
+        anime: AniListAnime,
+    ) {
+        // Check if the setting is enabled
+        val prefs = try { uy.kohesive.injekt.Injekt.get<app.anikuta.player.PlayerPreferences>() } catch (e: Exception) { return }
+        if (!prefs.enableInAppMetadataFetch().get()) return
+
+        // Check if any episodes are missing metadata
+        val needsEnrichment = episodes.any { ep ->
+            ep.preview_url.isNullOrBlank() || ep.summary.isNullOrBlank()
+        }
+        if (!needsEnrichment) {
+            Log.d(TAG, "All episodes have metadata — skipping in-app fetch")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                val fetcher = app.anikuta.data.metadata.EpisodeMetadataFetcher()
+                val metadata = fetcher.fetch(anime, episodes.size)
+
+                if (metadata.isEmpty()) {
+                    Log.d(TAG, "No metadata found from Jikan/AniList")
+                    return@launch
+                }
+
+                // Enrich episodes with fetched metadata
+                var enrichedCount = 0
+                episodes.forEach { ep ->
+                    val epNum = ep.episode_number.toInt().coerceAtLeast(1)
+                    val meta = metadata[epNum] ?: return@forEach
+                    var changed = false
+
+                    // Only enrich fields that are missing
+                    if (ep.preview_url.isNullOrBlank() && !meta.thumbnailUrl.isNullOrBlank()) {
+                        ep.preview_url = meta.thumbnailUrl
+                        changed = true
+                    }
+                    if (ep.summary.isNullOrBlank() && !meta.description.isNullOrBlank()) {
+                        ep.summary = meta.description
+                        changed = true
+                    }
+                    // Enrich name if it's a generic "Episode N" and we have a title
+                    if ((ep.name.isBlank() || ep.name.matches(Regex("(?i)episode\\s*\\d+"))) && !meta.title.isNullOrBlank()) {
+                        ep.name = "Episode $epNum - ${meta.title}"
+                        changed = true
+                    }
+                    // Enrich date if missing
+                    if (ep.date_upload <= 0 && meta.airDate != null && meta.airDate > 0) {
+                        ep.date_upload = meta.airDate
+                        changed = true
+                    }
+
+                    if (changed) enrichedCount++
+                }
+
+                if (enrichedCount > 0) {
+                    Log.i(TAG, "Enriched $enrichedCount/${episodes.size} episodes with in-app metadata")
+                    // Update the episode cache + UI
+                    episodeCache[anilistId] = Pair(episodes, (episodeCache[anilistId]?.second ?: ""))
+                    val sourceName = (episodeCache[anilistId]?.second ?: "")
+                    _episodes.value = EpisodeState.Loaded(episodes, sourceName)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "In-app metadata enrichment failed (keeping original data)", e)
+            }
         }
     }
 

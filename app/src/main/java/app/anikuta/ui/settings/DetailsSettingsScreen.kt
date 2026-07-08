@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -59,6 +60,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
     val epNumPos by prefs.episodeNumberPosition().stateIn(scope).collectAsState()
     val thumbPos by prefs.thumbnailPosition().stateIn(scope).collectAsState()
     val animeInfoPos by prefs.animeInfoPosition().stateIn(scope).collectAsState()
+    val enableMetadataFetch by prefs.enableInAppMetadataFetch().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Details", onBack = onBack) {
         LazyColumn(
@@ -115,6 +117,14 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                         subtitle = "Display SUB/DUB/HSUB tags",
                         checked = showAudioPills,
                         onCheckedChange = { prefs.showAudioPills().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.CloudDownload,
+                        title = "In-app metadata fetching",
+                        subtitle = "Fetch episode thumbnails, titles, and descriptions from MAL + AniList for extensions that don't provide them",
+                        checked = enableMetadataFetch,
+                        onCheckedChange = { prefs.enableInAppMetadataFetch().set(it) },
                     )
                 }
             }

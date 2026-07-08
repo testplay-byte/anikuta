@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class AniListAnime(
     val id: Int,
+    val idMal: Int? = null,
     val title: AniListTitle,
     val coverImage: AniListCoverImage,
     val bannerImage: String? = null,
@@ -22,6 +23,14 @@ data class AniListAnime(
     val format: String? = null,
     val status: String? = null,
     val nextAiringEpisode: AniListNextAiring? = null,
+    val streamingEpisodes: List<AniListStreamingEpisode>? = null,
+)
+
+@Serializable
+data class AniListStreamingEpisode(
+    val title: String? = null,
+    val thumbnail: String? = null,
+    val url: String? = null,
 )
 
 @Serializable

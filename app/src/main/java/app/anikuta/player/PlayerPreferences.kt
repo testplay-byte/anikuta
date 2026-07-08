@@ -116,4 +116,13 @@ class PlayerPreferences(
      */
     fun animeInfoPosition(): Preference<String> =
         preferenceStore.getString("pref_anime_info_position", "below")
+
+    /**
+     * In-app episode metadata fetching: when enabled, ANI-KUTA fetches
+     * episode thumbnails, titles, and descriptions from Jikan (MAL),
+     * AniList, and Kitsu for extensions that don't provide this data.
+     * Default: true.
+     */
+    fun enableInAppMetadataFetch(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_in_app_metadata_fetch", true)
 }
