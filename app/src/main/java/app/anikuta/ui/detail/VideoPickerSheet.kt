@@ -171,13 +171,14 @@ private fun VideoPickerBottomSheet(
                     .height(520.dp),
             ) {
                 serverSections.forEach { section ->
-                    val isExpanded = section.serverName !in expandedServers  // default expanded
+                    // Default: collapsed. Only expanded if in the set.
+                    val isExpanded = section.serverName in expandedServers
 
-                    // Server header (top-level, collapsible)
+                    // Server header (top-level, collapsible) with audio tag chips
                     item(key = "server_${section.serverName}") {
                         ServerHeader(
                             serverName = section.serverName,
-                            audioCount = section.audioSections.size,
+                            audioTags = section.audioSections.map { it.audio },
                             isExpanded = isExpanded,
                             onClick = { onToggleServer(section.serverName) },
                         )
@@ -186,7 +187,7 @@ private fun VideoPickerBottomSheet(
                     // Audio sections + videos (only when server is expanded)
                     if (isExpanded) {
                         section.audioSections.forEach { audioSection ->
-                            // Audio sub-header (expandable)
+                            // Audio sub-header
                             item(key = "audio_${section.serverName}_${audioSection.audio.name}") {
                                 AudioSubHeader(
                                     audio = audioSection.audio,
@@ -213,12 +214,12 @@ private fun VideoPickerBottomSheet(
 
 /**
  * Server header — top-level collapsible section. Shows the server name +
- * number of audio versions. Tap to expand/collapse.
+ * small audio tag chips (SUB, DUB, HSUB) on the right. Tap to expand/collapse.
  */
 @Composable
 private fun ServerHeader(
     serverName: String,
-    audioCount: Int,
+    audioTags: List<AudioVersion>,
     isExpanded: Boolean,
     onClick: () -> Unit,
 ) {
@@ -248,16 +249,21 @@ private fun ServerHeader(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = MaterialTheme.colorScheme.outlineVariant,
-            ) {
-                Text(
-                    text = "$audioCount audio",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                )
+            // Audio tag chips (SUB / DUB / HSUB)
+            audioTags.forEach { audio ->
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                ) {
+                    Text(
+                        text = audio.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
             }
         }
     }

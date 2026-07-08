@@ -61,6 +61,8 @@ class DownloadsViewModel : ViewModel() {
         _serverOrder.value = prefs?.preferredServerOrder()?.get() ?: emptyList()
         _priorityMode.value = PriorityMode.fromValue(prefs?.qualityVsAudioPriority()?.get() ?: "")
         _audioFallback.value = AudioFallback.fromValue(prefs?.audioFallbackMode()?.get() ?: "")
+        _downloadOverWifiOnly.value = prefs?.downloadOverWifiOnly()?.get() ?: true
+        _deleteAfterWatching.value = prefs?.deleteAfterWatching()?.get() ?: false
 
         // Observe download queue
         viewModelScope.launch {
@@ -111,11 +113,21 @@ class DownloadsViewModel : ViewModel() {
         prefs?.audioFallbackMode()?.set(mode.value)
     }
 
-    // ---- Toggles ----
-    fun downloadOverWifiOnly(): Boolean = prefs?.downloadOverWifiOnly()?.get() ?: true
-    fun setDownloadOverWifiOnly(v: Boolean) { prefs?.downloadOverWifiOnly()?.set(v) }
-    fun deleteAfterWatching(): Boolean = prefs?.deleteAfterWatching()?.get() ?: false
-    fun setDeleteAfterWatching(v: Boolean) { prefs?.deleteAfterWatching()?.set(v) }
+    // ---- Toggles (StateFlow so the UI updates live) ----
+    private val _downloadOverWifiOnly = MutableStateFlow(true)
+    val downloadOverWifiOnly: StateFlow<Boolean> = _downloadOverWifiOnly.asStateFlow()
+
+    private val _deleteAfterWatching = MutableStateFlow(false)
+    val deleteAfterWatching: StateFlow<Boolean> = _deleteAfterWatching.asStateFlow()
+
+    fun setDownloadOverWifiOnly(v: Boolean) {
+        _downloadOverWifiOnly.value = v
+        prefs?.downloadOverWifiOnly()?.set(v)
+    }
+    fun setDeleteAfterWatching(v: Boolean) {
+        _deleteAfterWatching.value = v
+        prefs?.deleteAfterWatching()?.set(v)
+    }
 
     // ---- Download queue actions ----
     fun cancelDownload(id: String) { manager?.cancelDownload(id) }

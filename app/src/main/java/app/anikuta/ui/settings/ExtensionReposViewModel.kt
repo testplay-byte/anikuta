@@ -1,7 +1,6 @@
 package app.anikuta.ui.settings
 
 import android.util.Log
-import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo
@@ -20,13 +19,9 @@ import uy.kohesive.injekt.api.get
 /**
  * Phase 7 — ViewModel for the Extension Repositories settings screen.
  *
- * Manages the list of extension repos (add/remove/refresh). Repos are stored
- * in the SQLDelight `extension_repos` table. Each repo has a baseUrl, name,
- * website, and signingKeyFingerprint.
- *
- * The repo URL must point to an `index.min.json` file. We strip the
- * `/index.min.json` suffix to get the baseUrl, then fetch `/repo.json` for
- * the repo's metadata (name, signing fingerprint).
+ * Uses LAZY initialization for the interactors (not constructor-time) so that
+ * if one interactor fails to resolve, the others still work and we can log
+ * the actual exception instead of silently nulled-out fields.
  */
 class ExtensionReposViewModel : ViewModel() {
 
@@ -34,10 +29,13 @@ class ExtensionReposViewModel : ViewModel() {
         private const val TAG = "ExtReposViewModel"
     }
 
-    private val getExtensionRepo: GetAnimeExtensionRepo? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
-    private val createRepo: CreateAnimeExtensionRepo? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
-    private val deleteRepo: DeleteAnimeExtensionRepo? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
-    private val updateRepo: UpdateAnimeExtensionRepo? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
+    // Lazy init — resolves on first use, not at construction time.
+    // This way if DI has a transient issue, we get the actual error when
+    // the action is attempted, not a silent null at startup.
+    private val getExtensionRepo: GetAnimeExtensionRepo? by lazy { safeGet("GetAnimeExtensionRepo") }
+    private val createRepo: CreateAnimeExtensionRepo? by lazy { safeGet("CreateAnimeExtensionRepo") }
+    private val deleteRepo: DeleteAnimeExtensionRepo? by lazy { safeGet("DeleteAnimeExtensionRepo") }
+    private val updateRepo: UpdateAnimeExtensionRepo? by lazy { safeGet("UpdateAnimeExtensionRepo") }
 
     private val _repos = MutableStateFlow<List<ExtensionRepo>>(emptyList())
     val repos: StateFlow<List<ExtensionRepo>> = _repos.asStateFlow()
@@ -45,9 +43,20 @@ class ExtensionReposViewModel : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    /** Result of the last createRepo call — drives conflict/error dialogs. */
     private val _createResult = MutableStateFlow<CreateResult>(CreateResult.Idle)
     val createResult: StateFlow<CreateResult> = _createResult.asStateFlow()
+
+    private fun <T> safeGet(name: String): T? {
+        return try {
+            @Suppress("UNCHECKED_CAST")
+            Injekt.get<T>().also {
+                Log.d(TAG, "✅ $name resolved from DI")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to resolve $name from DI", e)
+            null
+        }
+    }
 
     init {
         viewModelScope.launch {
@@ -60,12 +69,11 @@ class ExtensionReposViewModel : ViewModel() {
 
     /**
      * Add a new repo. Accepts URLs with or without /index.min.json suffix.
-     * On success, the repo is inserted into the DB and the Flow auto-updates.
-     * On error, sets [createResult] so the UI shows an error dialog.
      */
     fun createRepo(url: String) {
         val interactor = createRepo ?: run {
-            _createResult.value = CreateResult.Error("DI not initialized")
+            Log.e(TAG, "createRepo: CreateAnimeExtensionRepo is null (DI failed)")
+            _createResult.value = CreateResult.Error("Internal error: repo service unavailable. Restart the app.")
             return
         }
         viewModelScope.launch {
@@ -94,7 +102,7 @@ class ExtensionReposViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "createRepo failed", e)
-                _createResult.value = CreateResult.Error(e.message ?: "Unknown error")
+                _createResult.value = CreateResult.Error(e.message ?: "Unknown error: ${e.javaClass.simpleName}")
             }
         }
     }

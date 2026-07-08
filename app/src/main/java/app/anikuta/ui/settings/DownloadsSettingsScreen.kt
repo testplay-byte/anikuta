@@ -156,15 +156,17 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
             // ---- Toggles ----
             SettingsGroupCard(title = "General") {
                 Column {
+                    val wifiOnly by viewModel.downloadOverWifiOnly.collectAsState()
                     ToggleRow(
                         label = "Download over WiFi only",
-                        checked = viewModel.downloadOverWifiOnly(),
+                        checked = wifiOnly,
                         onCheckedChange = { viewModel.setDownloadOverWifiOnly(it) },
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    val deleteAfter by viewModel.deleteAfterWatching.collectAsState()
                     ToggleRow(
                         label = "Delete after watching",
-                        checked = viewModel.deleteAfterWatching(),
+                        checked = deleteAfter,
                         onCheckedChange = { viewModel.setDeleteAfterWatching(it) },
                     )
                 }

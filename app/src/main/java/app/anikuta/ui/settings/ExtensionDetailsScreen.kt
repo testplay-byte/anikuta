@@ -127,11 +127,13 @@ fun ExtensionDetailsScreen(
                 }
             }
 
-            // Actions — single line, text doesn't wrap
+            // Actions — "Remove from Sources" / "Add to Sources" is the primary
+            // button (takes most space). Uninstall is a compact icon-only button.
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (isTrusted && extension != null) {
                         OutlinedButton(
@@ -150,15 +152,21 @@ fun ExtensionDetailsScreen(
                             },
                         )
                     }
-                    OutlinedButton(
+                    // Compact icon-only Uninstall button
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.errorContainer,
                         onClick = { viewModel.uninstallExtension(pkgName) },
-                        modifier = Modifier.weight(1f),
-                        content = {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Uninstall", maxLines = 1, softWrap = false)
-                        },
-                    )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Uninstall",
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier
+                                .padding(10.dp)
+                                .size(20.dp),
+                        )
+                    }
                 }
             }
 

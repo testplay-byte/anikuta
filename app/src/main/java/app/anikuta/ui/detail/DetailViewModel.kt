@@ -81,13 +81,24 @@ class DetailViewModel(
     private val _videoPicker = MutableStateFlow<VideoPickerState>(VideoPickerState.Hidden)
     val videoPicker: StateFlow<VideoPickerState> = _videoPicker.asStateFlow()
 
-    /** Collapsed server sections in the picker (key = "\${audio}_\${server}"). */
+    /** Expanded server section in the picker (key = serverName). Empty = all collapsed.
+     *  Accordion behavior: only one server expanded at a time. */
     private val _expandedServers = MutableStateFlow<Set<String>>(emptySet())
     val expandedServers: StateFlow<Set<String>> = _expandedServers.asStateFlow()
 
+    /**
+     * Toggle a server's expand state. Accordion: if expanding, collapse all
+     * others first. This ensures only one server is open at a time.
+     */
     fun toggleServer(key: String) {
-        _expandedServers.value = _expandedServers.value.let {
-            if (key in it) it - key else it + key
+        _expandedServers.value = _expandedServers.value.let { current ->
+            if (key in current) {
+                // Already expanded → collapse it
+                current - key
+            } else {
+                // Expanding → close all others, open only this one (accordion)
+                setOf(key)
+            }
         }
     }
 
