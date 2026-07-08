@@ -162,8 +162,14 @@ class AnimeExtensionLoader(
         }
 
         val appInfo = pkgInfo.applicationInfo
+        // Strip "Aniyomi: " prefix from the extension name (extensions are
+        // built with this prefix in their app label, but we don't want it
+        // shown in the UI — matches aniyomi's AnimeExtensionApi behavior
+        // which strips it for Available extensions).
+        val rawName = appInfo?.loadLabel(context.packageManager)?.toString() ?: pkgName
+        val cleanName = rawName.removePrefix("Aniyomi: ").trim()
         val extension = AnimeExtension.Installed(
-            name = appInfo?.loadLabel(context.packageManager)?.toString() ?: pkgName,
+            name = cleanName,
             pkgName = pkgName,
             versionName = pkgInfo.versionName ?: "unknown",
             versionCode = PackageInfoCompat.getLongVersionCode(pkgInfo),

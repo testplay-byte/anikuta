@@ -193,12 +193,14 @@ class ExtensionsViewModel : ViewModel() {
 
     /**
      * Filtered + sorted available extensions based on search query, language
-     * filter, and sort mode. Used by the UI to render the available list.
+     * filter, and sort mode. Installed extensions are moved to the BOTTOM
+     * of the list (they still show, but at the end).
      */
     fun filteredAvailable(): List<AnimeExtension.Available> {
         val query = _searchQuery.value.lowercase().trim()
         val langs = _enabledLanguages.value
         val sortMode = _sortMode.value
+        val installedPkgs = _sources.value.map { it.pkgName } + _installed.value.map { it.pkgName }
 
         return _available.value
             .filter { ext ->
@@ -216,6 +218,7 @@ class ExtensionsViewModel : ViewModel() {
                     SortMode.NAME_DESC -> compareByDescending { it.name.lowercase() }
                 },
             )
+            .sortedBy { it.pkgName in installedPkgs }  // installed → bottom (false < true)
     }
 
     /**

@@ -2,6 +2,7 @@ package app.anikuta.ui.settings
 
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -138,34 +139,78 @@ fun ExtensionsSettingsScreen(
         title = if (isSearchActive) "" else "Extensions",
         onBack = if (isSearchActive) ({ viewModel.setSearchActive(false) }) else onBack,
         actions = {
-            // Search bar expands from the right
-            if (isSearchActive) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { viewModel.setSearchQuery(it) },
-                    placeholder = { Text("Search extensions…", style = MaterialTheme.typography.bodyMedium) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    trailingIcon = {
+            // Search bar — expands smoothly from the right with animation.
+            // When active, hides the title and shows a filled TextField.
+            AnimatedVisibility(
+                visible = isSearchActive,
+                enter = expandHorizontally(animationSpec = spring()) + fadeIn(),
+                exit = shrinkHorizontally(animationSpec = spring()) + fadeOut(),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 0.dp,
+                    modifier = Modifier
+                        .width(220.dp)
+                        .padding(end = 4.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.setSearchQuery(it) },
+                            placeholder = { Text("Search…", style = MaterialTheme.typography.bodyMedium) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp),
+                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                                disabledBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                            ),
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                        )
                         if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                            IconButton(onClick = { viewModel.setSearchQuery("") }, modifier = Modifier.size(20.dp)) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Clear",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
-                    },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(end = 8.dp),
-                )
-            } else {
-                IconButton(onClick = { viewModel.setSearchActive(true) }) {
-                    Icon(Icons.Default.Search, contentDescription = "Search")
+                    }
                 }
-                IconButton(onClick = { showFilterSheet = true }) {
-                    Icon(Icons.Default.Tune, contentDescription = "Filter")
-                }
-                IconButton(onClick = onManageRepos) {
-                    Icon(Icons.Outlined.Public, contentDescription = "Manage repositories")
+            }
+            // Action icons — hidden when search is active
+            AnimatedVisibility(
+                visible = !isSearchActive,
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                Row {
+                    IconButton(onClick = { viewModel.setSearchActive(true) }) {
+                        Icon(Icons.Default.Search, contentDescription = "Search")
+                    }
+                    IconButton(onClick = { showFilterSheet = true }) {
+                        Icon(Icons.Default.Tune, contentDescription = "Filter")
+                    }
+                    IconButton(onClick = onManageRepos) {
+                        Icon(Icons.Outlined.Public, contentDescription = "Manage repositories")
+                    }
                 }
             }
         },
@@ -296,6 +341,7 @@ private fun ExtensionsListContent(
                                         isInstalled = isInstalled,
                                         isDownloading = ext.pkgName in downloading,
                                         onInstall = { onInstall(ext) },
+                                        onUninstall = { onUninstall(ext.pkgName) },
                                     )
                                     if (idx < available.size - 1) {
                                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -517,7 +563,7 @@ private fun ExtensionGridCard(
 }
 
 /* ------------------------------------------------------------------ */
-/* Filter bottom sheet                                                 */
+/* Filter bottom sheet (M3 Expressive redesign)                        */
 /* ------------------------------------------------------------------ */
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -533,78 +579,168 @@ private fun FilterBottomSheet(
     val allLangs = remember { viewModel.allLanguages + setOf("en") }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Filter", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(16.dp))
-
-            // Language filter
-            Text("Languages", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            // FlowRow-like layout using Column + Row chunks
-            val langList = allLangs.sorted()
-            langList.chunked(3).forEach { rowLangs ->
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(vertical = 4.dp),
-                ) {
-                    rowLangs.forEach { lang ->
-                        FilterChip(
-                            selected = lang in enabledLanguages,
-                            onClick = {
-                                val newSet = if (lang in enabledLanguages) {
-                                    enabledLanguages - lang
-                                } else {
-                                    enabledLanguages + lang
-                                }
-                                viewModel.setEnabledLanguages(newSet)
-                            },
-                            label = { Text(langLabel(lang)) },
-                        )
-                    }
-                    // Fill remaining space if row has < 3 items
-                    repeat(3 - rowLangs.size) { Spacer(Modifier.width(0.dp)) }
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            // Header
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Tune,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Filter & sort", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-
-            // Sort mode
-            Text("Sort by", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = sortMode == SortMode.NAME_ASC,
-                    onClick = { viewModel.setSortMode(SortMode.NAME_ASC) },
-                    label = { Text("Name ↑") },
-                )
-                FilterChip(
-                    selected = sortMode == SortMode.NAME_DESC,
-                    onClick = { viewModel.setSortMode(SortMode.NAME_DESC) },
-                    label = { Text("Name ↓") },
-                )
+            // ---- Layout section ----
+            item {
+                FilterSection(title = "Layout") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SegmentedOption(
+                            label = "List",
+                            icon = Icons.Default.ViewList,
+                            selected = layoutMode == LayoutMode.LIST,
+                            onClick = { viewModel.setLayoutMode(LayoutMode.LIST) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        SegmentedOption(
+                            label = "Grid",
+                            icon = Icons.Default.ViewModule,
+                            selected = layoutMode == LayoutMode.GRID,
+                            onClick = { viewModel.setLayoutMode(LayoutMode.GRID) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
 
-            Spacer(Modifier.height(16.dp))
-
-            // Layout mode
-            Text("Layout", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = layoutMode == LayoutMode.LIST,
-                    onClick = { viewModel.setLayoutMode(LayoutMode.LIST) },
-                    leadingIcon = { Icon(Icons.Default.ViewList, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                    label = { Text("List") },
-                )
-                FilterChip(
-                    selected = layoutMode == LayoutMode.GRID,
-                    onClick = { viewModel.setLayoutMode(LayoutMode.GRID) },
-                    leadingIcon = { Icon(Icons.Default.ViewModule, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                    label = { Text("Grid") },
-                )
+            // ---- Sort section ----
+            item {
+                FilterSection(title = "Sort by") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SegmentedOption(
+                            label = "Name A-Z",
+                            icon = null,
+                            selected = sortMode == SortMode.NAME_ASC,
+                            onClick = { viewModel.setSortMode(SortMode.NAME_ASC) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        SegmentedOption(
+                            label = "Name Z-A",
+                            icon = null,
+                            selected = sortMode == SortMode.NAME_DESC,
+                            onClick = { viewModel.setSortMode(SortMode.NAME_DESC) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
 
-            Spacer(Modifier.height(24.dp))
+            // ---- Language section ----
+            item {
+                FilterSection(title = "Languages") {
+                    // FlowRow-like layout using Row chunks
+                    val langList = allLangs.sorted()
+                    langList.chunked(3).forEach { rowLangs ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        ) {
+                            rowLangs.forEach { lang ->
+                                SegmentedOption(
+                                    label = langLabel(lang),
+                                    icon = null,
+                                    selected = lang in enabledLanguages,
+                                    onClick = {
+                                        val newSet = if (lang in enabledLanguages) {
+                                            enabledLanguages - lang
+                                        } else {
+                                            enabledLanguages + lang
+                                        }
+                                        viewModel.setEnabledLanguages(newSet)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            repeat(3 - rowLangs.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
+            }
+
+            // Bottom padding
+            item { Spacer(Modifier.height(16.dp)) }
+        }
+    }
+}
+
+/** A section with a title label + content below. */
+@Composable
+private fun FilterSection(title: String, content: @Composable () -> Unit) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        content()
+    }
+}
+
+/**
+ * A segmented-option button — a pill-shaped Surface that fills its weight.
+ * Selected state uses secondaryContainer; unselected uses surfaceVariant with
+ * lower alpha. Clean M3 look.
+ */
+@Composable
+private fun SegmentedOption(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector?,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        onClick = onClick,
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp, horizontal = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -748,10 +884,32 @@ private fun AvailableExtensionRow(
     isInstalled: Boolean,
     isDownloading: Boolean,
     onInstall: () -> Unit,
+    onUninstall: () -> Unit,
 ) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // Delete confirmation dialog
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete extension?") },
+            text = { Text("Do you want to delete ${ext.name}?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    onUninstall()
+                }) { Text("Yes") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("No") }
+            },
+        )
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(enabled = isInstalled) { showDeleteDialog = true }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -771,7 +929,7 @@ private fun AvailableExtensionRow(
         when {
             isInstalled -> Icon(
                 Icons.Default.Check,
-                contentDescription = "Installed",
+                contentDescription = "Installed — tap to delete",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(24.dp),
             )
@@ -818,10 +976,13 @@ private fun ExtensionIconSlot(
     drawable: Drawable?,
     iconUrl: String?,
     contentDescription: String,
-    size: Int = 40,
+    size: Int = 48,
 ) {
+    // Squircle-like shape: RoundedCornerShape with 28% corner radius gives
+    // the smooth superellipse look (not a plain circle, not a sharp square).
+    val squircleShape = RoundedCornerShape(percent = 28)
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = squircleShape,
         color = MaterialTheme.colorScheme.secondaryContainer,
         modifier = Modifier.size(size.dp),
     ) {
@@ -831,18 +992,18 @@ private fun ExtensionIconSlot(
                 painter != null -> androidx.compose.foundation.Image(
                     painter = painter,
                     contentDescription = contentDescription,
-                    modifier = Modifier.size((size * 0.7f).dp),
+                    modifier = Modifier.size((size * 0.75f).dp),
                 )
                 iconUrl != null -> AsyncImage(
                     model = iconUrl,
                     contentDescription = contentDescription,
-                    modifier = Modifier.size((size * 0.7f).dp),
+                    modifier = Modifier.size((size * 0.75f).dp),
                 )
                 else -> Icon(
                     imageVector = Icons.Default.Extension,
                     contentDescription = contentDescription,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size((size * 0.5f).dp),
+                    modifier = Modifier.size((size * 0.55f).dp),
                 )
             }
         }
