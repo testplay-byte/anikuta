@@ -315,7 +315,9 @@ private fun AudioSubHeader(
 }
 
 /**
- * Video row — shows the video title on the left, quality chip on the RIGHT.
+ * Video row — quality label on the left (weighted), quality chip on the RIGHT.
+ * Only ONE quality representation is shown as text; the chip is the visual
+ * indicator. No duplicate plain text.
  */
 @Composable
 private fun VideoRow(
@@ -332,32 +334,28 @@ private fun VideoRow(
             .padding(horizontal = 56.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = qualityLabel,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-        )
-        // Quality chip on the RIGHT side (per user's request)
-        Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-        ) {
-            Text(
-                text = qualityLabel,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-            )
-        }
-        Spacer(Modifier.width(8.dp))
+        // Play icon on the left
         Icon(
             imageVector = Icons.Default.PlayArrow,
             contentDescription = "Play",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(16.dp),
         )
+        Spacer(Modifier.width(8.dp))
+        // Spacer to push the quality chip to the right
+        Spacer(Modifier.weight(1f))
+        // Quality chip on the RIGHT side
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+        ) {
+            Text(
+                text = qualityLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+            )
+        }
     }
 }

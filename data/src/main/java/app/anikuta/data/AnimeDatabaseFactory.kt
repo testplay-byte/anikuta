@@ -3,6 +3,7 @@ package app.anikuta.data
 import android.content.Context
 import android.util.Log
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
+import app.cash.sqldelight.db.SqlDriver
 import dataanime.Animehistory
 import dataanime.Animes
 
@@ -21,8 +22,20 @@ object AnimeDatabaseFactory {
                 context = context,
                 name = "tachiyomi.animedb",
             )
-            Log.d(TAG, "Driver created. Schema version: ${AnimeDatabase.Schema.version}")
+            return createWithDriver(context, driver)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to create AnimeDatabase", e)
+            throw e
+        }
+    }
 
+    /**
+     * Create the database with an EXISTING driver (used when the driver is
+     * registered in Injekt separately from the database).
+     */
+    fun createWithDriver(context: Context, driver: SqlDriver): AnimeDatabase {
+        Log.d(TAG, "Creating AnimeDatabase with existing driver. Schema version: ${AnimeDatabase.Schema.version}")
+        try {
             val db = AnimeDatabase(
                 driver = driver,
                 animehistoryAdapter = Animehistory.Adapter(
