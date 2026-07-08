@@ -90,6 +90,13 @@ class ExtensionsViewModel : ViewModel() {
     private val _sortMode = MutableStateFlow(SortMode.NAME_ASC)
     val sortMode: StateFlow<SortMode> = _sortMode.asStateFlow()
 
+    // ---- Sources priority (drag-and-drop) ----
+    // MUST be declared before the init block — the init block's coroutine
+    // accesses _sourcePriority.value, and Kotlin initializes properties in
+    // declaration order. If this is after init, it's null when accessed.
+    private val _sourcePriority = MutableStateFlow<List<String>>(emptyList())
+    val sourcePriority: StateFlow<List<String>> = _sourcePriority.asStateFlow()
+
     /** All languages found in available extensions (for the filter UI). */
     val allLanguages: Set<String>
         get() = _available.value.mapNotNull { it.lang.takeIf { l -> l.isNotBlank() } }.toSet()
@@ -191,9 +198,7 @@ class ExtensionsViewModel : ViewModel() {
         if (!active) _searchQuery.value = ""
     }
 
-    // ---- Sources priority (drag-and-drop) ----
-    private val _sourcePriority = MutableStateFlow<List<String>>(emptyList())
-    val sourcePriority: StateFlow<List<String>> = _sourcePriority.asStateFlow()
+    // ---- Sources priority methods (declaration is above, near other StateFlows) ----
 
     fun reorderSourcePriority(from: Int, to: Int) {
         val list = _sourcePriority.value.toMutableList()

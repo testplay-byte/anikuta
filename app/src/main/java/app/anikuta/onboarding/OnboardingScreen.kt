@@ -630,14 +630,6 @@ private fun ExpressiveExtensionStep(
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Select Extension", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            "Extensions are how ANI-KUTA finds anime streams.\n" +
-                "Select an installed extension to use as your source.\n" +
-                "It will be trusted when you tap Next.",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-        )
         Spacer(modifier = Modifier.height(24.dp))
 
         when {
