@@ -137,12 +137,12 @@ fun OnboardingScreen(
                     text = if (state.currentStep == state.totalSteps - 1) "Start Watching" else "Next",
                     onClick = {
                         // Step 3 (Extension): trust the selected extension on Next.
-                        // The selection is visual only during the step; trust happens here.
-                        if (state.currentStep == 3 && state.primaryExtensionPkg != null) {
+                        val selectedPkg = state.primaryExtensionPkg
+                        if (state.currentStep == 3 && selectedPkg != null) {
                             try {
                                 val manager = Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
-                                manager.trust(state.primaryExtensionPkg)
-                                Log.i("Onboarding", "Trusted ${state.primaryExtensionPkg} on Next")
+                                manager.trust(selectedPkg)
+                                Log.i("Onboarding", "Trusted $selectedPkg on Next")
                             } catch (e: Exception) {
                                 Log.e("Onboarding", "Trust on Next failed", e)
                             }

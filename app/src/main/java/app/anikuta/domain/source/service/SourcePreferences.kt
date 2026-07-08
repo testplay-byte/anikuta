@@ -34,10 +34,10 @@ class SourcePreferences(
      * The AniyomiSourceBridge tries them in this order when matching an anime.
      * Empty = use insertion order (current behavior).
      *
-     * Phase 7 — sources priority drag-and-drop.
+     * Phase 7 — sources priority drag-and-drop. Stored as a JSON string.
      */
-    fun sourcePriorityOrder(): Preference<MutableList<String>> =
-        preferenceStore.getString("source_priority_order", "[]") as Preference<MutableList<String>>
+    fun sourcePriorityOrder(): Preference<String> =
+        preferenceStore.getString("source_priority_order", "[]")
 
     fun extensionUpdatesCount(): Preference<Int> =
         preferenceStore.getInt("extension_updates_count", 0)

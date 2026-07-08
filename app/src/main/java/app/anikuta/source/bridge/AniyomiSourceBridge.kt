@@ -66,7 +66,11 @@ class AniyomiSourceBridge(
             // priority list are preferred when scores are tied.
             val priorityOrder: List<String> = try {
                 val prefs = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.service.SourcePreferences>()
-                prefs.sourcePriorityOrder().get()
+                val json = prefs.sourcePriorityOrder().get()
+                kotlinx.serialization.json.Json.decodeFromString(
+                    kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()),
+                    json,
+                )
             } catch (e: Exception) { emptyList() }
 
             // Build a source→priorityIndex map for sorting

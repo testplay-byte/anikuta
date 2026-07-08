@@ -201,10 +201,14 @@ class ExtensionsViewModel : ViewModel() {
             val item = list.removeAt(from)
             list.add(to, item)
             _sourcePriority.value = list
-            // Persist to SourcePreferences
+            // Persist to SourcePreferences as JSON
             try {
                 val prefs = Injekt.get<app.anikuta.domain.source.service.SourcePreferences>()
-                prefs.sourcePriorityOrder().set(list.toMutableList())
+                val json = kotlinx.serialization.json.Json.encodeToString(
+                    kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()),
+                    list,
+                )
+                prefs.sourcePriorityOrder().set(json)
             } catch (e: Exception) {
                 Log.w(TAG, "Could not persist source priority", e)
             }
@@ -214,7 +218,13 @@ class ExtensionsViewModel : ViewModel() {
     private fun loadSourcePriority() {
         try {
             val prefs = Injekt.get<app.anikuta.domain.source.service.SourcePreferences>()
-            _sourcePriority.value = prefs.sourcePriorityOrder().get()
+            val json = prefs.sourcePriorityOrder().get()
+            _sourcePriority.value = try {
+                kotlinx.serialization.json.Json.decodeFromString(
+                    kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()),
+                    json,
+                )
+            } catch (e: Exception) { emptyList() }
         } catch (e: Exception) {
             Log.w(TAG, "Could not load source priority", e)
         }
