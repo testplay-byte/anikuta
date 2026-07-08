@@ -647,77 +647,7 @@ private fun EpisodeRowRich(
             }
         }
 
-        // Bottom-left: date pill + audio availability pills (below thumbnail)
-        if (showDates && episode.date_upload > 0 || hasThumbnail) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Date pill
-                if (showDates && episode.date_upload > 0) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Text(
-                            text = formatDate(episode.date_upload),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
-                    }
-                }
-                // Audio availability pills (SUB/DUB) — derived from the episode name
-                // Many extensions include "SUB" or "DUB" in the episode name
-                val nameUpper = episode.name.uppercase()
-                if (nameUpper.contains("SUB") || nameUpper.contains("HSUB")) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Text(
-                            text = "SUB",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
-                    }
-                }
-                if (nameUpper.contains("DUB")) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Text(
-                            text = "DUB",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
-                    }
-                }
-                if (nameUpper.contains("HSUB")) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Text(
-                            text = "HSUB",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
-                    }
-                }
-            }
-        }
-
-        // Synopsis with background (below everything)
+        // Synopsis with background — directly below the title (before date/pills)
         if (hasSummary) {
             Spacer(modifier = Modifier.height(8.dp))
             Surface(
@@ -735,6 +665,79 @@ private fun EpisodeRowRich(
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                         .clickable { summaryExpanded = !summaryExpanded },
                 )
+            }
+        }
+
+        // Date pill + audio availability pills (below synopsis, bottom-left)
+        val nameUpper = episode.name.uppercase()
+        val hasDate = showDates && episode.date_upload > 0
+        val hasSub = nameUpper.contains("SUB") || nameUpper.contains("HSUB")
+        val hasDub = nameUpper.contains("DUB")
+        val hasHsub = nameUpper.contains("HSUB")
+        if (hasDate || hasSub || hasDub || hasHsub) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Date pill
+                if (hasDate) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    ) {
+                        Text(
+                            text = formatDate(episode.date_upload),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                }
+                // Audio availability pills (SUB/DUB/HSUB)
+                if (hasSub) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    ) {
+                        Text(
+                            text = "SUB",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                }
+                if (hasDub) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    ) {
+                        Text(
+                            text = "DUB",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                }
+                if (hasHsub) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    ) {
+                        Text(
+                            text = "HSUB",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                }
             }
         }
     }
