@@ -41,4 +41,22 @@ class PlayerPreferences(
     /** Whether controls auto-hide. */
     fun autoHideControls(): Preference<Boolean> =
         preferenceStore.getBoolean("pref_auto_hide_controls", true)
+
+    // ---- Phase 7.5: Episode list display settings ----
+
+    /** Show episode titles (parsed from SEpisode.name). Default: true. */
+    fun showEpisodeTitles(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_show_episode_titles", true)
+
+    /** Show episode summaries/descriptions (from SEpisode.summary). Default: true. */
+    fun showEpisodeSummaries(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_show_episode_summaries", true)
+
+    /** Show episode thumbnails (from SEpisode.preview_url). Default: true. */
+    fun showEpisodeThumbnails(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_show_episode_thumbnails", true)
+
+    /** Show episode dates (from SEpisode.date_upload). Default: true. */
+    fun showEpisodeDates(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_show_episode_dates", true)
 }

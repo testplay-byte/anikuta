@@ -54,6 +54,13 @@ fun DetailScreen(
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
 
+    // Phase 7.5: Episode display settings
+    val playerPrefs = remember { try { uy.kohesive.injekt.Injekt.get<app.anikuta.player.PlayerPreferences>() } catch (e: Exception) { null } }
+    val showTitles = playerPrefs?.showEpisodeTitles()?.get() ?: true
+    val showSummaries = playerPrefs?.showEpisodeSummaries()?.get() ?: true
+    val showThumbnails = playerPrefs?.showEpisodeThumbnails()?.get() ?: true
+    val showDates = playerPrefs?.showEpisodeDates()?.get() ?: true
+
     // Observe play requests from the ViewModel → launch the player.
     androidx.compose.runtime.LaunchedEffect(playRequest) {
         val req = playRequest ?: return@LaunchedEffect
@@ -266,6 +273,10 @@ fun DetailScreen(
                                         EpisodeRow(
                                             episode = episode,
                                             onClick = { viewModel.playEpisode(episode) },
+                                            showThumbnails = showThumbnails,
+                                            showSummaries = showSummaries,
+                                            showTitles = showTitles,
+                                            showDates = showDates,
                                         )
                                     }
                                 }
@@ -466,70 +477,210 @@ private fun InfoCard(title: String, body: String) {
 private fun EpisodeRow(
     episode: app.anikuta.source.api.model.SEpisode,
     onClick: () -> Unit,
+    showThumbnails: Boolean = true,
+    showSummaries: Boolean = true,
+    showTitles: Boolean = true,
+    showDates: Boolean = true,
 ) {
+    val hasThumbnail = showThumbnails && !episode.preview_url.isNullOrBlank()
+    val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
+    val isRich = hasThumbnail || hasSummary
+
     Surface(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         onClick = onClick,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        if (isRich) {
+            // Rich layout: thumbnail (left) + title + summary + date
+            EpisodeRowRich(episode, onClick, hasThumbnail, hasSummary, showTitles, showDates)
+        } else {
+            // Simple layout: episode number badge + title + play icon
+            EpisodeRowSimple(episode, showTitles)
+        }
+    }
+}
+
+/**
+ * Simple episode row — no thumbnail, no summary.
+ * Episode number badge + title + play icon.
+ */
+@Composable
+private fun EpisodeRowSimple(
+    episode: app.anikuta.source.api.model.SEpisode,
+    showTitles: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Episode number — circular badge
+        Surface(
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.size(40.dp),
         ) {
-            // Episode number — circular badge
-            Surface(
-                shape = androidx.compose.foundation.shape.CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.size(40.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = if (episode.episode_number % 1f == 0f) episode.episode_number.toInt().toString()
-                        else episode.episode_number.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            // Episode title
-            Column(modifier = Modifier.weight(1f)) {
+            Box(contentAlignment = Alignment.Center) {
                 Text(
-                    text = episode.name.ifBlank { "Episode ${episode.episode_number}" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    text = EpisodeTitleParser.formatEpisodeNumber(episode.episode_number),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (episode.scanlator?.isNotBlank() == true) {
-                    Text(
-                        text = episode.scanlator!!,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            // Play icon
-            Surface(
-                shape = androidx.compose.foundation.shape.CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Filled.PlayArrow,
-                        contentDescription = "Play",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
             }
         }
+        Spacer(modifier = Modifier.width(12.dp))
+        // Episode title
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (showTitles) {
+                    EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number)
+                } else {
+                    "Episode ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (episode.scanlator?.isNotBlank() == true) {
+                Text(
+                    text = episode.scanlator!!,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        // Play icon
+        Surface(
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(32.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = "Play",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Rich episode row — with thumbnail and/or summary.
+ * Thumbnail on the left, title + summary + date in the middle, play icon on the right.
+ */
+@Composable
+private fun EpisodeRowRich(
+    episode: app.anikuta.source.api.model.SEpisode,
+    onClick: () -> Unit,
+    hasThumbnail: Boolean,
+    hasSummary: Boolean,
+    showTitles: Boolean,
+    showDates: Boolean,
+) {
+    var summaryExpanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        // Thumbnail (left)
+        if (hasThumbnail) {
+            coil3.compose.AsyncImage(
+                model = episode.preview_url,
+                contentDescription = "Episode thumbnail",
+                modifier = Modifier
+                    .width(120.dp)
+                    .height(68.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+        }
+
+        // Title + summary + date (middle)
+        Column(modifier = Modifier.weight(1f)) {
+            // Title
+            Text(
+                text = if (showTitles) {
+                    EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number)
+                } else {
+                    "Episode ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = if (hasThumbnail) 2 else 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            // Summary (expandable)
+            if (hasSummary) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = episode.summary!!,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable { summaryExpanded = !summaryExpanded },
+                )
+            }
+
+            // Date + scanlator
+            if (showDates && episode.date_upload > 0) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = formatDate(episode.date_upload),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (episode.scanlator?.isNotBlank() == true) {
+                Text(
+                    text = episode.scanlator!!,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        // Play icon (right)
+        Surface(
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(32.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = "Play",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Format a date_upload (epoch millis) as a readable date string.
+ */
+private fun formatDate(epochMillis: Long): String {
+    if (epochMillis <= 0) return ""
+    return try {
+        val sdf = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+        sdf.format(java.util.Date(epochMillis))
+    } catch (e: Exception) {
+        ""
     }
 }
 

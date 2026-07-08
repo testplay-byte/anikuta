@@ -3,9 +3,13 @@ package app.anikuta.ui.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Title
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -26,6 +30,10 @@ fun PlayerSettingsScreen(onBack: () -> Unit) {
     val speed by prefs.playerSpeed().stateIn(scope).collectAsState()
     val hwdec by prefs.tryHWDecoding().stateIn(scope).collectAsState()
     var audioLang by remember { mutableStateOf(prefs.preferredAudioLanguages().get()) }
+    val showTitles by prefs.showEpisodeTitles().stateIn(scope).collectAsState()
+    val showSummaries by prefs.showEpisodeSummaries().stateIn(scope).collectAsState()
+    val showThumbnails by prefs.showEpisodeThumbnails().stateIn(scope).collectAsState()
+    val showDates by prefs.showEpisodeDates().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Player", onBack = onBack) {
         LazyColumn(
@@ -69,6 +77,43 @@ fun PlayerSettingsScreen(onBack: () -> Unit) {
                             placeholder = { Text("jpn,eng") },
                         )
                     }
+                }
+            }
+
+            // ---- Episode list display settings (Phase 7.5) ----
+            item {
+                SettingsGroupCard(title = "Episode list") {
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Title,
+                        title = "Show episode titles",
+                        subtitle = "Display parsed episode titles (strips 'Episode N - ' prefix)",
+                        checked = showTitles,
+                        onCheckedChange = { prefs.showEpisodeTitles().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Subtitles,
+                        title = "Show episode summaries",
+                        subtitle = "Display episode descriptions (when provided by the extension)",
+                        checked = showSummaries,
+                        onCheckedChange = { prefs.showEpisodeSummaries().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Image,
+                        title = "Show episode thumbnails",
+                        subtitle = "Display preview images (when provided by the extension)",
+                        checked = showThumbnails,
+                        onCheckedChange = { prefs.showEpisodeThumbnails().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.CalendarMonth,
+                        title = "Show episode dates",
+                        subtitle = "Display air dates (when provided by the extension)",
+                        checked = showDates,
+                        onCheckedChange = { prefs.showEpisodeDates().set(it) },
+                    )
                 }
             }
         }
