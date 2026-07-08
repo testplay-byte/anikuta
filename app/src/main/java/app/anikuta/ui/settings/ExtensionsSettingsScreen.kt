@@ -1,14 +1,12 @@
 package app.anikuta.ui.settings
 
 import android.graphics.drawable.Drawable
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,7 +74,6 @@ import app.anikuta.extension.anime.model.AnimeExtension
 import app.anikuta.ui.settings.ExtensionsViewModel.SortMode
 import coil3.compose.AsyncImage
 import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.draggableHandle
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 /**
@@ -142,83 +139,82 @@ fun ExtensionsSettingsScreen(
         title = if (isSearchActive) "" else "Extensions",
         onBack = if (isSearchActive) ({ viewModel.setSearchActive(false) }) else onBack,
         actions = {
-            // Search bar — smooth slide-in from the right. Uses a simple
-            // width animation (not AnimatedVisibility) to avoid layout jitter.
-            // The Surface has no fixed height — it wraps the text field content
-            // naturally, so the text isn't clipped.
-            androidx.compose.animation.AnimatedContent(
-                targetState = isSearchActive,
-                transitionSpec = {
-                    androidx.compose.animation.togetherWith(
-                        enter = expandHorizontally(animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)) + fadeIn(animationSpec = spring()),
-                        exit = shrinkHorizontally(animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)) + fadeOut(animationSpec = spring()),
-                    )
-                },
-                label = "search_bar_transition",
-            ) { active ->
-                if (active) {
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        tonalElevation = 0.dp,
+            // Search bar — smooth slide-in from the right.
+            // Uses AnimatedVisibility with expandHorizontally for a smooth,
+            // non-jittery transition. The Surface wraps the text field content
+            // naturally (no fixed height), so the text isn't clipped.
+            AnimatedVisibility(
+                visible = isSearchActive,
+                enter = expandHorizontally(animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)) + fadeIn(),
+                exit = shrinkHorizontally(animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)) + fadeOut(),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 0.dp,
+                    modifier = Modifier
+                        .width(240.dp)
+                        .padding(end = 4.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .width(240.dp)
-                            .padding(end = 4.dp),
+                            .padding(start = 12.dp, end = 4.dp)
+                            .height(40.dp),
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.setSearchQuery(it) },
+                            placeholder = { Text("Search…", style = MaterialTheme.typography.bodySmall) },
+                            singleLine = true,
                             modifier = Modifier
-                                .padding(start = 12.dp, end = 4.dp)
-                                .height(40.dp),
+                                .weight(1f)
+                                .padding(horizontal = 8.dp),
+                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                                disabledBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                            ),
+                            textStyle = MaterialTheme.typography.bodySmall,
+                        )
+                        IconButton(
+                            onClick = { viewModel.setSearchActive(false) },
+                            modifier = Modifier.size(32.dp),
                         ) {
                             Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
+                                Icons.Default.Close,
+                                contentDescription = "Close search",
                                 modifier = Modifier.size(18.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { viewModel.setSearchQuery(it) },
-                                placeholder = { Text("Search…", style = MaterialTheme.typography.bodySmall) },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 8.dp),
-                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                    disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                    focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                                    unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                                    disabledBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                                ),
-                                textStyle = MaterialTheme.typography.bodySmall,
-                            )
-                            IconButton(
-                                onClick = { viewModel.setSearchActive(false) },
-                                modifier = Modifier.size(32.dp),
-                            ) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Close search",
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
                         }
                     }
-                } else {
-                    Row {
-                        IconButton(onClick = { viewModel.setSearchActive(true) }) {
-                            Icon(Icons.Default.Search, contentDescription = "Search")
-                        }
-                        IconButton(onClick = { showFilterSheet = true }) {
-                            Icon(Icons.Default.Tune, contentDescription = "Filter")
-                        }
-                        IconButton(onClick = onManageRepos) {
-                            Icon(Icons.Outlined.Public, contentDescription = "Manage repositories")
-                        }
+                }
+            }
+            // Action icons — hidden when search is active
+            AnimatedVisibility(
+                visible = !isSearchActive,
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                Row {
+                    IconButton(onClick = { viewModel.setSearchActive(true) }) {
+                        Icon(Icons.Default.Search, contentDescription = "Search")
+                    }
+                    IconButton(onClick = { showFilterSheet = true }) {
+                        Icon(Icons.Default.Tune, contentDescription = "Filter")
+                    }
+                    IconButton(onClick = onManageRepos) {
+                        Icon(Icons.Outlined.Public, contentDescription = "Manage repositories")
                     }
                 }
             }
@@ -303,6 +299,7 @@ private fun ExtensionsListContent(
                                         onClick = { onOpenDetails(ext.pkgName) },
                                         onUntrust = { onRevoke(ext) },
                                         showDragHandle = sortedSources.size > 1,
+                                        dragModifier = if (sortedSources.size > 1) Modifier.draggableHandle() else Modifier,
                                     )
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                 }
@@ -597,6 +594,7 @@ private fun SourceExtensionRow(
     onClick: () -> Unit,
     onUntrust: () -> Unit,
     showDragHandle: Boolean = false,
+    dragModifier: Modifier = Modifier,
 ) {
     Row(
         modifier = Modifier
@@ -610,9 +608,8 @@ private fun SourceExtensionRow(
             Icon(
                 Icons.Default.DragHandle,
                 contentDescription = "Drag to reorder",
-                modifier = Modifier
-                    .size(24.dp)
-                    .draggableHandle(),
+                modifier = dragModifier
+                    .size(24.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.width(8.dp))
