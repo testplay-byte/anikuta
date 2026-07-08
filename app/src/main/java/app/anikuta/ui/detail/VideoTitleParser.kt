@@ -118,10 +118,7 @@ fun groupVideosByAudio(videos: List<Video>): List<AudioSection> {
     val byAudio = parsed.groupBy { it.audio }
 
     return byAudio.entries
-        .sortedWith(
-            compareBy<AudioVersion> { audioOrder.indexOf(it) }
-                .thenBy { it.label },
-        )
+        .sortedBy { audioOrder.indexOf(it.key) }
         .map { (audio, parsedVideos) ->
             val byServer = parsedVideos.groupBy { it.server }
             val servers = byServer.entries
