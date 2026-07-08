@@ -58,6 +58,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
     val titlePos by prefs.titlePosition().stateIn(scope).collectAsState()
     val epNumPos by prefs.episodeNumberPosition().stateIn(scope).collectAsState()
     val thumbPos by prefs.thumbnailPosition().stateIn(scope).collectAsState()
+    val animeInfoPos by prefs.animeInfoPosition().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Details", onBack = onBack) {
         LazyColumn(
@@ -235,6 +236,26 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                                 onClick = { prefs.thumbnailPosition().set("right") },
                                 shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                             ) { Text("Right") }
+                        }
+                    }
+                    HorizontalDivider()
+                    // Anime info position
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text("Anime info position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Where to show anime info (genres, score, etc.) relative to episodes", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(
+                                selected = animeInfoPos == "above",
+                                onClick = { prefs.animeInfoPosition().set("above") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            ) { Text("Above episodes") }
+                            SegmentedButton(
+                                selected = animeInfoPos == "below",
+                                onClick = { prefs.animeInfoPosition().set("below") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            ) { Text("Below episodes") }
                         }
                     }
                 }

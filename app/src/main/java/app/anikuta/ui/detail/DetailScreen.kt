@@ -72,6 +72,9 @@ fun DetailScreen(
     val datePosition = remember { playerPrefs?.datePosition()?.get() ?: "right_below_synopsis" }
     val thumbnailSize = remember { playerPrefs?.thumbnailSize()?.get() ?: "medium" }
     val titlePosition = remember { playerPrefs?.titlePosition()?.get() ?: "right" }
+    val episodeNumberPosition = remember { playerPrefs?.episodeNumberPosition()?.get() ?: "overlay" }
+    val thumbnailPosition = remember { playerPrefs?.thumbnailPosition()?.get() ?: "left" }
+    val animeInfoPosition = remember { playerPrefs?.animeInfoPosition()?.get() ?: "below" }
 
     // Observe play requests from the ViewModel → launch the player.
     androidx.compose.runtime.LaunchedEffect(playRequest) {
@@ -296,6 +299,8 @@ fun DetailScreen(
                                             thumbnailSize = thumbnailSize,
                                             availableAudioVersions = viewModel.getAvailableAudioVersions(episode.url),
                                             titlePosition = titlePosition,
+                                            episodeNumberPosition = episodeNumberPosition,
+                                            thumbnailPosition = thumbnailPosition,
                                         )
                                     }
                                 }
@@ -507,6 +512,8 @@ private fun EpisodeRow(
     thumbnailSize: String = "medium",
     availableAudioVersions: Set<String> = emptySet(),
     titlePosition: String = "right",
+    episodeNumberPosition: String = "overlay",
+    thumbnailPosition: String = "left",
 ) {
     val hasThumbnail = showThumbnails && !episode.preview_url.isNullOrBlank()
     val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
@@ -523,9 +530,10 @@ private fun EpisodeRow(
                 episode, hasThumbnail, hasSummary, showTitles, showDates,
                 showEpisodeNumber, showAudioPills, synopsisPosition, datePosition,
                 thumbnailSize, availableAudioVersions, titlePosition,
+                episodeNumberPosition, thumbnailPosition,
             )
         } else {
-            EpisodeRowSimple(episode, showTitles, showEpisodeNumber)
+            EpisodeRowSimple(episode, showTitles, showEpisodeNumber, episodeNumberPosition)
         }
     }
 }
@@ -539,6 +547,7 @@ private fun EpisodeRowSimple(
     episode: app.anikuta.source.api.model.SEpisode,
     showTitles: Boolean,
     showEpisodeNumber: Boolean,
+    episodeNumberPosition: String = "overlay",
 ) {
     Row(
         modifier = Modifier
@@ -609,6 +618,8 @@ private fun EpisodeRowRich(
     thumbnailSize: String,
     availableAudioVersions: Set<String>,
     titlePosition: String,
+    episodeNumberPosition: String,
+    thumbnailPosition: String,
 ) {
     var summaryExpanded by remember { mutableStateOf(false) }
 
@@ -619,9 +630,14 @@ private fun EpisodeRowRich(
         else -> 120.dp to 68.dp  // medium (default)
     }
 
-    // Audio versions from video cache (not episode name)
-    val hasSub = "SUB" in availableAudioVersions
-    val hasDub = "DUB" in availableAudioVersions
+    // Audio versions: check video cache first, then scanlator field.
+    // The AniKoto extension puts sub/dub info in SEpisode.scanlator:
+    // "Sub", "Dub", "Sub / Dub", or "Raw" (see Anikoto.kt lines 478-483).
+    val scanlatorUpper = episode.scanlator?.uppercase() ?: ""
+    val hasSubFromScanlator = scanlatorUpper.contains("SUB")
+    val hasDubFromScanlator = scanlatorUpper.contains("DUB")
+    val hasSub = "SUB" in availableAudioVersions || hasSubFromScanlator
+    val hasDub = "DUB" in availableAudioVersions || hasDubFromScanlator
     val hasHsub = "HSUB" in availableAudioVersions
     val hasDate = showDates && episode.date_upload > 0
     val hasAnyPills = hasDate || (showAudioPills && (hasSub || hasDub || hasHsub))
@@ -695,13 +711,14 @@ private fun EpisodeRowRich(
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
-        // Top row: thumbnail (left, with episode number overlay) + right-side content
+        // Top row: thumbnail + right-side content
+        // Thumbnail position: left (default) or right
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,
         ) {
-            // Thumbnail with episode number overlay (left)
-            if (hasThumbnail) {
+            // Thumbnail (left, if position is 'left')
+            if (hasThumbnail && thumbnailPosition == "left") {
                 Box(
                     modifier = Modifier
                         .width(thumbWidth)
@@ -721,8 +738,8 @@ private fun EpisodeRowRich(
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         )
                     }
-                    // Episode number overlay — top-left corner of the thumbnail
-                    if (showEpisodeNumber) {
+                    // Episode number overlay — only when position is 'overlay'
+                    if (showEpisodeNumber && episodeNumberPosition == "overlay") {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f),
@@ -741,7 +758,7 @@ private fun EpisodeRowRich(
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-            } else if (showEpisodeNumber) {
+            } else if (!hasThumbnail && showEpisodeNumber && episodeNumberPosition != "badge") {
                 // No thumbnail — show episode number badge
                 Surface(
                     shape = androidx.compose.foundation.shape.CircleShape,
@@ -764,24 +781,45 @@ private fun EpisodeRowRich(
             Column(modifier = Modifier.weight(1f)) {
                 // Title on the right side (if position is 'right')
                 if (titlePosition == "right" || !hasThumbnail) {
-                    // Title with background
+                    // Title with background — includes episode number badge if position is 'badge'
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceContainer,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(
-                            text = if (showTitles) {
-                                EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number)
-                            } else {
-                                "Episode ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}"
-                            },
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                        Row(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        )
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // Episode number badge (if position is 'badge')
+                            if (showEpisodeNumber && episodeNumberPosition == "badge") {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                ) {
+                                    Text(
+                                        text = "EP ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text(
+                                text = if (showTitles) {
+                                    EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number)
+                                } else {
+                                    "Episode ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}"
+                                },
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
                 }
 
@@ -804,6 +842,48 @@ private fun EpisodeRowRich(
                     if (hasAnyPills) {
                         Spacer(modifier = Modifier.height(6.dp))
                         DateAudioPillsRow()
+                    }
+                }
+            }
+
+            // Thumbnail (right, if position is 'right')
+            if (hasThumbnail && thumbnailPosition == "right") {
+                Spacer(modifier = Modifier.width(12.dp))
+                Box(
+                    modifier = Modifier
+                        .width(thumbWidth)
+                        .height(thumbHeight),
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        coil3.compose.AsyncImage(
+                            model = episode.preview_url,
+                            contentDescription = "Episode thumbnail",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(10.dp)),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        )
+                    }
+                    if (showEpisodeNumber && episodeNumberPosition == "overlay") {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(4.dp),
+                        ) {
+                            Text(
+                                text = "EP ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = androidx.compose.ui.graphics.Color.White,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
                     }
                 }
             }

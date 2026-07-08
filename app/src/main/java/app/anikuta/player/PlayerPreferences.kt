@@ -109,4 +109,11 @@ class PlayerPreferences(
      */
     fun thumbnailPosition(): Preference<String> =
         preferenceStore.getString("pref_thumbnail_position", "left")
+
+    /**
+     * Anime info position on detail page: 'below' = below episodes (default).
+     * 'above' = above episodes (info first, then episodes).
+     */
+    fun animeInfoPosition(): Preference<String> =
+        preferenceStore.getString("pref_anime_info_position", "below")
 }

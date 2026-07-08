@@ -78,11 +78,12 @@ fun EpisodeRowPreview(
 
     var summaryExpanded by remember { mutableStateOf(false) }
 
-    // Gradient colors for demo thumbnail
+    // Gradient colors for demo thumbnail — smooth 3-way gradient
+    // Using adjacent colors on the color wheel for a smooth transition
     val gradientColors = listOf(
+        MaterialTheme.colorScheme.primary,
         MaterialTheme.colorScheme.primaryContainer,
         MaterialTheme.colorScheme.secondaryContainer,
-        MaterialTheme.colorScheme.tertiaryContainer,
     )
 
     @Composable
