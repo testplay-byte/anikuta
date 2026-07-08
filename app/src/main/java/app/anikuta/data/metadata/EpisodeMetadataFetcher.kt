@@ -88,9 +88,10 @@ class EpisodeMetadataFetcher(
                     airDate = j?.airDate,
                 )
             }
+
+            Log.i(TAG, "Fetched metadata for ${results.size} episodes (AniList=${anilist.size}, Jikan=${jikan.size})")
         }
 
-        Log.i(TAG, "Fetched metadata for ${results.size} episodes (AniList=${anilist.size}, Jikan=${jikan.size})")
         return results
     }
 
