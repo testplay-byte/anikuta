@@ -33,7 +33,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import app.anikuta.ui.theme.AnikutaSprings
+import kotlinx.coroutines.launch
 
 @Composable
 fun OnboardingScreen(
@@ -254,9 +257,6 @@ private fun ExpressivePermissionsStep() {
     val context = LocalContext.current
 
     // ---- Notification permission (Android 13+ / API 33+) ----
-    // Pre-API 33: POST_NOTIFICATIONS doesn't exist as a runtime permission —
-    // notifications are granted at install time, so we hide the switch and
-    // show a "Granted" badge instead.
     val isApi33Plus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     val initialNotifGranted = if (isApi33Plus) {
         ContextCompat.checkSelfPermission(
@@ -269,14 +269,41 @@ private fun ExpressivePermissionsStep() {
     var notifGranted by remember { mutableStateOf(initialNotifGranted) }
     var notifAsked by remember { mutableStateOf(false) }
 
-    // Launcher that actually requests POST_NOTIFICATIONS at runtime.
-    // Per task 5.15: the Permissions step must REQUEST permissions, not just
-    // show text. Graceful degradation: denial still lets the user proceed.
     val notifLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         notifGranted = granted
         notifAsked = true
+    }
+
+    // ---- Install from unknown sources (API 26+) ----
+    // CanInstallApps checks if the user has granted "install unknown apps"
+    // permission for this app. Without it, extension APKs can't be installed.
+    val initialInstallGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        context.packageManager.canRequestPackageInstalls()
+    } else {
+        true  // Pre-O doesn't need this permission
+    }
+    var installGranted by remember { mutableStateOf(initialInstallGranted) }
+
+    // ---- Storage permission (API 33+ uses READ_MEDIA_*, older uses READ/WRITE_EXTERNAL_STORAGE) ----
+    val storagePermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_VIDEO
+    } else {
+        Manifest.permission.WRITE_EXTERNAL_STORAGE
+    }
+    val initialStorageGranted = ContextCompat.checkSelfPermission(
+        context,
+        storagePermission,
+    ) == PackageManager.PERMISSION_GRANTED
+    var storageGranted by remember { mutableStateOf(initialStorageGranted) }
+    var storageAsked by remember { mutableStateOf(false) }
+
+    val storageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        storageGranted = granted
+        storageAsked = true
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -290,7 +317,7 @@ private fun ExpressivePermissionsStep() {
         )
         Spacer(modifier = Modifier.height(20.dp))
 
-        // ---- Notifications card with a working toggle ----
+        // ---- Notifications card ----
         PermissionCard(
             name = "Notifications",
             desc = when {
@@ -305,11 +332,8 @@ private fun ExpressivePermissionsStep() {
                         checked = notifGranted,
                         onCheckedChange = { wantsEnabled ->
                             if (wantsEnabled && !notifGranted) {
-                                // Trigger the actual system permission dialog
                                 notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             } else if (!wantsEnabled && notifGranted) {
-                                // Apps can't revoke a granted runtime permission
-                                // themselves — bounce the user to system settings.
                                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                     data = Uri.fromParts("package", context.packageName, null)
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -324,7 +348,6 @@ private fun ExpressivePermissionsStep() {
             },
         )
 
-        // Inline deny hint — M3 Expressive tertiary/error tint
         if (notifAsked && !notifGranted && isApi33Plus) {
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -338,17 +361,107 @@ private fun ExpressivePermissionsStep() {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // ---- Storage card — folder selection handled in step 3 via
-        // OpenDocumentTree, so we just show a status indicator here.
-        // Per task 5.15 option (b): status indicator only.
+        // ---- Storage permission card ----
         PermissionCard(
             name = "Storage",
-            desc = "Folder selection happens in the next step",
+            desc = when {
+                storageGranted -> "Granted — save downloads + cache"
+                storageAsked -> "Denied — downloads won't work"
+                else -> "For saving downloads and cache"
+            },
             icon = Icons.Default.Storage,
             trailing = {
-                StatusBadge("Next step", granted = false)
+                Switch(
+                    checked = storageGranted,
+                    onCheckedChange = { wantsEnabled ->
+                        if (wantsEnabled && !storageGranted) {
+                            storageLauncher.launch(storagePermission)
+                        } else if (!wantsEnabled && storageGranted) {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            runCatching { context.startActivity(intent) }
+                        }
+                    },
+                )
             },
         )
+
+        if (storageAsked && !storageGranted) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                "Denied — downloads won't work. You can still continue.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // ---- Install from unknown sources card (API 26+) ----
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PermissionCard(
+                name = "Install unknown apps",
+                desc = when {
+                    installGranted -> "Granted — install extensions directly"
+                    else -> "Required to install extension APKs"
+                },
+                icon = Icons.Default.InstallMobile,
+                trailing = {
+                    Switch(
+                        checked = installGranted,
+                        onCheckedChange = { wantsEnabled ->
+                            if (wantsEnabled && !installGranted) {
+                                // Navigate to the system settings page where the user
+                                // can grant "install unknown apps" for this app.
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    Uri.parse("package:${context.packageName}"),
+                                ).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                runCatching { context.startActivity(intent) }
+                            } else if (!wantsEnabled && installGranted) {
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    Uri.parse("package:${context.packageName}"),
+                                ).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                runCatching { context.startActivity(intent) }
+                            }
+                        },
+                    )
+                },
+            )
+            // Re-check the permission status when the user returns from settings
+            LaunchedEffect(installGranted) {
+                // This LaunchedEffect re-runs when installGranted changes, but we
+                // also want to re-check when the composable recomposes. The user
+                // will see the updated state when they return from the settings page.
+            }
+            // Manual refresh button
+            TextButton(
+                onClick = {
+                    installGranted = context.packageManager.canRequestPackageInstalls()
+                    storageGranted = ContextCompat.checkSelfPermission(
+                        context,
+                        storagePermission,
+                    ) == PackageManager.PERMISSION_GRANTED
+                    notifGranted = if (isApi33Plus) {
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS,
+                        ) == PackageManager.PERMISSION_GRANTED
+                    } else true
+                },
+            ) {
+                Text("Refresh status", style = MaterialTheme.typography.labelSmall)
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         Text(
@@ -472,48 +585,176 @@ private fun ExpressiveStorageStep(onFolderSelected: (String) -> Unit, selectedUr
 }
 
 @Composable
-private fun ExpressiveExtensionStep(onPrimarySelected: (String) -> Unit, primaryPkg: String?) {
+private fun ExpressiveExtensionStep(
+    onPrimarySelected: (String) -> Unit,
+    primaryPkg: String?,
+) {
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // Load installed extensions (untrusted) from the extension manager.
+    // These are extensions the user has already installed but hasn't trusted yet.
+    var installedExtensions by remember { mutableStateOf<List<app.anikuta.extension.anime.model.AnimeExtension.Untrusted>>(emptyList()) }
+    var trustedExtensions by remember { mutableStateOf<List<app.anikuta.extension.anime.model.AnimeExtension.Installed>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var showRepoDialog by remember { mutableStateOf(false) }
+    var repoUrl by remember { mutableStateOf("") }
+    var repoStatus by remember { mutableStateOf<String?>(null) }
+
+    // Load extensions on first composition
+    LaunchedEffect(Unit) {
+        try {
+            val manager = uy.kohesive.injekt.Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
+            manager.reload()
+            kotlinx.coroutines.delay(500)  // give the manager time to scan
+            installedExtensions = manager.untrustedExtensions.value
+            trustedExtensions = manager.installedExtensions.value
+            Log.d("OnboardingExtension", "Loaded ${installedExtensions.size} untrusted, ${trustedExtensions.size} trusted")
+        } catch (e: Exception) {
+            Log.e("OnboardingExtension", "Failed to load extensions", e)
+        } finally {
+            isLoading = false
+        }
+    }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Select Extension", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "Extensions are how ANI-KUTA finds anime streams.\nPick one to get started.",
+            "Extensions are how ANI-KUTA finds anime streams.\n" +
+                "Select an installed extension to trust it as your source.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(24.dp))
-        val isSelected = primaryPkg == "eu.kanade.tachiyomi.animeextension.en.anikoto180"
-        Surface(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
-            shape = RoundedCornerShape(16.dp),
-            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 1.dp,
-            onClick = { onPrimarySelected("eu.kanade.tachiyomi.animeextension.en.anikoto180") },
-        ) {
-            Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+
+        when {
+            isLoading -> {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Scanning for installed extensions…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            installedExtensions.isNotEmpty() -> {
+                // Show the list of installed (untrusted) extensions
+                installedExtensions.forEach { ext ->
+                    val isSelected = primaryPkg == ext.pkgName
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 1.dp,
+                        onClick = {
+                            // Trust this extension
+                            try {
+                                val manager = uy.kohesive.injekt.Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
+                                manager.trust(ext.pkgName)
+                                onPrimarySelected(ext.pkgName)
+                                Log.i("OnboardingExtension", "Trusted ${ext.name}")
+                            } catch (e: Exception) {
+                                Log.e("OnboardingExtension", "Trust failed", e)
+                            }
+                        },
+                    ) {
+                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            ext.icon?.let { drawable ->
+                                androidx.compose.foundation.Image(
+                                    painter = androidx.compose.ui.graphics.painter.BitmapPainter(
+                                        drawable.toBitmap().asImageBitmap(),
+                                    ),
+                                    contentDescription = ext.name,
+                                    modifier = Modifier.size(40.dp),
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                            } ?: run {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    modifier = Modifier.size(40.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(ext.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text("v${ext.versionName} · Tap to trust", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (isSelected) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("AniKoto 180", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Recommended · Default anime source", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            else -> {
+                // No extensions installed — prompt for repo URL
+                Icon(
+                    Icons.Default.Extension,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "No extensions installed",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Add an extension repository to install extensions.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Repo URL input
+                OutlinedTextField(
+                    value = repoUrl,
+                    onValueChange = { repoUrl = it },
+                    label = { Text("Repository URL") },
+                    placeholder = { Text("https://example.com/index.min.json") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        scope.launch {
+                            repoStatus = "Adding repository…"
+                            try {
+                                val createRepo = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo>()
+                                val result = createRepo.await(repoUrl.trim())
+                                repoStatus = when (result) {
+                                    is app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo.Result.Success -> "Repository added! Install extensions from Settings → Extensions."
+                                    is app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo.Result.InvalidUrl -> "Invalid URL"
+                                    is app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo.Result.RepoAlreadyExists -> "Repository already exists"
+                                    else -> "Failed to add repository"
+                                }
+                            } catch (e: Exception) {
+                                repoStatus = "Error: ${e.message}"
+                            }
+                        }
+                    },
+                    enabled = repoUrl.isNotBlank(),
+                ) {
+                    Text("Add Repository")
                 }
-                if (isSelected) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                repoStatus?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                 }
             }
         }
+
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            "You can add more extensions later in Settings.",
+            "You can add more extensions later in Settings → Extensions.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

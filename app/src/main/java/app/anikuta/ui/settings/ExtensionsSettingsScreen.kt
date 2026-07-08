@@ -34,8 +34,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerifiedUser
-import androidx.compose.material.icons.filled.ViewList
-import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -71,7 +69,6 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.anikuta.extension.anime.TrustResult
 import app.anikuta.extension.anime.model.AnimeExtension
-import app.anikuta.ui.settings.ExtensionsViewModel.LayoutMode
 import app.anikuta.ui.settings.ExtensionsViewModel.SortMode
 import coil3.compose.AsyncImage
 
@@ -105,7 +102,6 @@ fun ExtensionsSettingsScreen(
     val isSearchActive by viewModel.isSearchActive.collectAsState()
     val enabledLanguages by viewModel.enabledLanguages.collectAsState()
     val sortMode by viewModel.sortMode.collectAsState()
-    val layoutMode by viewModel.layoutMode.collectAsState()
 
     val filteredSources = remember(sources, searchQuery) { viewModel.filteredSources() }
     val filteredInstalled = remember(installed, searchQuery) { viewModel.filteredInstalled() }
@@ -140,38 +136,39 @@ fun ExtensionsSettingsScreen(
         onBack = if (isSearchActive) ({ viewModel.setSearchActive(false) }) else onBack,
         actions = {
             // Search bar — expands smoothly from the right with animation.
-            // When active, hides the title and shows a filled TextField.
+            // Slim, pill-shaped, M3 Expressive. Close (X) button on the right.
             AnimatedVisibility(
                 visible = isSearchActive,
                 enter = expandHorizontally(animationSpec = spring()) + fadeIn(),
                 exit = shrinkHorizontally(animationSpec = spring()) + fadeOut(),
             ) {
                 Surface(
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = 0.dp,
                     modifier = Modifier
-                        .width(220.dp)
+                        .width(240.dp)
+                        .height(36.dp)
                         .padding(end = 4.dp),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp),
                     ) {
                         Icon(
                             Icons.Default.Search,
                             contentDescription = null,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { viewModel.setSearchQuery(it) },
-                            placeholder = { Text("Search…", style = MaterialTheme.typography.bodyMedium) },
+                            placeholder = { Text("Search…", style = MaterialTheme.typography.bodySmall) },
                             singleLine = true,
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(horizontal = 8.dp),
+                                .padding(horizontal = 6.dp),
                             colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
                                 unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -180,17 +177,19 @@ fun ExtensionsSettingsScreen(
                                 unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
                                 disabledBorderColor = androidx.compose.ui.graphics.Color.Transparent,
                             ),
-                            textStyle = MaterialTheme.typography.bodyMedium,
+                            textStyle = MaterialTheme.typography.bodySmall,
                         )
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.setSearchQuery("") }, modifier = Modifier.size(20.dp)) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Clear",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                        // Close (X) button — always visible when search is active
+                        IconButton(
+                            onClick = { viewModel.setSearchActive(false) },
+                            modifier = Modifier.size(20.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Close search",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -219,35 +218,19 @@ fun ExtensionsSettingsScreen(
             isRefreshing = isRefreshing,
             onRefresh = { viewModel.refresh() },
         ) {
-            if (layoutMode == LayoutMode.GRID) {
-                ExtensionsGridContent(
-                    sources = filteredSources,
-                    installed = filteredInstalled,
-                    available = filteredAvailable,
-                    isLoading = isLoading,
-                    downloading = downloading,
-                    onOpenDetails = onOpenExtensionDetails,
-                    onTrust = { viewModel.trustExtension(it) },
-                    onRevoke = { viewModel.revokeTrust(it) },
-                    onInstall = { viewModel.installExtension(it) },
-                    onUninstall = { viewModel.uninstallExtension(it) },
-                    isSearching = isSearchActive && searchQuery.isNotBlank(),
-                )
-            } else {
-                ExtensionsListContent(
-                    sources = filteredSources,
-                    installed = filteredInstalled,
-                    available = filteredAvailable,
-                    isLoading = isLoading,
-                    downloading = downloading,
-                    onOpenDetails = onOpenExtensionDetails,
-                    onTrust = { viewModel.trustExtension(it) },
-                    onRevoke = { viewModel.revokeTrust(it) },
-                    onInstall = { viewModel.installExtension(it) },
-                    onUninstall = { viewModel.uninstallExtension(it) },
-                    isSearching = isSearchActive && searchQuery.isNotBlank(),
-                )
-            }
+            ExtensionsListContent(
+                sources = filteredSources,
+                installed = filteredInstalled,
+                available = filteredAvailable,
+                isLoading = isLoading,
+                downloading = downloading,
+                onOpenDetails = onOpenExtensionDetails,
+                onTrust = { viewModel.trustExtension(it) },
+                onRevoke = { viewModel.revokeTrust(it) },
+                onInstall = { viewModel.installExtension(it) },
+                onUninstall = { viewModel.uninstallExtension(it) },
+                isSearching = isSearchActive && searchQuery.isNotBlank(),
+            )
         }
     }
 }
@@ -357,212 +340,6 @@ private fun ExtensionsListContent(
 }
 
 /* ------------------------------------------------------------------ */
-/* Grid layout (2 columns)                                             */
-/* ------------------------------------------------------------------ */
-
-@Composable
-private fun ExtensionsGridContent(
-    sources: List<AnimeExtension.Installed>,
-    installed: List<AnimeExtension.Untrusted>,
-    available: List<AnimeExtension.Available>,
-    isLoading: Boolean,
-    downloading: Set<String>,
-    onOpenDetails: (String) -> Unit,
-    onTrust: (AnimeExtension.Untrusted) -> Unit,
-    onRevoke: (AnimeExtension.Installed) -> Unit,
-    onInstall: (AnimeExtension.Available) -> Unit,
-    onUninstall: (String) -> Unit,
-    isSearching: Boolean,
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // Sources
-        if (sources.isNotEmpty()) {
-            item(key = "grid_sources_header") { SectionHeader("Sources · ${sources.size}/2") }
-            // Render as rows of 2 (manual grid, no nested LazyVerticalGrid)
-            sources.chunked(2).forEachIndexed { rowIdx, rowItems ->
-                item(key = "grid_sources_row_$rowIdx") {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        rowItems.forEach { ext ->
-                            ExtensionGridCard(
-                                name = ext.name,
-                                lang = ext.lang,
-                                iconDrawable = ext.icon,
-                                iconUrl = null,
-                                isDownloading = false,
-                                isInstalled = true,
-                                onClick = { onOpenDetails(ext.pkgName) },
-                                onAction = { onRevoke(ext) },
-                                actionIcon = Icons.Default.VerifiedUser,
-                                actionTint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        // Fill empty slot if odd number
-                        if (rowItems.size == 1) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
-        }
-
-        // Installed
-        if (installed.isNotEmpty()) {
-            item(key = "grid_installed_header") { SectionHeader("Installed · ${installed.size}") }
-            installed.chunked(2).forEachIndexed { rowIdx, rowItems ->
-                item(key = "grid_installed_row_$rowIdx") {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        rowItems.forEach { ext ->
-                            ExtensionGridCard(
-                                name = ext.name,
-                                lang = ext.lang ?: "",
-                                iconDrawable = ext.icon,
-                                iconUrl = null,
-                                isDownloading = false,
-                                isInstalled = false,
-                                onClick = { onOpenDetails(ext.pkgName) },
-                                onAction = { onTrust(ext) },
-                                actionIcon = Icons.Default.VerifiedUser,
-                                actionTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        if (rowItems.size == 1) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
-        }
-
-        // Available
-        if (available.isNotEmpty()) {
-            item(key = "grid_available_header") { SectionHeader("Available · ${available.size}") }
-            available.chunked(2).forEachIndexed { rowIdx, rowItems ->
-                item(key = "grid_available_row_$rowIdx") {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        rowItems.forEach { ext ->
-                            val isInstalled = sources.any { it.pkgName == ext.pkgName } ||
-                                installed.any { it.pkgName == ext.pkgName }
-                            ExtensionGridCard(
-                                name = ext.name,
-                                lang = ext.lang,
-                                iconDrawable = null,
-                                iconUrl = ext.iconUrl,
-                                isDownloading = ext.pkgName in downloading,
-                                isInstalled = isInstalled,
-                                onClick = { },
-                                onAction = { onInstall(ext) },
-                                actionIcon = Icons.Default.Download,
-                                actionTint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        if (rowItems.size == 1) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
-        }
-
-        if (isLoading && available.isEmpty()) {
-            item { LoadingBody() }
-        }
-    }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(vertical = 4.dp),
-    )
-}
-
-@Composable
-private fun ExtensionGridCard(
-    name: String,
-    lang: String,
-    iconDrawable: Drawable?,
-    iconUrl: String?,
-    isDownloading: Boolean,
-    isInstalled: Boolean,
-    onClick: () -> Unit,
-    onAction: () -> Unit,
-    actionIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    actionTint: androidx.compose.ui.graphics.Color,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        modifier = modifier
-            .height(180.dp)
-            .clickable(onClick = onClick),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            ExtensionIconSlot(drawable = iconDrawable, iconUrl = iconUrl, contentDescription = name, size = 48)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
-            if (lang.isNotBlank()) {
-                Text(
-                    text = langLabel(lang),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-            // Action button at the bottom
-            when {
-                isDownloading -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                isInstalled -> Icon(
-                    Icons.Default.Check,
-                    contentDescription = "Installed",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp),
-                )
-                else -> Surface(
-                    shape = RoundedCornerShape(50),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    onClick = onAction,
-                ) {
-                    Icon(
-                        actionIcon,
-                        contentDescription = "Action",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .size(20.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-/* ------------------------------------------------------------------ */
 /* Filter bottom sheet (M3 Expressive redesign)                        */
 /* ------------------------------------------------------------------ */
 
@@ -575,7 +352,6 @@ private fun FilterBottomSheet(
     val sheetState = rememberModalBottomSheetState()
     val enabledLanguages by viewModel.enabledLanguages.collectAsState()
     val sortMode by viewModel.sortMode.collectAsState()
-    val layoutMode by viewModel.layoutMode.collectAsState()
     val allLangs = remember { viewModel.allLanguages + setOf("en") }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -595,28 +371,6 @@ private fun FilterBottomSheet(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text("Filter & sort", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            // ---- Layout section ----
-            item {
-                FilterSection(title = "Layout") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SegmentedOption(
-                            label = "List",
-                            icon = Icons.Default.ViewList,
-                            selected = layoutMode == LayoutMode.LIST,
-                            onClick = { viewModel.setLayoutMode(LayoutMode.LIST) },
-                            modifier = Modifier.weight(1f),
-                        )
-                        SegmentedOption(
-                            label = "Grid",
-                            icon = Icons.Default.ViewModule,
-                            selected = layoutMode == LayoutMode.GRID,
-                            onClick = { viewModel.setLayoutMode(LayoutMode.GRID) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
                 }
             }
 

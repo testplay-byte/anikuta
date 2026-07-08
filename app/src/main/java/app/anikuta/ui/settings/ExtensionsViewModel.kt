@@ -90,10 +90,6 @@ class ExtensionsViewModel : ViewModel() {
     private val _sortMode = MutableStateFlow(SortMode.NAME_ASC)
     val sortMode: StateFlow<SortMode> = _sortMode.asStateFlow()
 
-    enum class LayoutMode { LIST, GRID }
-    private val _layoutMode = MutableStateFlow(LayoutMode.LIST)
-    val layoutMode: StateFlow<LayoutMode> = _layoutMode.asStateFlow()
-
     /** All languages found in available extensions (for the filter UI). */
     val allLanguages: Set<String>
         get() = _available.value.mapNotNull { it.lang.takeIf { l -> l.isNotBlank() } }.toSet()
@@ -144,6 +140,10 @@ class ExtensionsViewModel : ViewModel() {
             }
         }
 
+        // Auto-refresh: always fetch available extensions on init. This ensures
+        // the list populates when the user returns from the Repos screen (where
+        // they may have just added a repo). The previous behavior required a
+        // manual pull-to-refresh, which was poor UX.
         refresh()
     }
 
@@ -187,9 +187,6 @@ class ExtensionsViewModel : ViewModel() {
 
     // ---- Sort ----
     fun setSortMode(mode: SortMode) { _sortMode.value = mode }
-
-    // ---- Layout ----
-    fun setLayoutMode(mode: LayoutMode) { _layoutMode.value = mode }
 
     /**
      * Filtered + sorted available extensions based on search query, language
