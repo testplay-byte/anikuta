@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
@@ -37,6 +38,8 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import app.anikuta.ui.theme.AnikutaSprings
 import kotlinx.coroutines.launch
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @Composable
 fun OnboardingScreen(
@@ -604,7 +607,7 @@ private fun ExpressiveExtensionStep(
     // Load extensions on first composition
     LaunchedEffect(Unit) {
         try {
-            val manager = uy.kohesive.injekt.Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
+            val manager = Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
             manager.reload()
             kotlinx.coroutines.delay(500)  // give the manager time to scan
             installedExtensions = manager.untrustedExtensions.value
@@ -647,7 +650,7 @@ private fun ExpressiveExtensionStep(
                         onClick = {
                             // Trust this extension
                             try {
-                                val manager = uy.kohesive.injekt.Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
+                                val manager = Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
                                 manager.trust(ext.pkgName)
                                 onPrimarySelected(ext.pkgName)
                                 Log.i("OnboardingExtension", "Trusted ${ext.name}")
@@ -728,7 +731,7 @@ private fun ExpressiveExtensionStep(
                         scope.launch {
                             repoStatus = "Adding repository…"
                             try {
-                                val createRepo = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo>()
+                                val createRepo = Injekt.get<app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo>()
                                 val result = createRepo.await(repoUrl.trim())
                                 repoStatus = when (result) {
                                     is app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo.Result.Success -> "Repository added! Install extensions from Settings → Extensions."
