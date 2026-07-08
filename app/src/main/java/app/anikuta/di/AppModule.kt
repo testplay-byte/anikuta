@@ -37,6 +37,7 @@ import app.anikuta.data.mihon.AnimeExtensionRepoRepositoryImpl
 import app.anikuta.extension.anime.AnimeExtensionManager
 import app.anikuta.extension.anime.util.AnimeExtensionLoader
 import app.anikuta.source.AndroidAnimeSourceManager
+import kotlinx.serialization.json.Json
 import uy.kohesive.injekt.api.InjektModule
 import uy.kohesive.injekt.api.InjektRegistrar
 import uy.kohesive.injekt.api.addSingleton
