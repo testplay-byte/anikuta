@@ -81,6 +81,16 @@ class DetailViewModel(
     private val _videoPicker = MutableStateFlow<VideoPickerState>(VideoPickerState.Hidden)
     val videoPicker: StateFlow<VideoPickerState> = _videoPicker.asStateFlow()
 
+    /** Collapsed server sections in the picker (key = "\${audio}_\${server}"). */
+    private val _expandedServers = MutableStateFlow<Set<String>>(emptySet())
+    val expandedServers: StateFlow<Set<String>> = _expandedServers.asStateFlow()
+
+    fun toggleServer(key: String) {
+        _expandedServers.value = _expandedServers.value.let {
+            if (key in it) it - key else it + key
+        }
+    }
+
     // Remember the matched source + SAnime so we can fetch episodes/videos later.
     private var matchedSource: AnimeCatalogueSource? = null
     private var matchedSAnime: SAnime? = null
@@ -99,7 +109,11 @@ class DetailViewModel(
     companion object {
         private const val TAG = "DetailViewModel"
         private const val REFRESH_GUARD_MS = 5 * 60 * 1000L  // 5 minutes
+        private const val VIDEO_CACHE_TTL_MS = 10 * 60 * 1000L  // 10 minutes
         private val episodeCache = mutableMapOf<Int, Pair<List<SEpisode>, String>>()
+        /** Phase 7: short-TTL video cache. Keyed by episode.url. */
+        private data class CachedVideoData(val audioSections: List<AudioSection>, val timestamp: Long)
+        private val videoCache = mutableMapOf<String, CachedVideoData>()
     }
 
     private val preferenceStore: app.anikuta.core.preference.PreferenceStore? = try { Injekt.get() } catch (e: Exception) { null }
@@ -283,58 +297,44 @@ class DetailViewModel(
 
     /**
      * Resolve the video URL for an episode. Called when the user taps an episode.
-     * Fetches the video list from the source (network call) and picks the first
-     * available video. Sets [playRequest] so the UI can launch the player.
+     *
+     * Phase 7: checks the short-TTL video cache first. On cache hit, shows the
+     * picker INSTANTLY with a "Refreshing…" badge and launches a background
+     * re-resolve. On cache miss, shows the "Resolving video…" overlay.
+     *
+     * Videos are grouped by audio version (SUB/DUB/HSUB) using [groupVideosByAudio],
+     * with qualities sorted descending within each server section.
      */
     fun playEpisode(episode: SEpisode) {
         val source = matchedSource ?: run {
             _playRequest.value = PlayRequest.Error("No source available")
             return
         }
+
+        // Phase 7: check video cache (10-min TTL)
+        val cached = videoCache[episode.url]
+        val now = System.currentTimeMillis()
+        if (cached != null && now - cached.timestamp < VIDEO_CACHE_TTL_MS) {
+            Log.d(TAG, "Video cache hit (age=${(now - cached.timestamp) / 1000}s): ${cached.audioSections.size} audio sections")
+            // Show picker instantly with cached data + refreshing badge
+            _videoPicker.value = VideoPickerState.Cached(episode, cached.audioSections, isRefreshing = true)
+            // Background re-resolve for smooth update
+            backgroundResolveVideos(episode, source)
+            return
+        }
+
+        // Cache miss — show resolving overlay
         _resolvingEpisode.value = true
+        _videoPicker.value = VideoPickerState.Resolving(episode)
         viewModelScope.launch {
             try {
-                // Try the newer getHosterList API first (groups videos by
-                // server/hoster). Fall back to flat getVideoList if the
-                // extension doesn't support it OR if getHosterList fails
-                // for any reason (URL parse error, classloader issue, etc.).
-                //
-                // Many extensions only override videoListRequest (the older
-                // API) and don't override hosterListRequest (the newer API
-                // from extensions-lib 16). When we call getHosterList on
-                // such an extension, the BASE CLASS default implementation
-                // runs: GET(baseUrl + episode.url). If the episode URL is
-                // not a simple relative path (e.g. it's an encoded string),
-                // this constructs an invalid URL → IllegalArgumentException.
-                //
-                // Fix: catch ALL exceptions (not just IllegalStateException)
-                // and fall back to getVideoList, which uses the extension's
-                // overridden videoListRequest — the correct URL constructor.
-                val serverGroups = try {
-                    val hosters = withContext(Dispatchers.IO) { source.getHosterList(episode) }
-                    hosters.mapNotNull { hoster ->
-                        val vids = hoster.videoList?.filter { it.videoUrl.isNotBlank() }
-                        if (!vids.isNullOrEmpty()) {
-                            ServerGroup(hoster.hosterName.ifBlank { "Server" }, vids)
-                        } else null
-                    }
-                } catch (e: Exception) {
-                    // Any failure in getHosterList — fall back to getVideoList.
-                    // This handles: IllegalStateException ("Not used"),
-                    // IllegalArgumentException (invalid URL), LinkageError
-                    // (classloader conflict), and any other extension error.
-                    Log.d(TAG, "getHosterList failed (${e.javaClass.simpleName}: ${e.message}), falling back to getVideoList")
-                    val flat = withContext(Dispatchers.IO) { source.getVideoList(episode) }
-                    val playable = flat.filter { it.videoUrl.isNotBlank() }
-                    listOf(ServerGroup("Default", playable))
-                }
-
-                val allVideos = serverGroups.flatMap { it.videos }
-                if (allVideos.isEmpty()) {
+                val audioSections = resolveVideos(episode, source)
+                if (audioSections.isEmpty()) {
+                    _videoPicker.value = VideoPickerState.Hidden
                     _playRequest.value = PlayRequest.Error("No playable video found for this episode")
-                } else if (allVideos.size == 1) {
-                    val v = allVideos[0]
-                    Log.d(TAG, "Single video: ${v.videoTitle} → ${v.videoUrl}")
+                } else if (audioSections.flatMap { it.servers }.flatMap { it.videos }.size == 1) {
+                    val v = audioSections.first().servers.first().videos.first()
+                    _videoPicker.value = VideoPickerState.Hidden
                     _playRequest.value = PlayRequest.Play(
                         url = v.videoUrl,
                         title = episode.name,
@@ -344,16 +344,65 @@ class DetailViewModel(
                         videoHeaders = buildHeaders(v),
                     )
                 } else {
-                    Log.d(TAG, "${allVideos.size} videos in ${serverGroups.size} server group(s) — showing picker")
-                    _videoPicker.value = VideoPickerState.Show(episode, serverGroups)
+                    val allVideos = audioSections.flatMap { it.servers }.flatMap { it.videos }
+                    Log.d(TAG, "${allVideos.size} videos in ${audioSections.size} audio section(s) — showing picker")
+                    // Cache the result
+                    videoCache[episode.url] = CachedVideoData(audioSections, now)
+                    _videoPicker.value = VideoPickerState.Show(episode, audioSections)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Video resolution failed", e)
+                _videoPicker.value = VideoPickerState.Hidden
                 _playRequest.value = PlayRequest.Error(e.message ?: "Failed to resolve video")
             } finally {
                 _resolvingEpisode.value = false
             }
         }
+    }
+
+    /**
+     * Phase 7: Background re-resolve for cached videos. Updates the picker
+     * smoothly if the new result differs from cached.
+     */
+    private fun backgroundResolveVideos(episode: SEpisode, source: AnimeCatalogueSource) {
+        viewModelScope.launch {
+            try {
+                val newSections = resolveVideos(episode, source)
+                val now = System.currentTimeMillis()
+                videoCache[episode.url] = CachedVideoData(newSections, now)
+                // Smooth swap: update the picker state. If the data is the same,
+                // the UI won't visibly change. If different, new qualities/servers
+                // appear in their sorted positions.
+                _videoPicker.value = VideoPickerState.Show(episode, newSections)
+                Log.d(TAG, "Background re-resolve complete: ${newSections.size} audio sections")
+            } catch (e: Exception) {
+                Log.w(TAG, "Background re-resolve failed (keeping cached data)", e)
+                // Keep showing the cached data — just remove the refreshing badge
+                val cached = videoCache[episode.url]
+                if (cached != null) {
+                    _videoPicker.value = VideoPickerState.Show(episode, cached.audioSections)
+                }
+            }
+        }
+    }
+
+    /**
+     * Fetch videos from the source (getHosterList → getVideoList fallback)
+     * and group them by audio version using [groupVideosByAudio].
+     */
+    private suspend fun resolveVideos(episode: SEpisode, source: AnimeCatalogueSource): List<AudioSection> {
+        // Try getHosterList first, fall back to getVideoList on ANY exception.
+        val allVideos = try {
+            val hosters = withContext(Dispatchers.IO) { source.getHosterList(episode) }
+            hosters.mapNotNull { hoster ->
+                hoster.videoList?.filter { it.videoUrl.isNotBlank() }
+            }.flatten()
+        } catch (e: Exception) {
+            Log.d(TAG, "getHosterList failed (${e.javaClass.simpleName}: ${e.message}), falling back to getVideoList")
+            val flat = withContext(Dispatchers.IO) { source.getVideoList(episode) }
+            flat.filter { it.videoUrl.isNotBlank() }
+        }
+        return groupVideosByAudio(allVideos)
     }
 
     /** User picked a specific video from the quality picker → launch the player. */
@@ -582,13 +631,17 @@ sealed class PlayRequest {
 }
 
 /**
- * Video quality picker state. When the extension returns multiple videos
- * (different servers/qualities), the user picks one from a bottom sheet.
- * Videos are grouped by server ([ServerGroup]) for a cleaner UI.
+ * Video quality picker state. Phase 7 adds [Resolving] and [Cached] for
+ * the short-TTL video cache + smooth soft-refresh.
  */
 sealed class VideoPickerState {
     data object Hidden : VideoPickerState()
-    data class Show(val episode: SEpisode, val serverGroups: List<ServerGroup>) : VideoPickerState()
+    /** First-time resolve (no cache) — shows the "Resolving video…" overlay. */
+    data class Resolving(val episode: SEpisode) : VideoPickerState()
+    /** Cache hit — shows the picker instantly with a "Refreshing…" badge. */
+    data class Cached(val episode: SEpisode, val audioSections: List<AudioSection>, val isRefreshing: Boolean) : VideoPickerState()
+    /** Fresh resolve complete — shows the picker. */
+    data class Show(val episode: SEpisode, val audioSections: List<AudioSection>) : VideoPickerState()
 }
 
 /**

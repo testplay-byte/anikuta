@@ -293,122 +293,20 @@ fun DetailScreen(
                 }
             }
 
-            // Loading overlay while resolving an episode's video URL.
-            // The extension's getVideoList can take 10-30s (resolving multiple
-            // servers in parallel). Without this, the user taps an episode and
-            // nothing happens for a long time — feels broken.
-            if (resolvingEpisode) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.6f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            CircularProgressIndicator()
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                "Resolving video…",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "Fetching servers from the extension",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ---- Video quality picker bottom sheet ----
-            // Shows when the extension returns multiple videos (different
-            // servers/qualities). User picks one → player opens with that video.
+            // ---- Phase 7: Video quality picker ----
+            // Handles Resolving (first-time), Cached (instant + background refresh),
+            // and Show (fresh) states. Uses LazyColumn (scrollable), collapsible
+            // servers, audio-version grouping (SUB/DUB/HSUB), quality-desc sort.
             val pickerState = videoPicker
-            if (pickerState is VideoPickerState.Show) {
-                androidx.compose.material3.ModalBottomSheet(
-                    onDismissRequest = { viewModel.dismissVideoPicker() },
-                    sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
-                ) {
-                    Column(modifier = Modifier.padding(bottom = 24.dp)) {
-                        Text(
-                            "Select quality",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                        )
-                        // Show videos grouped by server — each server is a
-                        // section with a header chip + its qualities listed below.
-                        pickerState.serverGroups.forEach { group ->
-                            // Server header
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
-                            ) {
-                                Text(
-                                    group.serverName,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                )
-                            }
-                            // Qualities in this server
-                            group.videos.forEach { video ->
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = androidx.compose.ui.graphics.Color.Transparent,
-                                    onClick = { viewModel.playSpecificVideo(video, pickerState.episode) },
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 24.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(
-                                            Icons.Filled.PlayArrow,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(
-                                            text = video.videoTitle.ifBlank { "Unknown quality" },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        video.resolution?.let { res ->
-                                            Surface(
-                                                shape = RoundedCornerShape(6.dp),
-                                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                            ) {
-                                                Text(
-                                                    "${res}p",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                        }
-                    }
-                }
+            val expandedServersState by viewModel.expandedServers.collectAsState()
+            if (pickerState !is VideoPickerState.Hidden) {
+                VideoPickerSheet(
+                    state = pickerState,
+                    expandedServers = expandedServersState,
+                    onToggleServer = { viewModel.toggleServer(it) },
+                    onPickVideo = { video, ep -> viewModel.playSpecificVideo(video, ep) },
+                    onDismiss = { viewModel.dismissVideoPicker() },
+                )
             }
             } // end ThreeStagePullRefresh
             } // end Box
