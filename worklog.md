@@ -228,3 +228,40 @@ Stage Summary:
   - Quality-vs-audio priority toggle + audio fallback mode
 - No existing functionality broken (all builds compile + produce APK).
 - Awaiting user on-device verification.
+
+---
+
+## Session 23-27 (Phase 7 implementation + iterations — comprehensive log)
+
+Task ID: P7-FULL (Sessions 23-27)
+Agent: main (Z.ai Code)
+
+Work Log:
+- Session 23: Implemented all 4 Phase 7 workstreams (A: extensions, C: caching, D: video picker, B: downloads). All builds green.
+- Session 24: On-device testing round 1 — fixed 6 issues (downloads crash, source settings crash, repo not adding, video picker hierarchy, extension details UI, installed section trust button + logos).
+- Session 25: On-device testing round 2 — fixed 4 issues (downloads toggles not live, video picker collapse/accordion/audio chips, extension details button balance, source settings empty + repo DI).
+- Session 26: On-device testing round 3 — fixed 5 issues (untrusted extension tap→details, source settings preferenceScreen attach, repo SqlDriver DI root cause, video picker height/auto-close/animations, audio chip order).
+- Session 27: Extensions page overhaul — search bar, filter bottom sheet, auto-refresh (BroadcastReceiver), direct install, compact install button, max-2 popup with logos + auto-trust, squircle icons. Then iterative fixes: stripped "Aniyomi: " prefix, redesigned search bar, redesigned filter sheet, installed→bottom of Available + tap-to-delete, removed grid layout, onboarding permissions (storage + install unknown apps), onboarding extension step redesign, sources priority drag-and-drop, NPE crash fix, bottom nav floating pill redesign, pull-to-refresh fixes, synopsis HTML tag stripping.
+
+Stage Summary:
+- Phase 7 fully implemented + iterated through 5 rounds of on-device testing.
+- All builds green. Latest: 27053e1.
+- Key systems delivered:
+  - Extension trust system (max 2, with popup + auto-trust)
+  - Extension repo management (add/remove/refresh)
+  - Extension details + settings pages (ConfigurableAnimeSource interop)
+  - Episode caching (in-memory + persistent source-match) + background soft-refresh
+  - 3-stage pull-to-refresh (episodes / details / everything)
+  - Video picker: Server→Audio→Quality hierarchy, collapsible, accordion, 10-min cache
+  - Downloads: drag-and-drop priority lists (quality/audio/server) + fallback modes
+  - Sources priority drag-and-drop (affects AniyomiSourceBridge tiebreaking)
+  - Search bar (below action icons, animated)
+  - Filter bottom sheet (language, sort)
+  - Auto-refresh on package install/uninstall (BroadcastReceiver)
+  - Direct install (ACTION_INSTALL_PACKAGE, no chooser)
+  - Floating pill bottom nav (transparent background, content scrolls under)
+  - Onboarding: storage + install-unknown-apps permissions, extension selection with refresh
+  - Synopsis HTML tag stripping
+- Plans written for future sessions:
+  - DOCS/PLAN/STATISTICS-PLAN.md (watch tracking, heatmaps, genre stats)
+  - DOCS/PLAN/EPISODE-LIST-ENHANCEMENTS-PLAN.md (thumbnails, titles, summaries, auto-fetch)

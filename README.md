@@ -69,13 +69,13 @@ committed.**
 | 4 — Player (MPV streaming) | ✅ Done + **user-verified on-device** (play, seek, resume all work) |
 | 5 — Library / History / Search | ✅ Done |
 | 6 — Functionality + Polish | ✅ Done (settings, extensions, tracking, downloads, error handling) |
-| 7 — Backend improvements | ⏭️ Next (extension settings management, cold-launch race, small adjustments) |
-| 8 — 4 designs + theming | Planned |
-| 9 — Final polish | Planned |
+| 7 — Backend improvements | ✅ Done (extensions, trust, repos, downloads, caching, video picker, search, filter, floating nav, onboarding) |
+| 7.5 — Episode list enhancements | ⏭️ Next (thumbnails, titles, summaries, auto-fetch) |
+| 8 — Statistics & watch tracking | Planned (see DOCS/PLAN/STATISTICS-PLAN.md) |
+| 9 — 4 designs + theming | Planned |
+| 10 — Final polish | Planned |
 
-**Latest verified build:** `1d5f7d2` — end-to-end streaming works for all
-extensions (not just AniKoto). See `worklog.md` (Sessions 19–20) and
-`DOCS/APP/STRUCTURE/player.md` for the full fix history.
+**Latest verified build:** `27053e1` — floating bottom nav, all Phase 7 features working.
 
 **Recovery:** `git clone` this repo + restore gitignored credentials = full
 recovery after a sandbox crash. All source, docs, session logs, and the

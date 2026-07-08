@@ -130,25 +130,62 @@ progress tracked, episodes downloadable, settings organized. ✅
 
 ---
 
-## Phase 7 — Backend improvements (next, user-directed)
+## Phase 7 — Backend improvements ✅ DONE
 
-**Goal:** Small backend adjustments + missing functionality discovered during
-on-device use. To be planned before implementation.
+**Goal:** Extension system overhaul, downloads redesign, episode/video caching, video picker redesign.
 
-- [ ] Extension settings management — each extension has its own preferences
-      (e.g. AniKoto has quality/server prefs, others have login/API-key prefs).
-      We currently don't surface or adjust them.
-- [ ] Cold-launch "no source available" race — source manager loads async;
-      first episode tap on a fresh launch can fire before extensions are ready.
-      (Retry loop mitigates it; harden further.)
-- [ ] Other small adjustments identified during use.
+- [x] Extension trust system (max 2 trusted sources, popup with auto-trust)
+- [x] Extension repo management (add/remove/refresh, SQLDelight-backed)
+- [x] Extension details + settings pages (ConfigurableAnimeSource + PreferenceFragmentCompat)
+- [x] Sources priority drag-and-drop (affects AniyomiSourceBridge tiebreaking)
+- [x] Episode caching (in-memory + persistent) + background soft-refresh
+- [x] 3-stage pull-to-refresh (episodes / details / everything)
+- [x] Video picker: Server→Audio→Quality hierarchy, collapsible accordion, 10-min cache
+- [x] Downloads: drag-and-drop priority lists (quality/audio/server) + fallback modes
+- [x] Search bar + filter bottom sheet (language, sort)
+- [x] Auto-refresh on package install/uninstall (BroadcastReceiver)
+- [x] Direct install (ACTION_INSTALL_PACKAGE, no chooser)
+- [x] Floating pill bottom nav (transparent background)
+- [x] Onboarding: storage + install-unknown-apps permissions, extension selection with refresh
+- [x] Synopsis HTML tag stripping
+- [x] Sources priority drag-and-drop in AniyomiSourceBridge
 
-**Deliverable:** Extensions fully configurable from within the app; edge-case
-races resolved.
+**Deliverable:** Fully functional extension system, downloads, caching, and UI polish. ✅
 
 ---
 
-## Phase 8 — The 4 designs + theming (moved from Phase 6)
+## Phase 7.5 — Episode list enhancements (next)
+
+**Goal:** Episode thumbnails, titles, summaries, auto-fetch from AniList.
+
+- [ ] Episode title parsing (strip "Episode X - " prefix from SEpisode.name)
+- [ ] Episode summaries (from AniList if extension doesn't provide)
+- [ ] Episode thumbnails (preview images)
+- [ ] Auto-fetch from AniList (with 24h cache TTL)
+- [ ] Soft loading (show episodes first, enhance in background)
+- [ ] User settings (toggle titles, summaries, thumbnails, auto-fetch)
+
+**Deliverable:** Rich episode list with thumbnails, titles, and summaries.
+See `DOCS/PLAN/EPISODE-LIST-ENHANCEMENTS-PLAN.md` for full plan.
+
+---
+
+## Phase 8 — Statistics & watch tracking (future)
+
+**Goal:** Track user's watching habits and display beautiful statistics.
+
+- [ ] Watch time tracking (total, per-day/week/month, heatmaps)
+- [ ] Episode views (completed, started, dropped)
+- [ ] Score distribution + mean score
+- [ ] Genre tracking (most-watched, highest-rated)
+- [ ] Collection stats
+
+**Deliverable:** Statistics screen with heatmaps, charts, and genre tracking.
+See `DOCS/PLAN/STATISTICS-PLAN.md` for full plan.
+
+---
+
+## Phase 9 — The 4 designs + theming (moved from Phase 6)
 
 **Goal:** The customization system lands.
 
@@ -194,4 +231,4 @@ is fully featured.
 
 ---
 
-_Last updated: Session 20. Phases 0–6 done + user-verified. Phase 7 (backend improvements) is next, user-directed._
+_Last updated: Session 27. Phase 7 done. Phase 7.5 (episode list enhancements) is next._
