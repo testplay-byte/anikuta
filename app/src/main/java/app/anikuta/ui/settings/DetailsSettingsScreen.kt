@@ -34,7 +34,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Phase 7.5 — Details page settings.
+ * Phase 7.5 — Details page settings with live preview.
  */
 @Composable
 fun DetailsSettingsScreen(onBack: () -> Unit) {
@@ -49,6 +49,7 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
     val synopsisPos by prefs.synopsisPosition().stateIn(scope).collectAsState()
     val datePos by prefs.datePosition().stateIn(scope).collectAsState()
     val thumbSize by prefs.thumbnailSize().stateIn(scope).collectAsState()
+    val titlePos by prefs.titlePosition().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Details", onBack = onBack) {
         LazyColumn(
@@ -56,6 +57,26 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // ---- LIVE PREVIEW ----
+            item {
+                SettingsGroupCard(title = "Live preview") {
+                    Column(Modifier.padding(12.dp)) {
+                        EpisodeRowPreview(
+                            showThumbnails = showThumbnails,
+                            showSummaries = showSummaries,
+                            showTitles = showTitles,
+                            showDates = showDates,
+                            showEpisodeNumber = showEpisodeNumber,
+                            showAudioPills = showAudioPills,
+                            synopsisPosition = synopsisPos,
+                            datePosition = datePos,
+                            thumbnailSize = thumbSize,
+                            titlePosition = titlePos,
+                        )
+                    }
+                }
+            }
+
             // ---- Show/hide toggles ----
             item {
                 SettingsGroupCard(title = "Episode list display") {
@@ -112,6 +133,26 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
             // ---- Layout positions ----
             item {
                 SettingsGroupCard(title = "Layout positions") {
+                    // Title position
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text("Title position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Where to show the episode title", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(
+                                selected = titlePos == "right",
+                                onClick = { prefs.titlePosition().set("right") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            ) { Text("Right") }
+                            SegmentedButton(
+                                selected = titlePos == "below",
+                                onClick = { prefs.titlePosition().set("below") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            ) { Text("Below") }
+                        }
+                    }
+                    HorizontalDivider()
                     // Synopsis position
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text("Synopsis position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
@@ -155,8 +196,6 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                                 shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                             ) { Text("Full") }
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text("Above = right of thumbnail, above synopsis · Below = right of thumbnail, below synopsis · Full = full-width below thumbnail row", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -166,8 +205,6 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                 SettingsGroupCard(title = "Thumbnail size") {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text("Thumbnail size", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(4.dp))
-                        Text("Size of the episode preview thumbnail", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         SingleChoiceSegmentedButtonRow {
                             SegmentedButton(
@@ -186,8 +223,6 @@ fun DetailsSettingsScreen(onBack: () -> Unit) {
                                 shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                             ) { Text("Large") }
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text("Small = 100×56dp · Medium = 120×68dp · Large = 160×90dp", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

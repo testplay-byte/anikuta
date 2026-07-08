@@ -88,4 +88,11 @@ class PlayerPreferences(
      */
     fun thumbnailSize(): Preference<String> =
         preferenceStore.getString("pref_thumbnail_size", "medium")
+
+    /**
+     * Title position: 'right' = right of thumbnail (default).
+     * 'below' = full-width below the thumbnail row.
+     */
+    fun titlePosition(): Preference<String> =
+        preferenceStore.getString("pref_title_position", "right")
 }

@@ -128,17 +128,45 @@ class DetailViewModel(
     }
 
     /**
-     * Phase 7.5: Get available audio versions for an episode from the video cache.
-     * Returns a set of audio version names (e.g. "SUB", "DUB", "HSUB") if the
-     * episode's videos have been resolved before. Empty if not cached yet.
+     * Phase 7.5: Get available audio versions for an episode.
+     * Checks the in-memory video cache first, then falls back to a persistent
+     * PreferenceStore cache (survives app restart). Returns a set of audio
+     * version names (e.g. "SUB", "DUB", "HSUB") if the episode's videos have
+     * been resolved before. Empty if not cached yet.
      */
     fun getAvailableAudioVersions(episodeUrl: String): Set<String> {
-        val cached = videoCache[episodeUrl] ?: return emptySet()
-        return cached.serverSections
+        // Check in-memory cache first
+        val cached = videoCache[episodeUrl]
+        if (cached != null) {
+            return cached.serverSections
+                .flatMap { it.audioSections }
+                .map { it.audio.name }
+                .filter { it != "ANY" }
+                .toSet()
+        }
+        // Fall back to persistent cache (survives app restart)
+        val prefs = preferenceStore ?: return emptySet()
+        val key = "audio_versions_${episodeUrl.hashCode()}"
+        val stored = prefs.getString(key, "").get()
+        if (stored.isBlank()) return emptySet()
+        return stored.split(",").filter { it.isNotBlank() }.toSet()
+    }
+
+    /**
+     * Persist audio versions for an episode to PreferenceStore.
+     * Called when videos are resolved.
+     */
+    private fun persistAudioVersions(episodeUrl: String, serverSections: List<ServerSection>) {
+        val prefs = preferenceStore ?: return
+        val audioVersions = serverSections
             .flatMap { it.audioSections }
-            .map { it.audio.name }  // "SUB", "DUB", "HSUB", "ANY"
+            .map { it.audio.name }
             .filter { it != "ANY" }
             .toSet()
+        if (audioVersions.isNotEmpty()) {
+            val key = "audio_versions_${episodeUrl.hashCode()}"
+            prefs.getString(key, "").set(audioVersions.joinToString(","))
+        }
     }
 
     private val preferenceStore: app.anikuta.core.preference.PreferenceStore? = try { Injekt.get() } catch (e: Exception) { null }
@@ -373,6 +401,8 @@ class DetailViewModel(
                     Log.d(TAG, "${allVideos.size} videos in ${audioSections.size} server section(s) — showing picker")
                     // Cache the result
                     videoCache[episode.url] = CachedVideoData(audioSections, now)
+                    // Persist audio versions for cross-session pill display
+                    persistAudioVersions(episode.url, audioSections)
                     _videoPicker.value = VideoPickerState.Show(episode, audioSections)
                 }
             } catch (e: Exception) {
@@ -395,6 +425,7 @@ class DetailViewModel(
                 val newSections = resolveVideos(episode, source)
                 val now = System.currentTimeMillis()
                 videoCache[episode.url] = CachedVideoData(newSections, now)
+                persistAudioVersions(episode.url, newSections)
                 // Smooth swap: update the picker state. If the data is the same,
                 // the UI won't visibly change. If different, new qualities/servers
                 // appear in their sorted positions.

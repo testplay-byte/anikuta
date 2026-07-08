@@ -71,6 +71,7 @@ fun DetailScreen(
     val synopsisPosition = remember { playerPrefs?.synopsisPosition()?.get() ?: "right" }
     val datePosition = remember { playerPrefs?.datePosition()?.get() ?: "right_below_synopsis" }
     val thumbnailSize = remember { playerPrefs?.thumbnailSize()?.get() ?: "medium" }
+    val titlePosition = remember { playerPrefs?.titlePosition()?.get() ?: "right" }
 
     // Observe play requests from the ViewModel → launch the player.
     androidx.compose.runtime.LaunchedEffect(playRequest) {
@@ -294,6 +295,7 @@ fun DetailScreen(
                                             datePosition = datePosition,
                                             thumbnailSize = thumbnailSize,
                                             availableAudioVersions = viewModel.getAvailableAudioVersions(episode.url),
+                                            titlePosition = titlePosition,
                                         )
                                     }
                                 }
@@ -504,6 +506,7 @@ private fun EpisodeRow(
     datePosition: String = "right_below_synopsis",
     thumbnailSize: String = "medium",
     availableAudioVersions: Set<String> = emptySet(),
+    titlePosition: String = "right",
 ) {
     val hasThumbnail = showThumbnails && !episode.preview_url.isNullOrBlank()
     val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
@@ -519,7 +522,7 @@ private fun EpisodeRow(
             EpisodeRowRich(
                 episode, hasThumbnail, hasSummary, showTitles, showDates,
                 showEpisodeNumber, showAudioPills, synopsisPosition, datePosition,
-                thumbnailSize, availableAudioVersions,
+                thumbnailSize, availableAudioVersions, titlePosition,
             )
         } else {
             EpisodeRowSimple(episode, showTitles, showEpisodeNumber)
@@ -605,6 +608,7 @@ private fun EpisodeRowRich(
     datePosition: String,
     thumbnailSize: String,
     availableAudioVersions: Set<String>,
+    titlePosition: String,
 ) {
     var summaryExpanded by remember { mutableStateOf(false) }
 
@@ -758,24 +762,27 @@ private fun EpisodeRowRich(
 
             // Right side content column
             Column(modifier = Modifier.weight(1f)) {
-                // Title with background
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = if (showTitles) {
-                            EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number)
-                        } else {
-                            "Episode ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}"
-                        },
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
+                // Title on the right side (if position is 'right')
+                if (titlePosition == "right" || !hasThumbnail) {
+                    // Title with background
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = if (showTitles) {
+                                EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number)
+                            } else {
+                                "Episode ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}"
+                            },
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
                 }
 
                 // Date above synopsis (if position is right_above_synopsis)
@@ -804,6 +811,25 @@ private fun EpisodeRowRich(
 
         // Below-thumbnail content (full width)
         if (hasThumbnail) {
+            // Title below thumbnail (if position is 'below')
+            if (titlePosition == "below" && showTitles) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+            }
+
             // Synopsis below (if position is 'below')
             if (hasSummary && synopsisPosition == "below") {
                 Spacer(modifier = Modifier.height(8.dp))
