@@ -290,7 +290,7 @@ private fun ExtensionsListContent(
                             state = lazyListState,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(sortedSources.size * 64.dp),
+                                .height((sortedSources.size * 64).dp),
                         ) {
                             items(sortedSources, key = { it.pkgName }) { ext ->
                                 ReorderableItem(reorderableState, key = ext.pkgName) {
