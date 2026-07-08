@@ -165,3 +165,66 @@ Stage Summary:
 - Recommended implementation order: A → C → D → B (A establishes trusted-sources gate; C before D unblocks Flow-based updates; B last reuses D's VideoTitleParser).
 - 8 open questions flagged for the user (trust model, popup UX, grouping depth, pull thresholds, cache TTL, refresh guard, order, other-extension formats).
 - NO code written this session — planning only, per user's request.
+
+---
+
+## Session 22 (Phase 7 implementation — all 4 workstreams)
+
+Task ID: P7-IMPL (Session 22)
+Agent: main (Z.ai Code)
+Task: Implement all 4 workstreams of Phase 7 (A: extensions, C: caching, D: video picker, B: downloads). Build green after each workstream.
+
+Work Log:
+- **Workstream A — Extension system overhaul** (build 731d376):
+  - Deleted 3 stub files that shadowed real domain/ implementations (GetAnimeExtensionRepo, UpdateAnimeExtensionRepo, ExtensionRepo model)
+  - Real TrustAnimeExtension: per-package trust via SourcePreferences.trustedSources()
+  - AnimeExtensionLoader: real trust check (replaces always-true stub) + proper signature hash
+  - AnimeExtensionManager: trust()/revokeTrust() with MAX_TRUSTED=2 + TrustResult sealed class
+  - AppModule: wired real AnimeExtensionRepoRepository + ExtensionRepoService + 7 repo interactors
+  - ExtensionsSettingsScreen: restructured to 3 sections (Sources/Installed/Available) with Trust/Untrust/Delete + max-2-trusted popup + Manage Repos button
+  - ExtensionReposScreen + ViewModel: add/remove/refresh repos (SQLDelight-backed)
+  - ExtensionDetailsScreen: metadata + source list with Settings gear for ConfigurableAnimeSource
+  - SourcePreferencesScreen: PreferenceFragmentCompat interop (source.setupPreferenceScreen) with SourcePreferenceDataStore
+  - NavGraph: 3 new routes (extension_repos, extension_details, source_preferences)
+  - MainActivity: FragmentActivity (for PreferenceFragmentCompat)
+  - Added androidx.preference dependency
+  - Build fix: missing Json import in AppModule
+
+- **Workstream C — Episode caching + 3-stage pull-to-refresh** (build 96af06a):
+  - DetailViewModel: background soft-refresh of episodes on cache hit (5-min guard)
+  - DetailViewModel: 3 refresh methods (refreshEpisodesOnly, refreshDetailsOnly, refreshEverything)
+  - RefreshStage enum + isRefreshing state
+  - ThreeStagePullRefresh: custom nestedScroll composable tracking pull distance with 3 thresholds (120dp/240dp/360dp). Shows "Release to refresh episodes/details/everything" labels.
+  - DetailScreen: wrapped LazyColumn in ThreeStagePullRefresh, fixed Retry button
+
+- **Workstream D — Video caching + picker redesign** (build 862b403):
+  - VideoTitleParser: parse "{server} - {audio} - {quality}" titles → (server, AudioVersion, quality)
+  - AudioVersion enum (SUB/DUB/HSUB/ANY) with fromToken() factory
+  - groupVideosByAudio(): groups flat video list → AudioSection → ServerSection → Video (quality desc sort)
+  - DetailViewModel: short-TTL video cache (10 min, keyed by episode.url) + VideoPickerState.Resolving/Cached/Show + background re-resolve (show cached instantly, smooth swap)
+  - DetailViewModel: expandedServers state + toggleServer() for collapsible sections
+  - VideoPickerSheet: new picker with LazyColumn (fixes scroll), collapsible server headers, audio-version grouping (SUB/DUB/HSUB sections), quality-desc sort, refreshing badge on cache hit
+  - Build fix: VideoTitleParser sortedWith type mismatch
+
+- **Workstream B — Downloads preferences redesign** (build dcd8048):
+  - Added sh.calvin.reorderable:2.4.3 dependency
+  - DownloadPreferences: replaced single-value prefs with ordered-list prefs (preferredQualityOrder, preferredAudioOrder, preferredServerOrder) + PriorityMode + AudioFallback + Phase 6 migration
+  - PreferenceListDelegate: JSON-serialized List<String> backed by String pref
+  - DownloadsViewModel: 3 StateFlow<List<String>> for drag reorder + priorityMode + audioFallback + reorder methods
+  - DownloadsSettingsScreen: full rewrite with 3 ReorderableLazyColumn drag-and-drop lists + priority mode radio + audio fallback radio + WiFi/delete toggles
+
+Stage Summary:
+- ALL 4 WORKSTREAMS COMPLETE. 4 builds green (731d376, 96af06a, 862b403, dcd8048).
+- ntfy notifications sent after each workstream + final.
+- Key features delivered:
+  - Extension trust system with max-2 limit + popup
+  - Extension repo management (add/remove repos)
+  - Extension details + settings pages (ConfigurableAnimeSource interop)
+  - Background episode soft-refresh (5-min guard)
+  - 3-stage pull-to-refresh (episodes / details / everything)
+  - Short-TTL video cache (10 min) with smooth soft-refresh
+  - Video picker: scrollable + collapsible + audio-version grouping + quality-desc sort
+  - Drag-and-drop download priority lists (quality/audio/server)
+  - Quality-vs-audio priority toggle + audio fallback mode
+- No existing functionality broken (all builds compile + produce APK).
+- Awaiting user on-device verification.
