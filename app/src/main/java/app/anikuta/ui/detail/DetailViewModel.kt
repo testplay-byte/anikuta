@@ -390,7 +390,7 @@ class DetailViewModel(
      * Fetch videos from the source (getHosterList → getVideoList fallback)
      * and group them by audio version using [groupVideosByAudio].
      */
-    private suspend fun resolveVideos(episode: SEpisode, source: AnimeCatalogueSource): List<AudioSection> {
+    private suspend fun resolveVideos(episode: SEpisode, source: AnimeCatalogueSource): List<ServerSection> {
         // Try getHosterList first, fall back to getVideoList on ANY exception.
         val allVideos = try {
             val hosters = withContext(Dispatchers.IO) { source.getHosterList(episode) }
