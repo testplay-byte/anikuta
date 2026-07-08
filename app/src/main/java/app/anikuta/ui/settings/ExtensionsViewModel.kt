@@ -1,7 +1,9 @@
 package app.anikuta.ui.settings
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
@@ -26,17 +28,19 @@ import java.io.File
 import java.io.IOException
 
 /**
- * Phase 7 — ViewModel for the Extensions settings screen.
+ * Phase 7 (enhanced) — ViewModel for the Extensions settings screen.
  *
- * Exposes three lists:
- *  - [sources] — trusted installed extensions (max 2). These are the ONLY
- *    extensions used for app functionality (search/resolve/play).
- *  - [installed] — installed-but-untrusted extensions. User can Trust (→
- *    moves to sources) or Delete (uninstall).
- *  - [available] — extensions from the repo(s) that are not yet installed.
- *    User can Install (→ moves to installed/untrusted after install).
- *
- * Also exposes [trustResult] for the max-2-trusted popup.
+ * Features:
+ *  - Three lists: sources (trusted), installed (untrusted), available (from repos)
+ *  - Search: filters across all three lists
+ *  - Filter: by language (default: English only)
+ *  - Sort: by name ascending/descending
+ *  - Layout: list or grid (2 columns)
+ *  - Auto-refresh: BroadcastReceiver detects package install/uninstall and
+ *    reloads the extension list automatically (no manual pull-to-refresh needed)
+ *  - Direct install: uses ACTION_INSTALL_PACKAGE (not ACTION_VIEW) to skip the
+ *    package-installer chooser dialog when possible
+ *  - Max-2-trusted popup with auto-trust after revoke
  */
 class ExtensionsViewModel : ViewModel() {
 
@@ -44,35 +48,18 @@ class ExtensionsViewModel : ViewModel() {
         private const val TAG = "ExtensionsViewModel"
     }
 
-    private val extensionManager: AnimeExtensionManager? = try {
-        Injekt.get<AnimeExtensionManager>().also { Log.d(TAG, "✅ AnimeExtensionManager obtained") }
-    } catch (e: Exception) {
-        Log.e(TAG, "❌ Failed to get AnimeExtensionManager from DI", e); null
-    }
-
-    private val context: Context? = try {
-        Injekt.get<Context>()
-    } catch (e: Exception) {
-        Log.e(TAG, "❌ Failed to get Context from DI", e); null
-    }
-
-    private val networkHelper: NetworkHelper? = try {
-        Injekt.get<NetworkHelper>()
-    } catch (e: Exception) {
-        Log.e(TAG, "❌ Failed to get NetworkHelper from DI", e); null
-    }
-
+    private val extensionManager: AnimeExtensionManager? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
+    private val context: Context? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
+    private val networkHelper: NetworkHelper? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
     private val api: AnimeExtensionApi by lazy { AnimeExtensionApi() }
 
-    // ---- Sources (trusted installed) ----
+    // ---- Raw lists (from manager) ----
     private val _sources = MutableStateFlow<List<AnimeExtension.Installed>>(emptyList())
     val sources: StateFlow<List<AnimeExtension.Installed>> = _sources.asStateFlow()
 
-    // ---- Installed (untrusted) ----
     private val _installed = MutableStateFlow<List<AnimeExtension.Untrusted>>(emptyList())
     val installed: StateFlow<List<AnimeExtension.Untrusted>> = _installed.asStateFlow()
 
-    // ---- Available (from repos, not installed) ----
     private val _available = MutableStateFlow<List<AnimeExtension.Available>>(emptyList())
     val available: StateFlow<List<AnimeExtension.Available>> = _available.asStateFlow()
 
@@ -85,15 +72,54 @@ class ExtensionsViewModel : ViewModel() {
     private val _downloading = MutableStateFlow<Set<String>>(emptySet())
     val downloading: StateFlow<Set<String>> = _downloading.asStateFlow()
 
-    /** Result of the last trust() call — drives the max-2 popup. */
     private val _trustResult = MutableStateFlow<TrustResult?>(null)
     val trustResult: StateFlow<TrustResult?> = _trustResult.asStateFlow()
+
+    // ---- UI state: search, filter, sort, layout ----
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _isSearchActive = MutableStateFlow(false)
+    val isSearchActive: StateFlow<Boolean> = _isSearchActive.asStateFlow()
+
+    /** Languages to show. Default: English only. */
+    private val _enabledLanguages = MutableStateFlow<Set<String>>(setOf("en"))
+    val enabledLanguages: StateFlow<Set<String>> = _enabledLanguages.asStateFlow()
+
+    enum class SortMode { NAME_ASC, NAME_DESC }
+    private val _sortMode = MutableStateFlow(SortMode.NAME_ASC)
+    val sortMode: StateFlow<SortMode> = _sortMode.asStateFlow()
+
+    enum class LayoutMode { LIST, GRID }
+    private val _layoutMode = MutableStateFlow(LayoutMode.LIST)
+    val layoutMode: StateFlow<LayoutMode> = _layoutMode.asStateFlow()
+
+    /** All languages found in available extensions (for the filter UI). */
+    val allLanguages: Set<String>
+        get() = _available.value.mapNotNull { it.lang.takeIf { l -> l.isNotBlank() } }.toSet()
+
+    // ---- Package install/uninstall receiver for auto-refresh ----
+    private val packageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            val pkg = intent?.data?.schemeSpecificPart ?: return
+            when (intent.action) {
+                Intent.ACTION_PACKAGE_ADDED, Intent.ACTION_PACKAGE_REPLACED -> {
+                    Log.d(TAG, "Package added/replaced: $pkg — reloading extensions")
+                    extensionManager?.reload()
+                }
+                Intent.ACTION_PACKAGE_REMOVED -> {
+                    Log.d(TAG, "Package removed: $pkg — reloading extensions")
+                    extensionManager?.reload()
+                }
+            }
+        }
+    }
 
     init {
         // Subscribe to trusted (sources) and untrusted (installed) flows.
         viewModelScope.launch {
-            extensionManager?.installedExtensions?.collect { installed ->
-                _sources.value = installed
+            extensionManager?.installedExtensions?.collect { installedList ->
+                _sources.value = installedList
             }
         }
         viewModelScope.launch {
@@ -101,7 +127,33 @@ class ExtensionsViewModel : ViewModel() {
                 _installed.value = untrusted
             }
         }
+
+        // Register the package receiver for auto-refresh.
+        context?.let { ctx ->
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_PACKAGE_ADDED)
+                addAction(Intent.ACTION_PACKAGE_REPLACED)
+                addAction(Intent.ACTION_PACKAGE_REMOVED)
+                addDataScheme("package")
+            }
+            try {
+                ctx.registerReceiver(packageReceiver, filter)
+                Log.d(TAG, "Package receiver registered for auto-refresh")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not register package receiver", e)
+            }
+        }
+
         refresh()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        try {
+            context?.unregisterReceiver(packageReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not unregister package receiver", e)
+        }
     }
 
     fun refresh() {
@@ -110,11 +162,9 @@ class ExtensionsViewModel : ViewModel() {
             if (_available.value.isEmpty()) _isLoading.value = true
             try {
                 extensionManager?.reload()
-                val available = withContext(Dispatchers.IO) {
-                    api.findExtensions()
-                }
-                _available.value = available
-                Log.i(TAG, "Loaded ${available.size} available extensions")
+                val availableList = withContext(Dispatchers.IO) { api.findExtensions() }
+                _available.value = availableList
+                Log.i(TAG, "Loaded ${availableList.size} available extensions")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to refresh extensions", e)
                 Toast.makeText(context, "Failed to load extensions", Toast.LENGTH_SHORT).show()
@@ -125,44 +175,125 @@ class ExtensionsViewModel : ViewModel() {
         }
     }
 
+    // ---- Search ----
+    fun setSearchQuery(query: String) { _searchQuery.value = query }
+    fun setSearchActive(active: Boolean) {
+        _isSearchActive.value = active
+        if (!active) _searchQuery.value = ""
+    }
+
+    // ---- Filter ----
+    fun setEnabledLanguages(langs: Set<String>) { _enabledLanguages.value = langs }
+
+    // ---- Sort ----
+    fun setSortMode(mode: SortMode) { _sortMode.value = mode }
+
+    // ---- Layout ----
+    fun setLayoutMode(mode: LayoutMode) { _layoutMode.value = mode }
+
     /**
-     * Trust an installed (untrusted) extension — moves it to Sources.
-     * If the max-2 limit is reached, sets [trustResult] to LimitExceeded
-     * so the UI shows the popup.
+     * Filtered + sorted available extensions based on search query, language
+     * filter, and sort mode. Used by the UI to render the available list.
      */
-    fun trustExtension(ext: AnimeExtension.Untrusted) {
-        val result = extensionManager?.trust(ext.pkgName) ?: return
-        _trustResult.value = result
-        if (result is TrustResult.Success) {
-            Log.i(TAG, "Trusted ${ext.name}")
-        }
+    fun filteredAvailable(): List<AnimeExtension.Available> {
+        val query = _searchQuery.value.lowercase().trim()
+        val langs = _enabledLanguages.value
+        val sortMode = _sortMode.value
+
+        return _available.value
+            .filter { ext ->
+                // Language filter
+                if (langs.isNotEmpty()) ext.lang in langs else true
+            }
+            .filter { ext ->
+                // Search query filter
+                if (query.isBlank()) true
+                else ext.name.lowercase().contains(query) || ext.pkgName.lowercase().contains(query)
+            }
+            .sortedWith(
+                when (sortMode) {
+                    SortMode.NAME_ASC -> compareBy { it.name.lowercase() }
+                    SortMode.NAME_DESC -> compareByDescending { it.name.lowercase() }
+                },
+            )
     }
 
     /**
-     * Revoke trust from a source — moves it back to Installed (untrusted).
+     * Filtered sources (for search).
      */
+    fun filteredSources(): List<AnimeExtension.Installed> {
+        val query = _searchQuery.value.lowercase().trim()
+        if (query.isBlank()) return _sources.value
+        return _sources.value.filter { it.name.lowercase().contains(query) || it.pkgName.lowercase().contains(query) }
+    }
+
+    /**
+     * Filtered installed (for search).
+     */
+    fun filteredInstalled(): List<AnimeExtension.Untrusted> {
+        val query = _searchQuery.value.lowercase().trim()
+        if (query.isBlank()) return _installed.value
+        return _installed.value.filter { it.name.lowercase().contains(query) || it.pkgName.lowercase().contains(query) }
+    }
+
+    // ---- Trust management ----
+
+    /** Pending extension to trust after a revoke (for auto-trust). */
+    private var pendingTrustPkg: String? = null
+
+    fun trustExtension(ext: AnimeExtension.Untrusted) {
+        val result = extensionManager?.trust(ext.pkgName) ?: return
+        _trustResult.value = result
+        if (result is TrustResult.LimitExceeded) {
+            pendingTrustPkg = ext.pkgName
+        }
+    }
+
     fun revokeTrust(ext: AnimeExtension.Installed) {
         extensionManager?.revokeTrust(ext.pkgName)
         Log.i(TAG, "Revoked trust from ${ext.name}")
     }
 
-    /** Dismiss the trust-limit popup. */
     fun dismissTrustResult() {
         _trustResult.value = null
+        pendingTrustPkg = null
     }
 
     /**
-     * Download the APK for [ext] from its repo and launch the system package
-     * installer. The extension installs as UNTRUSTED (appears in Installed,
-     * not Sources) — the user must explicitly trust it after install.
+     * Revoke trust from a source AND auto-trust the pending extension.
+     * Called from the max-2 popup when the user taps "Remove" on one of the
+     * current sources.
+     */
+    fun revokeAndAutoTrust(pkgToRevoke: String) {
+        extensionManager?.revokeTrust(pkgToRevoke)
+        // Wait a moment for the reload to process, then trust the pending one.
+        val pending = pendingTrustPkg
+        if (pending != null) {
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(500)  // wait for revoke to process
+                val result = extensionManager?.trust(pending)
+                if (result is TrustResult.Success) {
+                    Log.i(TAG, "Auto-trusted $pending after revoking $pkgToRevoke")
+                }
+                _trustResult.value = null
+                pendingTrustPkg = null
+            }
+        } else {
+            _trustResult.value = null
+        }
+    }
+
+    // ---- Install / Uninstall ----
+
+    /**
+     * Download the APK and launch the installer. Uses ACTION_INSTALL_PACKAGE
+     * (not ACTION_VIEW) to skip the package-installer chooser dialog when
+     * possible. Falls back to ACTION_VIEW if the system doesn't support it.
      */
     fun installExtension(ext: AnimeExtension.Available) {
         if (ext.pkgName in _downloading.value) return
 
-        val ctx = context ?: run {
-            Log.e(TAG, "Cannot install — app context unavailable")
-            return
-        }
+        val ctx = context ?: return
         val client = networkHelper?.client ?: run {
             Toast.makeText(ctx, "Network not available", Toast.LENGTH_SHORT).show()
             return
@@ -176,25 +307,34 @@ class ExtensionsViewModel : ViewModel() {
 
                 withContext(Dispatchers.IO) {
                     val response = client.newCall(GET(apkUrl)).execute()
-                    if (!response.isSuccessful) {
-                        throw IOException("HTTP ${response.code}")
-                    }
+                    if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
                     response.body?.byteStream()?.use { input ->
                         apkFile.outputStream().use { output -> input.copyTo(output) }
                     } ?: throw IOException("Empty response body")
                 }
 
-                val uri = FileProvider.getUriForFile(
-                    ctx,
-                    "${ctx.packageName}.fileprovider",
-                    apkFile,
-                )
-                val intent = Intent(Intent.ACTION_VIEW).apply {
+                val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", apkFile)
+                // Use ACTION_INSTALL_PACKAGE for direct install (no chooser).
+                // Fall back to ACTION_VIEW if the action doesn't resolve.
+                val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
                     setDataAndType(uri, "application/vnd.android.package-archive")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    // Don't show the chooser — go straight to the system installer
+                    putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+                    putExtra(Intent.EXTRA_RETURN_RESULT, false)
                 }
-                ctx.startActivity(intent)
+                if (intent.resolveActivity(ctx.packageManager) != null) {
+                    ctx.startActivity(intent)
+                } else {
+                    // Fallback: ACTION_VIEW
+                    val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/vnd.android.package-archive")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    ctx.startActivity(fallbackIntent)
+                }
                 Toast.makeText(ctx, "Installing ${ext.name}…", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Log.e(TAG, "Install failed for ${ext.pkgName}", e)
@@ -205,37 +345,23 @@ class ExtensionsViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Uninstall an extension (works for both trusted sources and untrusted
-     * installed). After uninstall, the manager's flow auto-updates.
-     */
     fun uninstallExtension(pkgName: String) {
         val ctx = context ?: return
         try {
             val uri = Uri.parse("package:$pkgName")
-            val intent = Intent().apply {
-                action = "android.intent.action.UNINSTALL_PACKAGE"
+            val intent = Intent(Intent.ACTION_DELETE).apply {
                 data = uri
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra(Intent.EXTRA_RETURN_RESULT, true)
             }
             if (intent.resolveActivity(ctx.packageManager) != null) {
                 ctx.startActivity(intent)
             } else {
-                val fallbackIntent = Intent(Intent.ACTION_DELETE).apply {
+                val settingsIntent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = uri
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                if (fallbackIntent.resolveActivity(ctx.packageManager) != null) {
-                    ctx.startActivity(fallbackIntent)
-                } else {
-                    val settingsIntent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = uri
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    ctx.startActivity(settingsIntent)
-                    Toast.makeText(ctx, "Open the app info to uninstall", Toast.LENGTH_SHORT).show()
-                }
+                ctx.startActivity(settingsIntent)
+                Toast.makeText(ctx, "Open the app info to uninstall", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Uninstall failed for $pkgName", e)
