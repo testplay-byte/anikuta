@@ -629,7 +629,34 @@ private fun ExpressiveExtensionStep(
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Select Extension", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Select Extension", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(8.dp))
+            // Refresh button — lets the user re-scan for installed extensions
+            IconButton(onClick = {
+                isLoading = true
+                scope.launch {
+                    try {
+                        val manager = Injekt.get<app.anikuta.extension.anime.AnimeExtensionManager>()
+                        manager.reload()
+                        kotlinx.coroutines.delay(500)
+                        installedExtensions = manager.untrustedExtensions.value
+                        trustedExtensions = manager.installedExtensions.value
+                        Log.d("OnboardingExtension", "Refreshed: ${installedExtensions.size} untrusted")
+                    } catch (e: Exception) {
+                        Log.e("OnboardingExtension", "Refresh failed", e)
+                    } finally {
+                        isLoading = false
+                    }
+                }
+            }) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+            }
+        }
         Spacer(modifier = Modifier.height(24.dp))
 
         when {

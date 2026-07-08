@@ -176,7 +176,8 @@ fun DetailScreen(
                 }
 
                 // Description
-                anime.description?.let { desc ->
+                anime.description?.let { rawDesc ->
+                    val desc = cleanHtmlTags(rawDesc)
                     if (desc.isNotBlank()) {
                         item(key = "description") {
                             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -530,4 +531,22 @@ private fun EpisodeRow(
             }
         }
     }
+}
+
+/**
+ * Strips HTML formatting tags from AniList descriptions.
+ * AniList returns descriptions with <br>, <i>, </i>, <b>, </b>, etc.
+ * We convert <br> to newlines and strip all other tags.
+ */
+private fun cleanHtmlTags(text: String): String {
+    return text
+        .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+        .replace(Regex("<[^>]+>"), "")  // strip all HTML tags
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ")
+        .trim()
 }

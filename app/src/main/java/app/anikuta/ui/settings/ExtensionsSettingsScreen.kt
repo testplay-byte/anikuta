@@ -3,10 +3,10 @@ package app.anikuta.ui.settings
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -136,109 +136,71 @@ fun ExtensionsSettingsScreen(
     }
 
     SettingsSubpageScaffold(
-        title = if (isSearchActive) "" else "Extensions",
-        onBack = if (isSearchActive) ({ viewModel.setSearchActive(false) }) else onBack,
+        title = "Extensions",
+        onBack = onBack,
         actions = {
-            // Search bar — smooth slide-in from the right.
-            // Uses AnimatedVisibility with expandHorizontally for a smooth,
-            // non-jittery transition. The Surface wraps the text field content
-            // naturally (no fixed height), so the text isn't clipped.
-            AnimatedVisibility(
-                visible = isSearchActive,
-                enter = expandHorizontally(animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)) + fadeIn(),
-                exit = shrinkHorizontally(animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)) + fadeOut(),
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    tonalElevation = 0.dp,
-                    modifier = Modifier
-                        .width(240.dp)
-                        .padding(end = 4.dp),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .padding(start = 12.dp, end = 4.dp)
-                            .height(40.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { viewModel.setSearchQuery(it) },
-                            placeholder = { Text("Search…", style = MaterialTheme.typography.bodySmall) },
-                            singleLine = true,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 8.dp),
-                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                                unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                                disabledBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                            ),
-                            textStyle = MaterialTheme.typography.bodySmall,
-                        )
-                        IconButton(
-                            onClick = { viewModel.setSearchActive(false) },
-                            modifier = Modifier.size(32.dp),
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Close search",
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
+            // Action icons always visible — search bar shows BELOW them
+            IconButton(onClick = { viewModel.setSearchActive(!isSearchActive) }) {
+                Icon(
+                    if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
+                    contentDescription = if (isSearchActive) "Close search" else "Search",
+                )
             }
-            // Action icons — hidden when search is active
-            AnimatedVisibility(
-                visible = !isSearchActive,
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) {
-                Row {
-                    IconButton(onClick = { viewModel.setSearchActive(true) }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
-                    }
-                    IconButton(onClick = { showFilterSheet = true }) {
-                        Icon(Icons.Default.Tune, contentDescription = "Filter")
-                    }
-                    IconButton(onClick = onManageRepos) {
-                        Icon(Icons.Outlined.Public, contentDescription = "Manage repositories")
-                    }
-                }
+            IconButton(onClick = { showFilterSheet = true }) {
+                Icon(Icons.Default.Tune, contentDescription = "Filter")
+            }
+            IconButton(onClick = onManageRepos) {
+                Icon(Icons.Outlined.Public, contentDescription = "Manage repositories")
             }
         },
     ) {
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { viewModel.refresh() },
-        ) {
-            ExtensionsListContent(
-                sources = filteredSources,
-                installed = filteredInstalled,
-                available = filteredAvailable,
-                isLoading = isLoading,
-                downloading = downloading,
-                sourcePriority = viewModel.sourcePriority.collectAsState().value,
-                onReorderPriority = { from, to -> viewModel.reorderSourcePriority(from, to) },
-                onOpenDetails = onOpenExtensionDetails,
-                onTrust = { viewModel.trustExtension(it) },
-                onRevoke = { viewModel.revokeTrust(it) },
-                onInstall = { viewModel.installExtension(it) },
-                onUninstall = { viewModel.uninstallExtension(it) },
-                isSearching = isSearchActive && searchQuery.isNotBlank(),
-            )
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Search bar — shows below the action icons, slides down smoothly
+            AnimatedVisibility(
+                visible = isSearchActive,
+                enter = expandVertically(animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)) + fadeIn(),
+                exit = shrinkVertically(animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)) + fadeOut(),
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.setSearchQuery(it) },
+                    placeholder = { Text("Search extensions…", style = MaterialTheme.typography.bodyMedium) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() },
+            ) {
+                ExtensionsListContent(
+                    sources = filteredSources,
+                    installed = filteredInstalled,
+                    available = filteredAvailable,
+                    isLoading = isLoading,
+                    downloading = downloading,
+                    sourcePriority = viewModel.sourcePriority.collectAsState().value,
+                    onReorderPriority = { from, to -> viewModel.reorderSourcePriority(from, to) },
+                    onOpenDetails = onOpenExtensionDetails,
+                    onTrust = { viewModel.trustExtension(it) },
+                    onRevoke = { viewModel.revokeTrust(it) },
+                    onInstall = { viewModel.installExtension(it) },
+                    onUninstall = { viewModel.uninstallExtension(it) },
+                    isSearching = isSearchActive && searchQuery.isNotBlank(),
+                )
+            }
         }
     }
 }
@@ -281,18 +243,15 @@ private fun ExtensionsListContent(
                     if (sortedSources.isEmpty()) {
                         EmptySectionBody("No trusted sources. Install an extension, then tap Trust to add it here.")
                     } else {
-                        // Drag-and-drop reorderable list for source priority
+                        // Drag-and-drop reorderable list for source priority.
+                        // Uses a Column (not LazyColumn) since there are at most
+                        // 2 trusted sources — no need for lazy scrolling.
                         val lazyListState = rememberLazyListState()
                         val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
                             onReorderPriority(from.index, to.index)
                         }
-                        LazyColumn(
-                            state = lazyListState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height((sortedSources.size * 64).dp),
-                        ) {
-                            items(sortedSources, key = { it.pkgName }) { ext ->
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            sortedSources.forEach { ext ->
                                 ReorderableItem(reorderableState, key = ext.pkgName) {
                                     SourceExtensionRow(
                                         ext = ext,

@@ -1,24 +1,20 @@
 package app.anikuta.ui.detail
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,12 +41,13 @@ import androidx.compose.ui.unit.dp
  *
  * Tracks the user's pull-down distance via [NestedScrollConnection] and maps
  * it to three stages:
- *  - Stage 1 (120dp): "Release to refresh episodes"
- *  - Stage 2 (240dp): "Release to refresh details"
- *  - Stage 3 (360dp): "Release to refresh everything"
+ *  - Stage 1 (100dp): "Release to refresh episodes"
+ *  - Stage 2 (200dp): "Release to refresh details"
+ *  - Stage 3 (300dp): "Release to refresh everything"
  *
  * On release, fires [onRefresh] with the current stage. The indicator overlay
- * shows the stage label + a progress arrow that rotates as the user pulls.
+ * shows BELOW the header area (offset from top) so it doesn't overlap the
+ * notification bar or the back/save buttons.
  *
  * This is a NOVEL component — aniyomi uses single-stage Material3 PullRefresh.
  */
@@ -62,10 +59,10 @@ fun ThreeStagePullRefresh(
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
-    val stage1Px = with(density) { 120.dp.toPx() }
-    val stage2Px = with(density) { 240.dp.toPx() }
-    val stage3Px = with(density) { 360.dp.toPx() }
-    val maxPullPx = with(density) { 420.dp.toPx() }
+    val stage1Px = with(density) { 100.dp.toPx() }
+    val stage2Px = with(density) { 200.dp.toPx() }
+    val stage3Px = with(density) { 300.dp.toPx() }
+    val maxPullPx = with(density) { 360.dp.toPx() }
 
     var pullDistance by remember { mutableFloatStateOf(0f) }
 
@@ -75,16 +72,6 @@ fun ThreeStagePullRefresh(
         pullDistance >= stage1Px -> RefreshStage.Episodes
         else -> RefreshStage.Idle
     }
-
-    val rotation by animateFloatAsState(
-        targetValue = when (currentStage) {
-            RefreshStage.Everything -> 180f
-            RefreshStage.Details -> 135f
-            RefreshStage.Episodes -> 90f
-            RefreshStage.Idle -> 0f
-        },
-        label = "pull_arrow_rotation",
-    )
 
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -114,11 +101,16 @@ fun ThreeStagePullRefresh(
                 return Offset.Zero
             }
 
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                // On release: if past stage 1, fire the action. Then reset.
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                // On release: if past stage 1, fire the action.
                 if (pullDistance >= stage1Px) {
                     onRefresh(currentStage)
                 }
+                return Velocity.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                // Reset the pull distance after the fling completes.
                 pullDistance = 0f
                 return Velocity.Zero
             }
@@ -128,45 +120,44 @@ fun ThreeStagePullRefresh(
     Box(modifier = modifier.nestedScroll(nestedScrollConnection)) {
         content()
 
-        // Indicator overlay — shows at the top when pulling or refreshing
+        // Indicator overlay — shows BELOW the header area (offset from top)
+        // so it doesn't overlap the notification bar or back/save buttons.
         AnimatedVisibility(
             visible = pullDistance > 0f || isRefreshing,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 56.dp),  // below the header (back + save buttons)
         ) {
             Surface(
-                shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
                 tonalElevation = 3.dp,
-                modifier = Modifier.padding(top = 0.dp),
             ) {
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (isRefreshing) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(18.dp),
                             strokeWidth = 2.dp,
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = null,
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    androidx.compose.foundation.layout.Spacer(
-                        modifier = Modifier.size(8.dp),
-                    )
+                    Spacer(modifier = Modifier.size(8.dp))
                     Text(
                         text = if (isRefreshing) "Refreshing…" else currentStage.label,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

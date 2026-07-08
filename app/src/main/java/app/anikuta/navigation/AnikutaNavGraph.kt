@@ -66,67 +66,84 @@ fun AnikutaNavGraph() {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
-                // Full-width bottom nav. Removed the previous floating-pill
-                // treatment (horizontal = 48.dp + vertical = 8.dp) which made
-                // the bar too narrow AND too tall. Now it spans the full width
-                // and uses the standard M3 NavigationBar height (80dp). We
-                // still keep the transparent container + spring icon scale
-                // (M3 Expressive) but drop the extra container.
-                NavigationBar(
+                // Floating pill-style bottom nav — matches the top bar aesthetic.
+                // A rounded Surface floats above the content with padding, holding
+                // all 5 nav icons. The selected icon gets a secondaryContainer
+                // background pill + spring scale animation.
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding(),
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    tonalElevation = 0.dp,
-                    windowInsets = WindowInsets(0),
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
                 ) {
-                    bottomNavScreens.forEach { screen ->
-                        val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                    Surface(
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        tonalElevation = 3.dp,
+                        shadowElevation = 8.dp,
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            bottomNavScreens.forEach { screen ->
+                                val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
 
-                        val iconScale by animateFloatAsState(
-                            targetValue = if (isSelected) 1.2f else 1f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium,
-                            ),
-                            label = "nav_icon_scale",
-                        )
-
-                        NavigationBarItem(
-                            icon = {
-                                Icon(
-                                    if (isSelected) screen.selectedIcon else screen.unselectedIcon,
-                                    contentDescription = screen.label,
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .scale(iconScale),
+                                val iconScale by animateFloatAsState(
+                                    targetValue = if (isSelected) 1.15f else 1f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                    label = "nav_icon_scale",
                                 )
-                            },
-                            label = {
-                                if (isSelected) {
-                                    Text(
-                                        screen.label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
+
+                                // Each nav item is a clickable Surface that gets
+                                // a secondaryContainer background when selected.
+                                Surface(
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+                                    else androidx.compose.ui.graphics.Color.Transparent,
+                                    onClick = {
+                                        navController.navigate(screen.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center,
+                                    ) {
+                                        Icon(
+                                            if (isSelected) screen.selectedIcon else screen.unselectedIcon,
+                                            contentDescription = screen.label,
+                                            modifier = Modifier
+                                                .size(22.dp)
+                                                .scale(iconScale),
+                                            tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        if (isSelected) {
+                                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(4.dp))
+                                            Text(
+                                                screen.label,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                maxLines = 1,
+                                            )
+                                        }
+                                    }
                                 }
-                            },
-                            selected = isSelected,
-                            onClick = {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ),
-                        )
+                            }
+                        }
                     }
                 }
             }
