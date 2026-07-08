@@ -8,34 +8,34 @@ import dataanime.Animehistory
 import dataanime.Animes
 
 /**
- * Factory for creating the AnimeDatabase.
- * Includes logging for debugging.
+ * Factory for creating the AnimeDatabase + its SqlDriver.
+ *
+ * Phase 7: [createWithDriver] returns BOTH the driver and the database so
+ * they can be registered as separate singletons in Injekt. This is needed
+ * because [AndroidAnimeDatabaseHandler] requires both the AnimeDatabase
+ * (for queries) AND the SqlDriver (for transaction checks).
  */
 object AnimeDatabaseFactory {
     private const val TAG = "AnimeDBFactory"
 
     fun create(context: Context): AnimeDatabase {
-        Log.d(TAG, "Creating AnimeDatabase...")
+        return createWithDriver(context).second
+    }
+
+    /**
+     * Create the driver + database together. Returns (driver, database) so
+     * both can be registered in Injekt.
+     */
+    fun createWithDriver(context: Context): Pair<SqlDriver, AnimeDatabase> {
+        Log.d(TAG, "Creating AnimeDatabase + driver...")
         try {
             val driver = AndroidSqliteDriver(
                 schema = AnimeDatabase.Schema,
                 context = context,
                 name = "tachiyomi.animedb",
             )
-            return createWithDriver(context, driver)
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to create AnimeDatabase", e)
-            throw e
-        }
-    }
+            Log.d(TAG, "Driver created. Schema version: ${AnimeDatabase.Schema.version}")
 
-    /**
-     * Create the database with an EXISTING driver (used when the driver is
-     * registered in Injekt separately from the database).
-     */
-    fun createWithDriver(context: Context, driver: SqlDriver): AnimeDatabase {
-        Log.d(TAG, "Creating AnimeDatabase with existing driver. Schema version: ${AnimeDatabase.Schema.version}")
-        try {
             val db = AnimeDatabase(
                 driver = driver,
                 animehistoryAdapter = Animehistory.Adapter(
@@ -47,8 +47,8 @@ object AnimeDatabaseFactory {
                     fetch_typeAdapter = FetchTypeColumnAdapter,
                 ),
             )
-            Log.d(TAG, "✅ AnimeDatabase created successfully")
-            return db
+            Log.d(TAG, "✅ AnimeDatabase + driver created successfully")
+            return Pair(driver, db)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to create AnimeDatabase", e)
             throw e

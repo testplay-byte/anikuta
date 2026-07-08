@@ -75,13 +75,11 @@ class AppModule(val app: Application) : InjektModule {
         // AndroidAnimeDatabaseHandler needs both (db for queries, driver for
         // transaction checks). Without registering SqlDriver, Injekt.get()
         // fails when constructing the handler → repo management breaks.
-        val driver = app.cash.sqldelight.driver.android.AndroidSqliteDriver(
-            schema = AnimeDatabase.Schema,
-            context = app,
-            name = "tachiyomi.animedb",
-        )
-        addSingleton(driver)
-        addSingletonFactory { AnimeDatabaseFactory.createWithDriver(app, driver) }
+        // We use AnimeDatabaseFactory to create both the driver and the db,
+        // then register each as a singleton.
+        val (dbDriver, dbInstance) = AnimeDatabaseFactory.createWithDriver(app)
+        addSingleton(dbDriver)
+        addSingleton(dbInstance)
         addSingletonFactory<AnimeDatabaseHandler> { AndroidAnimeDatabaseHandler(get(), get()) }
 
         // Extension + source management
