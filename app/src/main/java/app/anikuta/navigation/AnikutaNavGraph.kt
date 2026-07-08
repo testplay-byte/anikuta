@@ -63,98 +63,24 @@ fun AnikutaNavGraph() {
     val currentDestination = backStackEntry?.destination
     val showBottomBar = currentDestination?.route in bottomNavScreens.map { it.route }
 
+    // The nav bar is NOT in the Scaffold's bottomBar slot — it overlays the
+    // content as a truly floating element. Content fills the full screen and
+    // scrolls under the transparent area around the pill.
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            if (showBottomBar) {
-                // Floating pill-style bottom nav — the area behind the pill
-                // is completely transparent so the content scrolls under it.
-                // Only the pill Surface itself has a background.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 12.dp),
-                ) {
-                    Surface(
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        tonalElevation = 0.dp,
-                        shadowElevation = 8.dp,
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            bottomNavScreens.forEach { screen ->
-                                val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
-
-                                val iconScale by animateFloatAsState(
-                                    targetValue = if (isSelected) 1.15f else 1f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ),
-                                    label = "nav_icon_scale",
-                                )
-
-                                // Each nav item is a clickable Surface that gets
-                                // a secondaryContainer background when selected.
-                                Surface(
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                                    color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-                                    else androidx.compose.ui.graphics.Color.Transparent,
-                                    onClick = {
-                                        navController.navigate(screen.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center,
-                                    ) {
-                                        Icon(
-                                            if (isSelected) screen.selectedIcon else screen.unselectedIcon,
-                                            contentDescription = screen.label,
-                                            modifier = Modifier
-                                                .size(22.dp)
-                                                .scale(iconScale),
-                                            tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
-                                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                        if (isSelected) {
-                                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(4.dp))
-                                            Text(
-                                                screen.label,
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                maxLines = 1,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
     ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Home.route,
-            // Only apply bottom padding (for nav bar height) — NOT top, so home + detail can be edge-to-edge
-            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = innerPadding.calculateTopPadding()),
         ) {
+            NavHost(
+                navController = navController,
+                startDestination = Screen.Home.route,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = if (showBottomBar) 80.dp else 0.dp),  // space for floating nav
+            ) {
             composable(Screen.Home.route) {
                 HomeScreen(
                     onAnimeClick = { anilistId ->
@@ -265,6 +191,87 @@ fun AnikutaNavGraph() {
                     sourceId = sourceId,
                     onBack = { navController.popBackStack() },
                 )
+            }
+
+            // Floating bottom nav — overlays the content at the bottom.
+            // The area around the pill is completely transparent; content
+            // scrolls under it. Only the pill itself has a background.
+            if (showBottomBar) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            bottomNavScreens.forEach { screen ->
+                                val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+
+                                val iconScale by animateFloatAsState(
+                                    targetValue = if (isSelected) 1.15f else 1f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                    label = "nav_icon_scale",
+                                )
+
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+                                    else androidx.compose.ui.graphics.Color.Transparent,
+                                    onClick = {
+                                        navController.navigate(screen.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center,
+                                    ) {
+                                        Icon(
+                                            if (isSelected) screen.selectedIcon else screen.unselectedIcon,
+                                            contentDescription = screen.label,
+                                            modifier = Modifier
+                                                .size(22.dp)
+                                                .scale(iconScale),
+                                            tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        if (isSelected) {
+                                            Spacer(modifier = Modifier.size(4.dp))
+                                            Text(
+                                                screen.label,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                maxLines = 1,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
