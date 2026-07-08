@@ -141,3 +141,27 @@ Stage Summary:
 - **Full project state is backed up to GitHub.** Clone + restore credentials = full recovery.
 - **Known minor issue (not a blocker):** cold-launch "no source available" race — to be addressed in the polish phase alongside extension-settings management.
 - **Next phase (user-directed):** backend/improvements — extension settings management (each extension has its own prefs we don't surface), plus other small adjustments. Will be properly planned before implementation.
+
+---
+
+## Session 21 (Phase 7 planning — thorough research + detailed plan)
+
+Task ID: P7-PLAN (Session 21)
+Agent: main (Z.ai Code)
+Task: Plan Phase 7 (backend improvements) thoroughly. User specified 4 areas: (A) extension system overhaul, (B) downloads preferences redesign, (C) episode list + detail caching & refresh, (D) episode video caching + picker redesign. Produce a detailed plan for user verification before implementation.
+
+Work Log:
+- Read the user's uploaded log file (AniKoto extension resolving 27 videos in 4 server groups: VidPlay-1/HD-1/Vidstream-2/VidCloud-1 × SUB/DUB/HSUB × 1080p/720p/360p). Confirmed the Video title format is `"{server} - {audio} - {quality}"`.
+- Launched 4 parallel Explore agents to research the aniyomi reference + current ANI-KUTA code for each area:
+  - Agent 1 (extension repo/trust/settings): Found aniyomi has a FULL repo management stack (SQLDelight `extension_repos` table, interactors, service, UI). ANI-KUTA has the domain/data code copied but NOT wired — STUB classes in `app/` shadow the real `domain/` versions. aniyomi HAS a trust system (`TrustAnimeExtension`, `trustedExtensions()` pref, `AnimeExtension.Untrusted`). ANI-KUTA's stub always returns true. aniyomi HAS extension details + settings screens (`AnimeExtensionDetailsScreen` → `AnimeSourcePreferencesScreen` with `PreferenceFragmentCompat` interop). ANI-KUTA has none. The "MAX 2 trusted + popup" is NOVEL — no aniyomi precedent.
+  - Agent 2 (download prefs): Found aniyomi has NO global preferred quality/audio/server — delegates entirely to extensions via `sortHosters()`/`sortVideos()` + `Video.preferred`. ANI-KUTA's entire priority-list + drag UI + resolver must be built from scratch. aniyomi uses `sh.calvin.reorderable:2.4.3` for drag-and-drop (category reordering) — ANI-KUTA doesn't have the dep yet. `HosterLoader.getBestVideo()` is the concurrent-resolution mechanic to adapt.
+  - Agent 3 (episode/video caching + refresh): Found aniyomi caches episodes in SQLDelight DB (persistent, no TTL) with `SyncEpisodesWithSource` for smooth diffs + `Flow` subscription for live UI updates. ANI-KUTA has the DB layer dormant — `DetailViewModel` uses an in-memory Map. aniyomi has single-stage `PullRefresh`; the 3-stage is NOVEL (custom `nestedScroll`). aniyomi does NOT cache videos (re-fetches every time — signed URLs expire); ANI-KUTA must build a short-TTL video cache.
+  - Agent 4 (video picker): Found aniyomi's `QualitySheet.kt` uses `LazyColumn` (scrolls) + `List<Boolean>` for collapse + structural `Hoster` grouping — but does NOT group by audio or sort by quality. ANI-KUTA's picker uses a plain `Column` (NO scroll — the bug), NO collapse, NO sort, NO title parsing. `Video` model has `videoTitle` + `resolution: Int?` + `audioTracks`. Must build `VideoTitleParser` + audio grouping + quality-desc sort.
+- Synthesized findings into `DOCS/PLAN/PHASE-7-PLAN.md` — a detailed plan with 4 workstreams (A/B/C/D), each with: current state, tasks (with file paths + aniyomi references), files touched, verification steps. Plus cross-cutting concerns (signed URL expiry, extension diversity, DB schema, backward compat) and 8 open questions for the user.
+
+Stage Summary:
+- `DOCS/PLAN/PHASE-7-PLAN.md` written (detailed plan, ~500 lines). Awaiting user verification.
+- Key findings: (1) ANI-KUTA already has much of aniyomi's extension repo/trust/settings domain code copied but unwired (stub shadow conflict must be resolved first). (2) The download priority system is almost entirely novel (aniyomi delegates to extensions). (3) The 3-stage pull-to-refresh + video cache are novel. (4) The video picker needs a full rewrite (Column→LazyColumn, add collapse, add audio grouping, add quality sort, add title parser).
+- Recommended implementation order: A → C → D → B (A establishes trusted-sources gate; C before D unblocks Flow-based updates; B last reuses D's VideoTitleParser).
+- 8 open questions flagged for the user (trust model, popup UX, grouping depth, pull thresholds, cache TTL, refresh guard, order, other-extension formats).
+- NO code written this session — planning only, per user's request.
