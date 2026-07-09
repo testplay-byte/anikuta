@@ -3,9 +3,13 @@ package app.anikuta.ui.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GestureTap
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -16,8 +20,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Phase 6 task 6.19 — Player settings subpage.
- * Speed, hardware decoding, audio language. Subtitle/gesture settings deferred.
+ * Player settings subpage.
+ * Phase 1.7: Added default view, gestures, auto-hide, skip duration.
+ * Original: Speed, hardware decoding, audio language.
  */
 @Composable
 fun PlayerSettingsScreen(onBack: () -> Unit) {
@@ -26,6 +31,10 @@ fun PlayerSettingsScreen(onBack: () -> Unit) {
     val speed by prefs.playerSpeed().stateIn(scope).collectAsState()
     val hwdec by prefs.tryHWDecoding().stateIn(scope).collectAsState()
     var audioLang by remember { mutableStateOf(prefs.preferredAudioLanguages().get()) }
+    val defaultView by prefs.defaultPlayerView().stateIn(scope).collectAsState()
+    val skipDuration by prefs.skipButtonDuration().stateIn(scope).collectAsState()
+    val gesturesEnabled by prefs.playerGesturesEnabled().stateIn(scope).collectAsState()
+    val autoHide by prefs.autoHideControls().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Player", onBack = onBack) {
         LazyColumn(
@@ -33,6 +42,35 @@ fun PlayerSettingsScreen(onBack: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Default view (Phase 1.7)
+            item {
+                SettingsGroupCard(title = "Default view") {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text("Which mode to open the player in", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("Ask shows a prompt the first time", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(10.dp))
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(
+                                selected = defaultView == "minimized",
+                                onClick = { prefs.defaultPlayerView().set("minimized") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                            ) { Text("Minimized") }
+                            SegmentedButton(
+                                selected = defaultView == "fullscreen",
+                                onClick = { prefs.defaultPlayerView().set("fullscreen") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                            ) { Text("Fullscreen") }
+                            SegmentedButton(
+                                selected = defaultView == "ask",
+                                onClick = { prefs.defaultPlayerView().set("ask") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                            ) { Text("Ask") }
+                        }
+                    }
+                }
+            }
+
+            // Playback settings (original + new)
             item {
                 SettingsGroupCard(title = "Playback") {
                     // Speed slider
@@ -69,6 +107,37 @@ fun PlayerSettingsScreen(onBack: () -> Unit) {
                             placeholder = { Text("jpn,eng") },
                         )
                     }
+                }
+            }
+
+            // Player behavior (Phase 1.7)
+            item {
+                SettingsGroupCard(title = "Player behavior") {
+                    SwitchSettingsRow(
+                        icon = Icons.Default.GestureTap,
+                        title = "Gestures",
+                        subtitle = "Swipe to seek, brightness, volume, double-tap",
+                        checked = gesturesEnabled,
+                        onCheckedChange = { prefs.playerGesturesEnabled().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Visibility,
+                        title = "Auto-hide controls",
+                        subtitle = "Hide player controls after inactivity",
+                        checked = autoHide,
+                        onCheckedChange = { prefs.autoHideControls().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.SkipNext,
+                        title = "Skip button",
+                        subtitle = "Skip opening duration: ${skipDuration}s",
+                        checked = skipDuration > 0,
+                        onCheckedChange = {
+                            prefs.skipButtonDuration().set(if (it) 85 else 0)
+                        },
+                    )
                 }
             }
         }
