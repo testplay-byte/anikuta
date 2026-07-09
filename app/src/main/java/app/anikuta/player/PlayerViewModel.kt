@@ -55,6 +55,14 @@ class PlayerViewModel(
     private val _controlsVisible = MutableStateFlow(true)
     val controlsVisible: StateFlow<Boolean> = _controlsVisible.asStateFlow()
 
+    /** Whether controls are locked (all input disabled except unlock). */
+    private val _controlsLocked = MutableStateFlow(false)
+    val controlsLocked: StateFlow<Boolean> = _controlsLocked.asStateFlow()
+
+    /** Whether the lock button itself is visible (auto-hides on inactivity). */
+    private val _lockButtonVisible = MutableStateFlow(false)
+    val lockButtonVisible: StateFlow<Boolean> = _lockButtonVisible.asStateFlow()
+
     /** Shows "Do you want to start over?" overlay for 10s after resume (Q8). */
     private val _showStartOverOverlay = MutableStateFlow(false)
     val showStartOverOverlay: StateFlow<Boolean> = _showStartOverOverlay.asStateFlow()
@@ -208,6 +216,37 @@ class PlayerViewModel(
 
     fun setControlsVisible(visible: Boolean) {
         _controlsVisible.value = visible
+    }
+
+    // ---- Lock controls (Phase 2.2) ----
+
+    /** Lock all controls. Only the lock button can unlock. */
+    fun lockControls() {
+        _controlsLocked.value = true
+        _controlsVisible.value = false
+        _lockButtonVisible.value = false
+    }
+
+    /** Unlock controls — restores normal control visibility. */
+    fun unlockControls() {
+        _controlsLocked.value = false
+        _controlsVisible.value = true
+        _lockButtonVisible.value = false
+    }
+
+    /** Toggle lock state. */
+    fun toggleLock() {
+        if (_controlsLocked.value) unlockControls() else lockControls()
+    }
+
+    /** Show the lock button (when user taps screen while locked). */
+    fun showLockButton() {
+        _lockButtonVisible.value = true
+    }
+
+    /** Hide the lock button (auto-hide on inactivity). */
+    fun hideLockButton() {
+        _lockButtonVisible.value = false
     }
 
     override fun onCleared() {
