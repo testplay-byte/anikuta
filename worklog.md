@@ -294,3 +294,33 @@ Stage Summary:
 - Merge priority: Title (Jikan→Kitsu→AniList), Description (Kitsu only),
   Thumbnail (Kitsu→AniList→banner fallback), Air date (Jikan→Kitsu)
 - Metadata persists across navigation (background refresh preserves enriched fields)
+
+---
+
+## Session 21 (Sandbox restore + episode list UX fixes)
+
+Task ID: P7.5-EPISODE-UX-FIXES (Session 21)
+Agent: main (Z.ai Code)
+Task: Restore project from GitHub after sandbox reset, then apply 5 episode list UX fixes from on-device testing of build b45431e.
+
+Work Log:
+- Sandbox had reset — entire anikuta/ directory was gone. Restored by cloning from GitHub (https://github.com/testplay-byte/anikuta.git) using user-provided PAT.
+- Verified build b45431e is HEAD of origin/main — confirmed previous session's edits were never committed (lost in reset).
+- Set up credentials: saved GitHub token to MEMORY/CREDENTIALS/github-token.txt (gitignored), saved Supabase credentials to MEMORY/CREDENTIALS/supabase-credentials.md (gitignored). Verified SupabaseClient.kt already has correct keys hardcoded.
+- Applied 5 fixes:
+  1. Metadata enrichment recomposition bug (DetailViewModel.kt): replaced mutation-in-place with SEpisode.create().apply{...} + .map{} to create new object references. Compose now detects changes and recomposes visible items immediately.
+  2. Removed getAvailableAudioVersions() + persistAudioVersions() methods and both call sites. Sub/dub detection now uses SEpisode.scanlator only (no video cache pollution).
+  3. Full-page scroll when animeInfoPosition=="above": episodes render via itemsIndexed() directly in outer LazyColumn (no inner container). Below mode keeps inner LazyColumn.
+  4. Alternating row colors: even=surfaceContainerLow, odd=surfaceContainerHigh by index%2. Inner elements use surfaceContainer for contrast.
+  5. Episodes list max height 400dp → 600dp (1.5x).
+- Added itemsIndexed import to DetailScreen.kt.
+- Removed availableAudioVersions parameter from EpisodeRow, EpisodeRowSimple, EpisodeRowRich.
+- Added index: Int = 0 parameter to EpisodeRow for alternating color calculation.
+- Committed as 63bcfd1, pushed to origin/main. GitHub Actions run #164 completed successfully (build SUCCESS, ~2.5 min).
+- Sent ntfy notification to ntfy.sh/THEANIMEAPPTASKISDONE.
+
+Stage Summary:
+- All 5 fixes applied, committed (63bcfd1), pushed, and built successfully.
+- Build artifacts: anikuta-debug-arm64-v8a APK available in Actions run #164.
+- Previous build b45431e did NOT include these fixes (previous session's edits were lost in sandbox reset before being committed). This was my mistake — I should have committed immediately.
+- Environment fully restored: repo cloned, credentials saved (gitignored), git config set, remote URL configured with token for push access.
