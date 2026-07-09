@@ -23,6 +23,7 @@ mpv-lib = "1.18.n"
 ffmpeg-kit = "1.18"
 sqldelight = "2.0.2"
 coil = "3.1.0"
+palette = "1.0.0"
 work = "2.10.0"
 
 [libraries]
@@ -74,6 +75,9 @@ paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.r
 coil-bom = { group = "io.coil-kt.coil3", name = "coil-bom", version.ref = "coil" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp" }
+
+# Palette (color extraction from images for dynamic theming)
+palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = "palette" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }

@@ -77,6 +77,7 @@ fun DetailScreen(
     val episodeNumberPosition = remember { playerPrefs?.episodeNumberPosition()?.get() ?: "overlay" }
     val thumbnailPosition = remember { playerPrefs?.thumbnailPosition()?.get() ?: "left" }
     val animeInfoPosition = remember { playerPrefs?.animeInfoPosition()?.get() ?: "below" }
+    val dynamicThemingEnabled = remember { playerPrefs?.dynamicDetailTheming()?.get() ?: true }
 
     // Observe play requests from the ViewModel → launch the player.
     androidx.compose.runtime.LaunchedEffect(playRequest) {
@@ -141,7 +142,25 @@ fun DetailScreen(
                 }
             }
 
-            Box(modifier = Modifier.fillMaxSize()) {
+            // Dynamic theming: extract multiple colors from the cover image
+            // using the Android Palette API. Used for episode card backgrounds,
+            // inner elements, and page background tint.
+            var dynamicColors by remember(anime.id) {
+                mutableStateOf<DynamicColorScheme?>(null)
+            }
+            androidx.compose.runtime.LaunchedEffect(anime.id, dynamicThemingEnabled) {
+                if (dynamicThemingEnabled) {
+                    dynamicColors = extractDynamicColors(anime)
+                } else {
+                    dynamicColors = null
+                }
+            }
+
+            // When dynamic theming is enabled, apply the extracted background
+            // color to the whole page so the detail page feels cohesive with
+            // the cover image's palette.
+            val pageBgColor = dynamicColors?.background ?: MaterialTheme.colorScheme.background
+            Box(modifier = Modifier.fillMaxSize().background(pageBgColor)) {
             ThreeStagePullRefresh(
                 isRefreshing = isRefreshing,
                 onRefresh = { stage -> viewModel.onRefreshStage(stage) },
@@ -332,6 +351,7 @@ fun DetailScreen(
                                 episodeNumberPosition = episodeNumberPosition,
                                 thumbnailPosition = thumbnailPosition,
                                 index = index,
+                                dynamicColors = dynamicColors,
                             )
                         }
                     }
@@ -447,6 +467,7 @@ fun DetailScreen(
                                                 episodeNumberPosition = episodeNumberPosition,
                                                 thumbnailPosition = thumbnailPosition,
                                                 index = index,
+                                                dynamicColors = dynamicColors,
                                             )
                                         }
                                     }
@@ -653,20 +674,23 @@ private fun EpisodeRow(
     episodeNumberPosition: String = "overlay",
     thumbnailPosition: String = "left",
     index: Int = 0,
+    dynamicColors: DynamicColorScheme? = null,
 ) {
     val hasThumbnail = showThumbnails && !episode.preview_url.isNullOrBlank()
     val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
     val isRich = hasThumbnail || hasSummary
 
-    // Alternating row colors: even rows use surfaceContainerLow, odd rows use
-    // surfaceContainerHigh. Both are standard M3 surface container levels that
-    // blend naturally with the theme. Inner elements (title, synopsis, thumbnail
-    // backgrounds) use surfaceContainer (the middle level), so they always
-    // contrast with the card background regardless of which level the card uses.
-    val cardColor = if (index % 2 == 0) {
-        MaterialTheme.colorScheme.surfaceContainerLow
+    // Alternating row colors. When dynamic theming is enabled, colors are
+    // extracted from the cover image (darkMuted for even, muted for odd).
+    // When disabled, fall back to standard M3 surface container levels.
+    val cardColor = if (dynamicColors != null) {
+        if (index % 2 == 0) dynamicColors.surfaceLow else dynamicColors.surfaceHigh
     } else {
-        MaterialTheme.colorScheme.surfaceContainerHigh
+        if (index % 2 == 0) {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        }
     }
 
     Surface(

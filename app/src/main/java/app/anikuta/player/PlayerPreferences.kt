@@ -119,10 +119,31 @@ class PlayerPreferences(
 
     /**
      * In-app episode metadata fetching: when enabled, ANI-KUTA fetches
-     * episode thumbnails, titles, and descriptions from Jikan (MAL),
-     * AniList, and Kitsu for extensions that don't provide this data.
+     * episode thumbnails, titles, and descriptions from external sources
+     * for extensions that don't provide this data.
      * Default: true.
      */
     fun enableInAppMetadataFetch(): Preference<Boolean> =
         preferenceStore.getBoolean("pref_in_app_metadata_fetch", true)
+
+    /** Fetch episode thumbnails via metadata enrichment. Default: true. */
+    fun fetchMetadataThumbnails(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_fetch_metadata_thumbnails", true)
+
+    /** Fetch episode titles via metadata enrichment. Default: true. */
+    fun fetchMetadataTitles(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_fetch_metadata_titles", true)
+
+    /** Fetch episode summaries/descriptions via metadata enrichment. Default: true. */
+    fun fetchMetadataSummaries(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_fetch_metadata_summaries", true)
+
+    /**
+     * Dynamic theming for the detail page: when enabled, the detail page's
+     * colors (background, episode cards, accents) are extracted from the
+     * anime's cover image using the Android Palette API.
+     * Default: true.
+     */
+    fun dynamicDetailTheming(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_dynamic_detail_theming", true)
 }

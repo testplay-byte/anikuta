@@ -327,9 +327,16 @@ class DetailViewModel(
         val prefs = try { uy.kohesive.injekt.Injekt.get<app.anikuta.player.PlayerPreferences>() } catch (e: Exception) { return }
         if (!prefs.enableInAppMetadataFetch().get()) return
 
-        // Check if any episodes are missing metadata
+        // Read the per-field fetch toggles
+        val fetchThumbnails = prefs.fetchMetadataThumbnails().get()
+        val fetchTitles = prefs.fetchMetadataTitles().get()
+        val fetchSummaries = prefs.fetchMetadataSummaries().get()
+
+        // Check if any episodes are missing metadata that we're configured to fetch
         val needsEnrichment = episodes.any { ep ->
-            ep.preview_url.isNullOrBlank() || ep.summary.isNullOrBlank()
+            (fetchThumbnails && ep.preview_url.isNullOrBlank()) ||
+            (fetchSummaries && ep.summary.isNullOrBlank()) ||
+            (fetchTitles && (ep.name.isBlank() || ep.name.matches(Regex("(?i)episode\\s*\\d+"))))
         }
         if (!needsEnrichment) {
             Log.d(TAG, "All episodes have metadata — skipping in-app fetch")
@@ -362,15 +369,15 @@ class DetailViewModel(
                         ep  // no metadata for this episode — keep original
                     } else {
                         var changed = false
-                        val newPreviewUrl = if (ep.preview_url.isNullOrBlank() && !meta.thumbnailUrl.isNullOrBlank()) {
+                        val newPreviewUrl = if (fetchThumbnails && ep.preview_url.isNullOrBlank() && !meta.thumbnailUrl.isNullOrBlank()) {
                             changed = true; meta.thumbnailUrl
                         } else ep.preview_url
 
-                        val newSummary = if (ep.summary.isNullOrBlank() && !meta.description.isNullOrBlank()) {
+                        val newSummary = if (fetchSummaries && ep.summary.isNullOrBlank() && !meta.description.isNullOrBlank()) {
                             changed = true; meta.description
                         } else ep.summary
 
-                        val newName = if ((ep.name.isBlank() || ep.name.matches(Regex("(?i)episode\\s*\\d+"))) && !meta.title.isNullOrBlank()) {
+                        val newName = if (fetchTitles && (ep.name.isBlank() || ep.name.matches(Regex("(?i)episode\\s*\\d+"))) && !meta.title.isNullOrBlank()) {
                             changed = true; "Episode $epNum - ${meta.title}"
                         } else ep.name
 
