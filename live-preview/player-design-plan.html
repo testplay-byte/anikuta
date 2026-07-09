@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANI-KUTA — Video Player Design Plan</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a21;
+    --surface-2: #232330;
+    --surface-3: #2d2d3d;
+    --primary: #e85d3a;
+    --primary-dim: #c44a2e;
+    --on-surface: #f0f0f5;
+    --on-surface-variant: #a0a0b0;
+    --accent: #ffb74d;
+    --success: #66bb6a;
+    --warning: #ffa726;
+    --error: #ef5350;
+    --info: #42a5f5;
+    --border: rgba(255,255,255,0.08);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--on-surface);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+  .hero {
+    text-align: center;
+    padding: 60px 24px 40px;
+    background: linear-gradient(135deg, #1a1a21 0%, #2d1810 50%, #1a1a21 100%);
+    border-radius: 20px;
+    margin-bottom: 32px;
+    border: 1px solid var(--border);
+  }
+  .hero h1 {
+    font-size: 2.4rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #e85d3a, #ffb74d);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+  .hero p { color: var(--on-surface-variant); font-size: 1.1rem; max-width: 600px; margin: 0 auto; }
+  .hero .badges { margin-top: 20px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .badge {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .badge-m3 { background: rgba(232,93,58,0.15); color: var(--primary); border: 1px solid rgba(232,93,58,0.3); }
+  .badge-yt { background: rgba(255,183,77,0.15); color: var(--accent); border: 1px solid rgba(255,183,77,0.3); }
+
+  .section { margin-bottom: 48px; }
+  .section-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title::before {
+    content: '';
+    width: 4px;
+    height: 28px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+  .section-subtitle {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 24px 0 12px;
+    color: var(--accent);
+  }
+
+  .card {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 24px;
+    border: 1px solid var(--border);
+  }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+
+  /* Phone mockup */
+  .phone-frame {
+    width: 300px;
+    height: 600px;
+    background: #000;
+    border-radius: 28px;
+    border: 3px solid var(--surface-3);
+    overflow: hidden;
+    position: relative;
+    margin: 0 auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .phone-screen {
+    width: 100%;
+    height: 100%;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Minimized view mockup */
+  .mini-video {
+    width: 100%;
+    height: 160px;
+    background: linear-gradient(135deg, #2a4a6a, #4a6a8a);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mini-video::after {
+    content: '▶';
+    color: rgba(255,255,255,0.8);
+    font-size: 32px;
+  }
+  .mini-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mini-seekbar {
+    flex: 1;
+    height: 3px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 2px;
+    position: relative;
+  }
+  .mini-seekbar::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 35%;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+  .mini-btn { color: #fff; font-size: 14px; }
+
+  .mini-info {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .mini-info-title { font-size: 0.85rem; font-weight: 600; color: var(--on-surface); }
+  .mini-info-sub { font-size: 0.72rem; color: var(--on-surface-variant); margin-top: 2px; }
+
+  .mini-controls-row {
+    padding: 10px 14px;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .mini-chip {
+    padding: 4px 10px;
+    background: var(--surface-2);
+    border-radius: 8px;
+    font-size: 0.7rem;
+    color: var(--on-surface);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .mini-ep-list {
+    padding: 8px 14px;
+    overflow-y: auto;
+    height: 180px;
+  }
+  .mini-ep-item {
+    padding: 8px 10px;
+    background: var(--surface-2);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 0.72rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mini-ep-num {
+    width: 24px;
+    height: 24px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.65rem;
+    flex-shrink: 0;
+  }
+  .mini-ep-playing { border: 2px solid var(--primary); }
+
+  /* Fullscreen mockup */
+  .fullscreen-video {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1a3a5a, #2d5a8a, #5a3a2d);
+    position: relative;
+  }
+  .fs-top-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(rgba(0,0,0,0.6), transparent);
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .fs-top-left { display: flex; flex-direction: column; gap: 4px; }
+  .fs-lock-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  .fs-title { color: #fff; font-size: 0.72rem; font-weight: 600; max-width: 140px; }
+  .fs-ep-info { color: rgba(255,255,255,0.7); font-size: 0.6rem; }
+  .fs-top-right { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 120px; }
+  .fs-icon-btn {
+    width: 26px;
+    height: 26px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #fff;
+  }
+
+  .fs-bottom-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    padding: 10px 12px;
+  }
+  .fs-seekbar {
+    height: 4px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 2px;
+    margin-bottom: 8px;
+    position: relative;
+  }
+  .fs-seekbar::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 35%;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+  .fs-bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .fs-bottom-left { display: flex; gap: 6px; align-items: center; }
+  .fs-bottom-right { display: flex; gap: 6px; align-items: center; }
+  .fs-time { color: #fff; font-size: 0.6rem; }
+
+  .fs-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .fs-play-btn {
+    width: 48px;
+    height: 48px;
+    background: rgba(255,255,255,0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #000;
+  }
+  .fs-seek-btn {
+    width: 36px;
+    height: 36px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #fff;
+  }
+
+  /* Gesture zones */
+  .gesture-zone {
+    position: absolute;
+    border: 1px dashed rgba(255,255,255,0.2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.55rem;
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+    padding: 4px;
+  }
+
+  /* Compare layout */
+  .compare-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 700px) { .compare-2 { grid-template-columns: 1fr; } }
+  .compare-label { text-align: center; font-size: 0.85rem; font-weight: 600; color: var(--on-surface-variant); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* Feature list */
+  .feature-list { list-style: none; }
+  .feature-list li {
+    padding: 8px 0;
+    padding-left: 28px;
+    position: relative;
+    color: var(--on-surface-variant);
+    font-size: 0.92rem;
+  }
+  .feature-list li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: var(--success);
+    font-weight: bold;
+  }
+
+  /* Phase cards */
+  .phase {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+    border-left: 4px solid var(--primary);
+  }
+  .phase-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .phase-title { font-size: 1.1rem; font-weight: 700; }
+  .phase-tag { padding: 4px 10px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; }
+  .tag-p1 { background: rgba(232,93,58,0.15); color: var(--primary); }
+  .tag-p2 { background: rgba(255,183,77,0.15); color: var(--accent); }
+  .tag-p3 { background: rgba(102,187,106,0.15); color: var(--success); }
+  .tag-p4 { background: rgba(66,165,245,0.15); color: var(--info); }
+
+  /* File tree */
+  .file-tree { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem; line-height: 1.8; }
+  .file-tree .dir { color: var(--accent); font-weight: 600; }
+  .file-tree .file { color: var(--on-surface); }
+  .file-tree .new { color: var(--success); font-weight: 600; }
+  .file-tree .existing { color: var(--on-surface-variant); }
+  .file-tree .comment { color: var(--on-surface-variant); font-style: italic; }
+
+  /* Questions */
+  .question {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    margin-bottom: 10px;
+    display: flex;
+    gap: 14px;
+    border-left: 4px solid var(--warning);
+  }
+  .q-num {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--warning); color: #000;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.9rem; flex-shrink: 0;
+  }
+  .q-text strong { display: block; margin-bottom: 4px; }
+  .q-text span { color: var(--on-surface-variant); font-size: 0.9rem; }
+
+  /* Zoom diagram */
+  .zoom-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding: 20px;
+  }
+  .zoom-bar {
+    width: 100%;
+    max-width: 500px;
+    height: 40px;
+    background: var(--surface-2);
+    border-radius: 20px;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .zoom-marker {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
+    background: var(--primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #fff;
+    border: 2px solid var(--accent);
+  }
+  .zoom-sticky {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 24px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+  .zoom-label {
+    position: absolute;
+    top: -20px;
+    font-size: 0.65rem;
+    color: var(--on-surface-variant);
+    transform: translateX(-50%);
+  }
+
+  .footer { text-align: center; padding: 40px 24px; color: var(--on-surface-variant); font-size: 0.9rem; border-top: 1px solid var(--border); margin-top: 40px; }
+
+  .callout {
+    background: rgba(255,183,77,0.08);
+    border: 1px solid rgba(255,183,77,0.2);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 16px 0;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .callout-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+  .callout-text { color: var(--on-surface); font-size: 0.9rem; }
+  .callout-text strong { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Video Player Design Plan</h1>
+    <p>One screen, two modes — YouTube-style minimized & fullscreen experience with Material 3 Expressive</p>
+    <div class="badges">
+      <span class="badge badge-m3">Material 3 Expressive</span>
+      <span class="badge badge-yt">YouTube-style</span>
+    </div>
+  </div>
+
+  <!-- Architecture Overview -->
+  <div class="section">
+    <div class="section-title">Architecture: One Screen, Two Modes</div>
+    <div class="card">
+      <p style="margin-bottom:16px; color:var(--on-surface-variant);">
+        The player is a <strong style="color:var(--primary);">single screen</strong> with two modes that the user can toggle between.
+        The video keeps playing during the transition — no reload, no rebuffer.
+      </p>
+      <div class="compare-2">
+        <div>
+          <div class="compare-label">Minimized Mode</div>
+          <ul class="feature-list">
+            <li>Video at top (adapts to aspect ratio)</li>
+            <li>Episode info below video</li>
+            <li>Server + version (sub/dub) dropdowns</li>
+            <li>Scrollable episodes list</li>
+            <li>Tap video to show/hide controls</li>
+            <li>Swipe up → fullscreen</li>
+          </ul>
+        </div>
+        <div>
+          <div class="compare-label">Fullscreen Mode</div>
+          <ul class="feature-list">
+            <li>Video fills entire screen</li>
+            <li>Controls overlay on video (auto-hide)</li>
+            <li>All settings in top bar + bottom bar</li>
+            <li>Lock button (top left)</li>
+            <li>Gestures: seek, brightness, volume</li>
+            <li>Pinch zoom with magnetic snapping</li>
+            <li>Swipe down → minimized</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Minimized View Mockup -->
+  <div class="section">
+    <div class="section-title">Minimized View — Layout</div>
+    <div class="compare-2">
+      <div style="display:flex; justify-content:center;">
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <!-- Video player area -->
+            <div class="mini-video">
+              <div class="mini-controls">
+                <span class="mini-btn">▶</span>
+                <div class="mini-seekbar"></div>
+                <span class="mini-btn" style="font-size:0.6rem;">4:32</span>
+                <span class="mini-btn">⛶</span>
+              </div>
+            </div>
+            <!-- Episode info -->
+            <div class="mini-info">
+              <div class="mini-info-title">Episode 5 — The Dragon's Labyrinth</div>
+              <div class="mini-info-sub">A young adventurer discovers a hidden labyrinth...</div>
+            </div>
+            <!-- Server + version controls -->
+            <div class="mini-controls-row">
+              <div class="mini-chip">⚙ Anikoto</div>
+              <div class="mini-chip">🎧 SUB · DUB</div>
+              <div class="mini-chip">📺 1080p</div>
+            </div>
+            <!-- Episodes list -->
+            <div class="mini-ep-list">
+              <div class="mini-ep-item mini-ep-playing">
+                <div class="mini-ep-num">5</div>
+                <div>The Dragon's Labyrinth</div>
+              </div>
+              <div class="mini-ep-item">
+                <div class="mini-ep-num">6</div>
+                <div>The Lost Temple</div>
+              </div>
+              <div class="mini-ep-item">
+                <div class="mini-ep-num">7</div>
+                <div>Shadow Realm</div>
+              </div>
+              <div class="mini-ep-item">
+                <div class="mini-ep-num">8</div>
+                <div>The Final Battle</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-subtitle">Layout (top to bottom)</div>
+        <ol style="color:var(--on-surface-variant); padding-left:20px; font-size:0.92rem;">
+          <li style="margin-bottom:8px;"><strong style="color:var(--primary);">Video player</strong> — width = screen width, height adapts to video aspect ratio (sides touch left/right edges)</li>
+          <li style="margin-bottom:8px;"><strong style="color:var(--primary);">Episode info bar</strong> — episode number, title, description (compact)</li>
+          <li style="margin-bottom:8px;"><strong style="color:var(--primary);">Server & version controls</strong> — dropdown chips: server, sub/dub/hardsub, quality</li>
+          <li style="margin-bottom:8px;"><strong style="color:var(--primary);">Episodes list</strong> — scrollable, current episode highlighted, tap to switch</li>
+        </ol>
+
+        <div class="section-subtitle">Video Controls (tap to show/hide)</div>
+        <ul class="feature-list">
+          <li>Play / pause button</li>
+          <li>Seek bar with timestamp</li>
+          <li>Minimize/maximize button</li>
+          <li>Subtitle + quality quick access</li>
+          <li>Double-tap to seek ±10s</li>
+          <li>Swipe up/down left = brightness, right = volume</li>
+          <li>Auto-hide after inactivity</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen View Mockup -->
+  <div class="section">
+    <div class="section-title">Fullscreen Mode — Layout</div>
+    <div class="compare-2">
+      <div style="display:flex; justify-content:center;">
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="fullscreen-video">
+              <!-- Top bar -->
+              <div class="fs-top-bar">
+                <div class="fs-top-left">
+                  <div class="fs-lock-btn">🔒</div>
+                  <div class="fs-title">Anime Name</div>
+                  <div class="fs-ep-info">EP 5 — The Dragon's Labyrinth</div>
+                </div>
+                <div class="fs-top-right">
+                  <div class="fs-icon-btn">⚙</div>
+                  <div class="fs-icon-btn">💬</div>
+                  <div class="fs-icon-btn">🎵</div>
+                  <div class="fs-icon-btn">📺</div>
+                  <div class="fs-icon-btn">⋯</div>
+                </div>
+              </div>
+              <!-- Center controls -->
+              <div class="fs-center">
+                <div class="fs-seek-btn">⏪</div>
+                <div class="fs-play-btn">⏸</div>
+                <div class="fs-seek-btn">⏩</div>
+              </div>
+              <!-- Bottom bar -->
+              <div class="fs-bottom-bar">
+                <div class="fs-seekbar"></div>
+                <div class="fs-bottom-row">
+                  <div class="fs-bottom-left">
+                    <span class="fs-time">4:32</span>
+                    <div class="fs-icon-btn" style="width:24px;height:24px;font-size:9px;">⚡</div>
+                    <div class="fs-icon-btn" style="width:24px;height:24px;font-size:9px;">↻</div>
+                  </div>
+                  <div class="fs-bottom-right">
+                    <div class="fs-icon-btn" style="width:24px;height:24px;font-size:9px;">⏭85</div>
+                    <div class="fs-icon-btn" style="width:24px;height:24px;font-size:9px;">🔲</div>
+                    <div class="fs-icon-btn" style="width:24px;height:24px;font-size:9px;">↙</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-subtitle">Top Left</div>
+        <ul class="feature-list" style="font-size:0.85rem;">
+          <li>Lock button (locks all controls)</li>
+          <li>Anime name</li>
+          <li>Episode number + title</li>
+        </ul>
+
+        <div class="section-subtitle">Top Right</div>
+        <ul class="feature-list" style="font-size:0.85rem;">
+          <li>Server selection</li>
+          <li>Subtitle selection</li>
+          <li>Audio track selection</li>
+          <li>Quality selection</li>
+          <li>More options (⋯) → advanced settings</li>
+        </ul>
+
+        <div class="section-subtitle">Bottom Left</div>
+        <ul class="feature-list" style="font-size:0.85rem;">
+          <li>Timestamp (current / total)</li>
+          <li>Playback speed control</li>
+          <li>Screen rotation toggle</li>
+        </ul>
+
+        <div class="section-subtitle">Bottom Right</div>
+        <ul class="feature-list" style="font-size:0.85rem;">
+          <li>Skip 85 seconds forward</li>
+          <li>Minimize button (→ minimized mode)</li>
+          <li>Picture-in-Picture button</li>
+        </ul>
+
+        <div class="section-subtitle">Center</div>
+        <ul class="feature-list" style="font-size:0.85rem;">
+          <li>Rewind 10s / Play-Pause / Forward 10s</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gesture Zones -->
+  <div class="section">
+    <div class="section-title">Gesture Zones (Fullscreen)</div>
+    <div class="card">
+      <div style="display:flex; justify-content:center; margin-bottom:20px;">
+        <div class="phone-frame" style="width:280px; height:560px;">
+          <div class="phone-screen">
+            <div class="fullscreen-video" style="position:relative;">
+              <!-- Left zone -->
+              <div class="gesture-zone" style="left:8px; top:30%; width:40%; height:40%; background:rgba(255,183,77,0.08);">
+                Brightness<br>↕ Swipe
+              </div>
+              <!-- Right zone -->
+              <div class="gesture-zone" style="right:8px; top:30%; width:40%; height:40%; background:rgba(66,165,245,0.08);">
+                Volume<br>↕ Swipe
+              </div>
+              <!-- Horizontal seek zone -->
+              <div class="gesture-zone" style="left:8px; right:8px; top:75%; height:15%; background:rgba(232,93,58,0.08);">
+                ← → Seek (horizontal swipe)
+              </div>
+              <!-- Double tap zones -->
+              <div class="gesture-zone" style="left:8px; top:8%; width:30%; height:20%; background:rgba(102,187,106,0.08); font-size:0.5rem;">
+                Double-tap<br>⏪ -10s
+              </div>
+              <div class="gesture-zone" style="right:8px; top:8%; width:30%; height:20%; background:rgba(102,187,106,0.08); font-size:0.5rem;">
+                Double-tap<br>⏩ +10s
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-grid">
+        <div class="card" style="padding:16px;">
+          <h4 style="color:var(--accent); margin-bottom:8px;">↔ Horizontal Swipe</h4>
+          <p style="color:var(--on-surface-variant); font-size:0.85rem;">Seek forward/backward. Shows a preview timestamp.</p>
+        </div>
+        <div class="card" style="padding:16px;">
+          <h4 style="color:var(--accent); margin-bottom:8px;">↕ Left Half Swipe</h4>
+          <p style="color:var(--on-surface-variant); font-size:0.85rem;">Brightness up/down with overlay indicator.</p>
+        </div>
+        <div class="card" style="padding:16px;">
+          <h4 style="color:var(--accent); margin-bottom:8px;">↕ Right Half Swipe</h4>
+          <p style="color:var(--on-surface-variant); font-size:0.85rem;">Volume up/down with overlay indicator.</p>
+        </div>
+        <div class="card" style="padding:16px;">
+          <h4 style="color:var(--accent); margin-bottom:8px;">Double-Tap</h4>
+          <p style="color:var(--on-surface-variant); font-size:0.85rem;">Left = -10s, Right = +10s. Shows ripple animation.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pinch Zoom with Magnetic Snapping -->
+  <div class="section">
+    <div class="section-title">Pinch Zoom — Magnetic Snapping</div>
+    <div class="card">
+      <p style="margin-bottom:20px; color:var(--on-surface-variant);">
+        Pinch to zoom has <strong style="color:var(--accent);">magnetic sticky zones</strong> at every 20% interval.
+        When zoom passes through a sticky point (100%, 80%, 60%, 40%), it "locks" there briefly.
+        The user must zoom a bit extra to break past the sticky zone — this prevents accidental zoom changes
+        and makes it easy to land on common zoom levels.
+      </p>
+      <div class="zoom-diagram">
+        <div class="zoom-bar">
+          <!-- Sticky markers at 40%, 60%, 80%, 100% -->
+          <div class="zoom-sticky" style="left:10%;"></div>
+          <div class="zoom-label" style="left:10%;">40%</div>
+          <div class="zoom-sticky" style="left:36.7%;"></div>
+          <div class="zoom-label" style="left:36.7%;">60%</div>
+          <div class="zoom-sticky" style="left:63.3%;"></div>
+          <div class="zoom-label" style="left:63.3%;">80%</div>
+          <div class="zoom-sticky" style="left:90%;"></div>
+          <div class="zoom-label" style="left:90%;">100%</div>
+          <!-- Current position marker -->
+          <div class="zoom-marker" style="left:90%;">100%</div>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:16px;">
+        <div class="callout-icon">🧲</div>
+        <div class="callout-text">
+          <strong>How it works:</strong> If the user is at 100% and zooms out, the zoom stays at 100% until they zoom out "hard enough".
+          Once past the threshold, it drops to 80% and sticks there. Same pattern at every 20% mark.
+          Also snaps when video edges align with screen edges (contain/cover fit).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mode Transition -->
+  <div class="section">
+    <div class="section-title">Mode Transition</div>
+    <div class="card">
+      <div class="compare-2">
+        <div>
+          <h4 style="color:var(--success); margin-bottom:12px;">↕ Swipe Gestures</h4>
+          <ul class="feature-list">
+            <li><strong>Swipe up</strong> from center → minimized to fullscreen</li>
+            <li><strong>Swipe down</strong> from center → fullscreen to minimized</li>
+            <li>Video keeps playing during transition</li>
+            <li>Smooth animation (YouTube-style)</li>
+          </ul>
+        </div>
+        <div>
+          <h4 style="color:var(--info); margin-bottom:12px;">⛶ Button Toggle</h4>
+          <ul class="feature-list">
+            <li><strong>Maximize button</strong> in minimized view → fullscreen</li>
+            <li><strong>Minimize button</strong> in fullscreen → minimized</li>
+            <li>Same smooth animation as swipe</li>
+            <li>Video position preserved</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Episode Switching -->
+  <div class="section">
+    <div class="section-title">Episode Switching</div>
+    <div class="card">
+      <p style="color:var(--on-surface-variant); margin-bottom:16px;">
+        When the user taps an episode in the list (minimized mode):
+      </p>
+      <ol style="color:var(--on-surface-variant); padding-left:20px;">
+        <li style="margin-bottom:8px;"><strong style="color:var(--primary);">Current episode pauses</strong></li>
+        <li style="margin-bottom:8px;"><strong style="color:var(--primary);">Loading animation</strong> appears on the video player</li>
+        <li style="margin-bottom:8px;"><strong style="color:var(--primary);">New episode loads</strong> in the background</li>
+        <li style="margin-bottom:8px;"><strong style="color:var(--primary);">Video starts playing</strong> once loaded</li>
+        <li style="margin-bottom:8px;"><strong style="color:var(--primary);">Episode info updates</strong> (title, description)</li>
+        <li style="margin-bottom:8px;"><strong style="color:var(--primary);">List updates</strong> — new episode highlighted as "playing"</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- First-Time Prompt -->
+  <div class="section">
+    <div class="section-title">First-Time Prompt</div>
+    <div class="card" style="max-width:400px; margin:0 auto;">
+      <div style="text-align:center; padding:20px;">
+        <div style="font-size:2rem; margin-bottom:12px;">🎬</div>
+        <h3 style="margin-bottom:8px;">Choose your default view</h3>
+        <p style="color:var(--on-surface-variant); font-size:0.85rem; margin-bottom:20px;">You can change this later in Settings</p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="background:var(--surface-2); padding:14px; border-radius:12px; border:2px solid var(--primary); display:flex; align-items:center; gap:12px; cursor:pointer;">
+            <span style="font-size:1.5rem;">📱</span>
+            <div style="text-align:left;">
+              <div style="font-weight:600; font-size:0.9rem;">Minimized</div>
+              <div style="font-size:0.75rem; color:var(--on-surface-variant);">Video + episode list</div>
+            </div>
+          </div>
+          <div style="background:var(--surface-2); padding:14px; border-radius:12px; border:1px solid var(--border); display:flex; align-items:center; gap:12px; cursor:pointer;">
+            <span style="font-size:1.5rem;">⛶</span>
+            <div style="text-align:left;">
+              <div style="font-weight:600; font-size:0.9rem;">Fullscreen</div>
+              <div style="font-size:0.75rem; color:var(--on-surface-variant);">Immersive video</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:16px; display:flex; align-items:center; justify-content:center; gap:8px;">
+          <input type="checkbox" checked style="accent-color:var(--primary);">
+          <span style="font-size:0.8rem; color:var(--on-surface-variant);">Remember my selection</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Implementation Phases -->
+  <div class="section">
+    <div class="section-title">Implementation Phases</div>
+
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-title">Phase 1: Core Player + Minimized Mode</div>
+        <span class="phase-tag tag-p1">Foundation</span>
+      </div>
+      <ul class="feature-list" style="font-size:0.88rem;">
+        <li>PlayerMode enum (MINIMIZED, FULLSCREEN)</li>
+        <li>PlayerViewModel extended with mode state + episode list</li>
+        <li>Minimized view layout (video + info + server chips + episodes list)</li>
+        <li>Basic video controls (play/pause, seek bar, timestamps)</li>
+        <li>Episode switching from list (with loading state)</li>
+        <li>First-time prompt dialog</li>
+        <li>Default view preference in Settings</li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-title">Phase 2: Fullscreen Mode + Transition</div>
+        <span class="phase-tag tag-p2">Core</span>
+      </div>
+      <ul class="feature-list" style="font-size:0.88rem;">
+        <li>Fullscreen overlay controls (top/bottom bars, center)</li>
+        <li>Smooth animated transition between modes</li>
+        <li>Swipe up/down to toggle modes</li>
+        <li>Maximize/minimize buttons</li>
+        <li>Controls auto-hide + tap to show/hide</li>
+        <li>Lock button (locks all controls)</li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-title">Phase 3: Selection Sheets</div>
+        <span class="phase-tag tag-p3">Features</span>
+      </div>
+      <ul class="feature-list" style="font-size:0.88rem;">
+        <li>Quality selection bottom sheet</li>
+        <li>Subtitle track selection sheet</li>
+        <li>Audio track selection sheet</li>
+        <li>Server selection sheet</li>
+        <li>Playback speed sheet</li>
+        <li>More options (⋯) → advanced settings sheet</li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-title">Phase 4: Gestures + Pinch Zoom</div>
+        <span class="phase-tag tag-p4">Interaction</span>
+      </div>
+      <ul class="feature-list" style="font-size:0.88rem;">
+        <li>Horizontal swipe to seek</li>
+        <li>Left/right vertical swipe for brightness/volume</li>
+        <li>Double-tap to skip ±10s</li>
+        <li>Pinch zoom with magnetic snapping (20% intervals)</li>
+        <li>Skip 85 seconds button</li>
+        <li>Screen rotation toggle</li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-title">Phase 5: Polish</div>
+        <span class="phase-tag tag-p4">Future</span>
+      </div>
+      <ul class="feature-list" style="font-size:0.88rem;">
+        <li>Picture-in-Picture mode</li>
+        <li>Media session (notification controls)</li>
+        <li>AniSkip integration (auto-skip openings)</li>
+        <li>Sleep timer</li>
+        <li>Subtitle customization (font, color, position)</li>
+        <li>Performance optimization (release build testing)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- File Structure -->
+  <div class="section">
+    <div class="section-title">Modular File Structure</div>
+    <div class="card">
+      <div class="file-tree">
+<span class="dir">app/anikuta/player/</span>
+├── <span class="existing">PlayerActivity.kt</span>              <span class="comment"># host (existing, extend)</span>
+├── <span class="existing">PlayerViewModel.kt</span>              <span class="comment"># state (existing, extend with mode + tracks)</span>
+├── <span class="existing">PlayerPreferences.kt</span>            <span class="comment"># prefs (existing, extend with default view)</span>
+├── <span class="existing">AnikutaMPVView.kt</span>               <span class="comment"># MPV wrapper (existing)</span>
+├── <span class="existing">PlayerObserver.kt</span>               <span class="comment"># MPV events (existing)</span>
+├── <span class="existing">WatchProgressStore.kt</span>           <span class="comment"># resume (existing)</span>
+├── <span class="existing">PlayerEnums.kt</span>                  <span class="comment"># extend with PlayerMode enum</span>
+├── <span class="new">PinchZoomHandler.kt</span>               <span class="comment"># NEW: magnetic zoom logic</span>
+├── <span class="new">PlayerTransition.kt</span>               <span class="comment"># NEW: animated mode transition</span>
+└── <span class="dir">controls/</span>
+    ├── <span class="existing">PlayerControls.kt</span>           <span class="comment"># refactor: mode-aware dispatcher</span>
+    ├── <span class="new">MinimizedControls.kt</span>          <span class="comment"># NEW: minimized view controls</span>
+    ├── <span class="new">FullscreenControls.kt</span>          <span class="comment"># NEW: fullscreen overlay controls</span>
+    ├── <span class="new">PlayerGestureHandler.kt</span>        <span class="comment"># NEW: all gesture detection</span>
+    ├── <span class="new">PlayerLockOverlay.kt</span>           <span class="comment"># NEW: lock button + locked state</span>
+    └── <span class="dir">sheets/</span>
+        ├── <span class="new">QualitySheet.kt</span>            <span class="comment"># NEW: quality selection</span>
+        ├── <span class="new">SubtitleTracksSheet.kt</span>    <span class="comment"># NEW: subtitle track list</span>
+        ├── <span class="new">AudioTracksSheet.kt</span>        <span class="comment"># NEW: audio track list</span>
+        ├── <span class="new">ServerSheet.kt</span>             <span class="comment"># NEW: server selection</span>
+        ├── <span class="new">SpeedSheet.kt</span>              <span class="comment"># NEW: playback speed</span>
+        └── <span class="new">MoreOptionsSheet.kt</span>        <span class="comment"># NEW: advanced settings (⋯)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Integration -->
+  <div class="section">
+    <div class="section-title">Settings Integration</div>
+    <div class="card">
+      <p style="margin-bottom:12px; color:var(--on-surface-variant);">A new "Player" section in Settings:</p>
+      <ul class="feature-list">
+        <li><strong>Default view</strong> — Minimized / Fullscreen / Ask every time</li>
+        <li><strong>Default playback speed</strong> — 0.25x to 4x</li>
+        <li><strong>Seek step</strong> — seconds per swipe (default 10)</li>
+        <li><strong>Gestures enabled</strong> — toggle all gestures on/off</li>
+        <li><strong>Pinch zoom enabled</strong> — toggle</li>
+        <li><strong>Auto-hide controls</strong> — toggle + timeout</li>
+        <li><strong>Skip button duration</strong> — customizable (default 85s)</li>
+        <li><strong>Subtitle settings</strong> — font size, color, background, position (Phase 5)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Remaining Questions -->
+  <div class="section">
+    <div class="section-title">Remaining Questions & Clarifications</div>
+    <div class="callout">
+      <div class="callout-icon">❓</div>
+      <div class="callout-text">
+        These are things I want to confirm before implementing. Please answer when you can.
+      </div>
+    </div>
+
+    <div class="question">
+      <div class="q-num">1</div>
+      <div class="q-text">
+        <strong>Skip 85 seconds button — what is it for?</strong>
+        <span>You mentioned a "skip 85 seconds forward" button. Is this for skipping anime openings/endings? Should this duration be customizable in settings? (AniSkip uses precise timestamps, but 85s is a common rough skip duration)</span>
+      </div>
+    </div>
+
+    <div class="question">
+      <div class="q-num">2</div>
+      <div class="q-text">
+        <strong>Lock button behavior</strong>
+        <span>When the lock button is pressed, should ALL gestures and controls be disabled (only the lock button itself can unlock)? Or should some controls still work (like play/pause)?</span>
+      </div>
+    </div>
+
+    <div class="question">
+      <div class="q-num">3</div>
+      <div class="q-text">
+        <strong>Server selection in minimized mode</strong>
+        <span>You mentioned "server selection" and "version selection (sub/dub/hardsub)" as dropdowns below the video. Should these be separate dropdown chips, or combined into one "settings" chip that opens a sheet?</span>
+      </div>
+    </div>
+
+    <div class="question">
+      <div class="q-num">4</div>
+      <div class="q-text">
+        <strong>Current full-screen player — keep or replace?</strong>
+        <span>Should the existing PlayerActivity (full-screen only) be replaced by this new combined player? Or should it stay as a fallback? My recommendation: replace it — the new player's fullscreen mode does everything the old one did plus more.</span>
+      </div>
+    </div>
+
+    <div class="question">
+      <div class="q-num">5</div>
+      <div class="q-text">
+        <strong>Performance — debug vs release</strong>
+        <span>The current jank may be partly due to debug build + logcat overhead. Should I set up a way to build release APKs for proper performance testing? Or should we address performance after the player is done?</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>ANI-KUTA Video Player Design Plan</p>
+    <p style="margin-top:4px; font-size:0.8rem;">Awaiting your approval before implementation begins</p>
+  </div>
+
+</div>
+</body>
+</html>
