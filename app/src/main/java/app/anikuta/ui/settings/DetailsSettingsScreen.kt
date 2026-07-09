@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.MaterialTheme
@@ -144,7 +145,7 @@ fun DetailsSettingsScreen(
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                     SettingsGroupCard(title = "Appearance") {
                         SwitchSettingsRow(
-                            icon = androidx.compose.material.icons.Icons.Default.Palette,
+                            icon = Icons.Default.Palette,
                             title = "Dynamic theming",
                             subtitle = "Color the detail page based on the anime's cover image",
                             checked = dynamicTheming,
