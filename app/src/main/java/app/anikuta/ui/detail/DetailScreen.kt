@@ -22,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -524,29 +525,26 @@ private fun DetailHeader(
     onShare: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
-        // Edge-to-edge banner with cover image + theme color tint.
-        // NOTE: removed Modifier.blur() — it's extremely expensive (renders to
-        // offscreen buffer + Gaussian blur on every frame) and was a major cause
-        // of scroll jank on the detail page. Instead, we use a heavier semi-
-        // transparent overlay (cover color at 50% alpha) which gives a similar
-        // "faded background" effect at zero performance cost.
+        // Edge-to-edge blurred banner with theme color tint
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(360.dp),  // Taller to truly cover behind status bar
         ) {
-            // Cover image as background (no blur — performance)
+            // Blurred cover image as background
             AsyncImage(
                 model = anime.coverImage.extraLarge ?: anime.coverImage.best(),
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(radius = 8.dp),  // Very subtle blur — just enough to make text readable
                 contentScale = ContentScale.Crop,
             )
-            // Theme color tint overlay — heavier to compensate for removed blur
+            // Theme color tint overlay — very subtle
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(coverColor.copy(alpha = 0.5f)),
+                    .background(coverColor.copy(alpha = 0.2f)),
             )
             // Gradient overlay for text readability (bottom fade to background)
             Box(
