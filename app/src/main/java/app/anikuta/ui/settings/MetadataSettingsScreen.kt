@@ -47,13 +47,8 @@ fun MetadataSettingsScreen(onBack: () -> Unit) {
     val fetchThumbnails by prefs.fetchMetadataThumbnails().stateIn(scope).collectAsState()
     val fetchTitles by prefs.fetchMetadataTitles().stateIn(scope).collectAsState()
     val fetchSummaries by prefs.fetchMetadataSummaries().stateIn(scope).collectAsState()
-    // Read display prefs for the live preview
-    val showTitles by prefs.showEpisodeTitles().stateIn(scope).collectAsState()
-    val showSummaries by prefs.showEpisodeSummaries().stateIn(scope).collectAsState()
-    val showThumbnails by prefs.showEpisodeThumbnails().stateIn(scope).collectAsState()
-    val showDates by prefs.showEpisodeDates().stateIn(scope).collectAsState()
-    val showEpisodeNumber by prefs.showEpisodeNumber().stateIn(scope).collectAsState()
-    val showAudioPills by prefs.showAudioPills().stateIn(scope).collectAsState()
+    // Read only LAYOUT prefs for the live preview (display prefs are forced ON
+    // so the preview always shows all elements, regardless of episode display settings)
     val synopsisPos by prefs.synopsisPosition().stateIn(scope).collectAsState()
     val datePos by prefs.datePosition().stateIn(scope).collectAsState()
     val thumbSize by prefs.thumbnailSize().stateIn(scope).collectAsState()
@@ -67,7 +62,7 @@ fun MetadataSettingsScreen(onBack: () -> Unit) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 4.dp),
+                    .padding(bottom = 20.dp),
             ) {
                 Text(
                     "LIVE PREVIEW",
@@ -78,13 +73,15 @@ fun MetadataSettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    // Display toggles forced ON — the preview always shows all elements
+                    // regardless of episode display settings. Only layout settings apply.
                     EpisodeRowPreview(
-                        showThumbnails = showThumbnails,
-                        showSummaries = showSummaries,
-                        showTitles = showTitles,
-                        showDates = showDates,
-                        showEpisodeNumber = showEpisodeNumber,
-                        showAudioPills = showAudioPills,
+                        showThumbnails = true,
+                        showSummaries = true,
+                        showTitles = true,
+                        showDates = true,
+                        showEpisodeNumber = true,
+                        showAudioPills = true,
                         synopsisPosition = synopsisPos,
                         datePosition = datePos,
                         thumbnailSize = thumbSize,

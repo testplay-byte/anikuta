@@ -58,7 +58,7 @@ fun DisplaySettingsScreen(onBack: () -> Unit) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 4.dp),
+                    .padding(bottom = 20.dp),
             ) {
                 Text(
                     "LIVE PREVIEW",

@@ -308,21 +308,20 @@ fun EpisodeRowPreview(
                         TitleContent()
                     }
 
-                    // Date above synopsis (if position is right_above_synopsis)
-                    if (datePosition == "right_above_synopsis" && hasAnyPills) {
+                    // Date above synopsis (right side — only when there IS a thumbnail)
+                    if (hasThumbnail && datePosition == "right_above_synopsis" && hasAnyPills) {
                         Spacer(modifier = Modifier.height(6.dp))
                         DateAudioPillsRow()
                     }
 
-                    // Synopsis on the right side
-                    if ((synopsisPosition == "right" || !hasThumbnail) && hasSummary) {
+                    // Synopsis on the right side (only when there IS a thumbnail)
+                    if (hasThumbnail && synopsisPosition == "right" && hasSummary) {
                         Spacer(modifier = Modifier.height(6.dp))
                         SynopsisContent()
                     }
 
-                    // Date below synopsis (if position is right_below_synopsis)
-                    // Shows on the right side regardless of whether there's a thumbnail.
-                    if (datePosition == "right_below_synopsis" && hasAnyPills) {
+                    // Date below synopsis (right side — only when there IS a thumbnail)
+                    if (hasThumbnail && datePosition == "right_below_synopsis" && hasAnyPills) {
                         Spacer(modifier = Modifier.height(6.dp))
                         DateAudioPillsRow()
                     }
@@ -355,9 +354,18 @@ fun EpisodeRowPreview(
                     DateAudioPillsRow()
                 }
             } else {
-                // No thumbnail — "below" position still shows date/pills after content
-                if (datePosition == "below" && hasAnyPills) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                // No thumbnail — synopsis and date/pills go full-width below the
+                // episode number + title row.
+                if (datePosition == "right_above_synopsis" && hasAnyPills) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    DateAudioPillsRow()
+                }
+                if (hasSummary) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    SynopsisContent()
+                }
+                if ((datePosition == "right_below_synopsis" || datePosition == "below") && hasAnyPills) {
+                    Spacer(modifier = Modifier.height(6.dp))
                     DateAudioPillsRow()
                 }
             }

@@ -77,6 +77,71 @@ fun generateDynamicScheme(coverColor: Color): DynamicColorScheme {
 }
 
 /**
+ * Convert a [DynamicColorScheme] into a full M3 [ColorScheme].
+ *
+ * This allows us to wrap the entire detail page in
+ * `MaterialTheme(colorScheme = toM3ColorScheme(dynamicColors))` so that
+ * EVERY composable using `MaterialTheme.colorScheme.*` automatically gets
+ * the dynamic colors — no need to pass dynamicColors to each composable
+ * individually.
+ *
+ * Mapping:
+ * - primary / primaryContainer → accent + darker variant
+ * - secondary / tertiary → desaturated accent
+ * - background / surface → dynamic background / surfaceLow
+ * - surfaceContainerLow / High / → dynamic surfaceLow / surfaceHigh
+ * - surfaceVariant / surfaceContainer → dynamic surfaceContainer
+ * - onSurface / onSurfaceVariant → dynamic text colors
+ * - outline / outlineVariant → derived from surfaceContainer
+ * - error → kept as default red
+ */
+fun DynamicColorScheme.toM3ColorScheme(): androidx.compose.material3.ColorScheme {
+    val accentColor = this.accent
+    val onAccent = if (accentColor.luminance() > 0.5f) Color.Black else Color.White
+
+    return androidx.compose.material3.darkColorScheme(
+        primary = accentColor,
+        onPrimary = onAccent,
+        primaryContainer = this.surfaceContainer,
+        onPrimaryContainer = Color.White,
+        inversePrimary = accentColor,
+        secondary = accentColor.copy(alpha = 0.7f),
+        onSecondary = onAccent,
+        secondaryContainer = this.surfaceContainer,
+        onSecondaryContainer = Color.White,
+        tertiary = accentColor.copy(alpha = 0.5f),
+        onTertiary = onAccent,
+        tertiaryContainer = this.surfaceContainer,
+        onTertiaryContainer = Color.White,
+        background = this.background,
+        onBackground = this.onSurface,
+        surface = this.surfaceLow,
+        onSurface = this.onSurface,
+        surfaceVariant = this.surfaceContainer,
+        onSurfaceVariant = this.onSurfaceVariant,
+        surfaceTint = accentColor,
+        inverseSurface = Color.White.copy(alpha = 0.9f),
+        inverseOnSurface = Color.Black,
+        outline = this.onSurfaceVariant.copy(alpha = 0.5f),
+        outlineVariant = this.surfaceContainer,
+        scrim = Color.Black,
+        surfaceContainerLowest = this.background,
+        surfaceContainerLow = this.surfaceLow,
+        surfaceContainer = this.surfaceContainer,
+        surfaceContainerHigh = this.surfaceHigh,
+        surfaceContainerHighest = this.surfaceHigh,
+    )
+}
+
+/**
+ * Calculate the relative luminance of a color (0 = black, 1 = white).
+ * Used to determine whether to use black or white text on top of the color.
+ */
+private fun Color.luminance(): Float {
+    return 0.299f * red + 0.587f * green + 0.114f * blue
+}
+
+/**
  * Convert a Compose Color to HSL (Hue: 0-360, Saturation: 0-1, Lightness: 0-1).
  */
 private fun rgbToHsl(color: Color): Triple<Float, Float, Float> {
