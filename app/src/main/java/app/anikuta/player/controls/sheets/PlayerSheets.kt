@@ -1,0 +1,272 @@
+package app.anikuta.player.controls.sheets
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import app.anikuta.player.PlayerViewModel
+import app.anikuta.player.VideoTrack
+import app.anikuta.source.api.model.Video
+
+// ═══════════════════════════════════════════════════════════════════
+// Phase 3.1 — Quality Sheet
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Quality selection bottom sheet.
+ * Lists available video qualities for the current episode.
+ * Tap to switch — the Activity reloads the video at the new quality.
+ */
+@Composable
+fun QualitySheet(
+    videos: List<Video>,
+    currentVideoUrl: String,
+    onSelect: (Video) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    PlayerSheet(title = "Quality", onDismiss = onDismiss) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(bottom = 8.dp),
+        ) {
+            items(videos, key = { it.videoUrl }) { video ->
+                SheetOption(
+                    title = video.videoTitle.ifBlank { video.quality?.let { "${it}p" } ?: "Unknown" },
+                    subtitle = video.quality?.let { "${it}p" },
+                    selected = video.videoUrl == currentVideoUrl,
+                    onClick = { onSelect(video); onDismiss() },
+                )
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Phase 3.2 — Subtitle Tracks Sheet
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Subtitle track selection bottom sheet.
+ * Lists available subtitle tracks from MPV's track-list.
+ * Includes an "Off" option (id = -1).
+ */
+@Composable
+fun SubtitleTracksSheet(
+    viewModel: PlayerViewModel,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val tracks by viewModel.subtitleTracks.collectAsState()
+    val currentId by viewModel.currentSubtitleId.collectAsState()
+
+    PlayerSheet(title = "Subtitles", onDismiss = onDismiss) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(bottom = 8.dp),
+        ) {
+            items(tracks, key = { it.id }) { track ->
+                SheetOption(
+                    title = track.name,
+                    subtitle = track.language,
+                    selected = track.id == currentId,
+                    onClick = { onSelect(track.id); onDismiss() },
+                )
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Phase 3.3 — Audio Tracks Sheet
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Audio track selection bottom sheet.
+ * Lists available audio tracks from MPV's track-list.
+ * Includes an "Off" option (id = -1).
+ */
+@Composable
+fun AudioTracksSheet(
+    viewModel: PlayerViewModel,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val tracks by viewModel.audioTracks.collectAsState()
+    val currentId by viewModel.currentAudioId.collectAsState()
+
+    PlayerSheet(title = "Audio", onDismiss = onDismiss) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(bottom = 8.dp),
+        ) {
+            items(tracks, key = { it.id }) { track ->
+                SheetOption(
+                    title = track.name,
+                    subtitle = track.language,
+                    selected = track.id == currentId,
+                    onClick = { onSelect(track.id); onDismiss() },
+                )
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Phase 3.4 — Server Sheet
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Server selection bottom sheet.
+ * Lists available servers for the current episode.
+ */
+@Composable
+fun ServerSheet(
+    servers: List<String>,
+    currentServer: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    PlayerSheet(title = "Server", onDismiss = onDismiss) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(bottom = 8.dp),
+        ) {
+            items(servers, key = { it }) { server ->
+                SheetOption(
+                    title = server,
+                    selected = server == currentServer,
+                    onClick = { onSelect(server); onDismiss() },
+                )
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Phase 3.5 — Speed Sheet
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Playback speed bottom sheet.
+ * Slider from 0.25x to 4.0x + preset buttons.
+ */
+@Composable
+fun SpeedSheet(
+    currentSpeed: Float,
+    onSelect: (Float) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var speed by remember { mutableFloatStateOf(currentSpeed) }
+
+    PlayerSheet(title = "Playback Speed", onDismiss = onDismiss) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "%.2fx".format(speed),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Slider(
+                value = speed,
+                onValueChange = { speed = it },
+                onValueChangeFinished = { onSelect(speed) },
+                valueRange = 0.25f..4.0f,
+                steps = 14, // 0.25 increments
+            )
+            // Presets
+            val presets = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
+            ) {
+                presets.forEach { preset ->
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            speed = preset
+                            onSelect(preset)
+                        },
+                    ) {
+                        Text(
+                            "${preset}x",
+                            color = if (preset == speed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (preset == speed) FontWeight.Bold else FontWeight.Medium,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Phase 3.6 — More Options Sheet
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * More options bottom sheet (⋯ button).
+ * Advanced settings: subtitle delay, audio delay, screenshot, sleep timer.
+ */
+@Composable
+fun MoreOptionsSheet(
+    onSubtitleDelay: () -> Unit,
+    onAudioDelay: () -> Unit,
+    onScreenshot: () -> Unit,
+    onSleepTimer: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    PlayerSheet(title = "More Options", onDismiss = onDismiss) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            MoreOptionRow(title = "Subtitle delay", subtitle = "Adjust subtitle timing", onClick = { onSubtitleDelay(); onDismiss() })
+            MoreOptionRow(title = "Audio delay", subtitle = "Adjust audio timing", onClick = { onAudioDelay(); onDismiss() })
+            MoreOptionRow(title = "Screenshot", subtitle = "Capture current frame", onClick = { onScreenshot(); onDismiss() })
+            MoreOptionRow(title = "Sleep timer", subtitle = "Stop playback after N minutes", onClick = { onSleepTimer(); onDismiss() })
+        }
+    }
+}
+
+@Composable
+private fun MoreOptionRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp)
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
