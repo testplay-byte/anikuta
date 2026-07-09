@@ -112,6 +112,10 @@ class PlayerActivity : ComponentActivity() {
     private var resumedPosition: Int? = null
     /** Reference to the MPV view — set from the Composable, used in onDestroy. */
     @Volatile private var mpvViewRef: AnikutaMPVView? = null
+    /** Player preferences — used for mode switching + first-time prompt. */
+    private var playerPrefs: PlayerPreferences? = null
+    /** Whether to show the first-time prompt on launch. */
+    @Volatile private var showFirstTimePrompt: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -133,20 +137,28 @@ class PlayerActivity : ComponentActivity() {
         // http-header-fields on MPV before loadfile.
         val videoHeaders = intent.getStringExtra(EXTRA_VIDEO_HEADERS) ?: ""
 
-        // Read default player view preference
-        val prefs: PlayerPreferences = try { uy.kohesive.injekt.Injekt.get() } catch (e: Exception) { null }!!
-        val defaultView = prefs.defaultPlayerView().get()
-        when (defaultView) {
-            "fullscreen" -> {
+        // Read default player view preference and set initial mode + orientation
+        playerPrefs = try { uy.kohesive.injekt.Injekt.get() } catch (e: Exception) { null }
+        val defaultView = playerPrefs?.defaultPlayerView()?.get() ?: "ask"
+        val promptShown = playerPrefs?.playerPromptShown()?.get() ?: false
+
+        when {
+            defaultView == "fullscreen" -> {
                 viewModel?.setPlayerMode(PlayerMode.FULLSCREEN)
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             }
-            "minimized" -> {
+            defaultView == "minimized" -> {
                 viewModel?.setPlayerMode(PlayerMode.MINIMIZED)
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             }
+            defaultView == "ask" && !promptShown -> {
+                // Show prompt — default to minimized until user chooses
+                viewModel?.setPlayerMode(PlayerMode.MINIMIZED)
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                showFirstTimePrompt = true
+            }
             else -> {
-                // "ask" — default to minimized for now (prompt will be added in Phase 1.7+)
+                // "ask" but already shown — default to minimized
                 viewModel?.setPlayerMode(PlayerMode.MINIMIZED)
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             }
@@ -169,6 +181,8 @@ class PlayerActivity : ComponentActivity() {
         })
 
         val vm = viewModel!!
+        val promptVisible = showFirstTimePrompt
+        val activity = this
         setContent {
             AnikutaTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
@@ -178,6 +192,16 @@ class PlayerActivity : ComponentActivity() {
                         onBack = { finish() },
                         onViewCreated = { view -> mpvViewRef = view },
                         videoHeaders = videoHeaders,
+                        showFirstTimePrompt = promptVisible,
+                        onPromptSelect = { view, remember ->
+                            activity.handleFirstTimePrompt(view, remember)
+                        },
+                        onPromptDismiss = {
+                            showFirstTimePrompt = false
+                        },
+                        onModeChange = { mode ->
+                            activity.handleModeChange(mode)
+                        },
                     )
                 }
             }
@@ -337,6 +361,36 @@ class PlayerActivity : ComponentActivity() {
         // speed / aspect — minimal player ignores for now.
     }
 
+    /**
+     * Handle mode change — updates orientation + ViewModel state.
+     * Called when user taps maximize/minimize buttons.
+     */
+    fun handleModeChange(mode: PlayerMode) {
+        viewModel?.setPlayerMode(mode)
+        requestedOrientation = when (mode) {
+            PlayerMode.FULLSCREEN -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            PlayerMode.MINIMIZED -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        }
+        Log.d(TAG, "Mode changed to: $mode")
+    }
+
+    /**
+     * Handle first-time prompt selection.
+     * Saves the preference and switches to the selected mode.
+     */
+    fun handleFirstTimePrompt(view: String, remember: Boolean) {
+        showFirstTimePrompt = false
+        if (remember) {
+            playerPrefs?.defaultPlayerView()?.set(view)
+            playerPrefs?.playerPromptShown()?.set(true)
+        }
+        when (view) {
+            "fullscreen" -> handleModeChange(PlayerMode.FULLSCREEN)
+            "minimized" -> handleModeChange(PlayerMode.MINIMIZED)
+        }
+        Log.d(TAG, "First-time prompt: view=$view, remember=$remember")
+    }
+
     private fun hideSystemBars() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
@@ -409,6 +463,10 @@ private fun PlayerScreen(
     onBack: () -> Unit,
     onViewCreated: (AnikutaMPVView) -> Unit = {},
     videoHeaders: String = "",
+    showFirstTimePrompt: Boolean = false,
+    onPromptSelect: (String, Boolean) -> Unit = { _, _ -> },
+    onPromptDismiss: () -> Unit = {},
+    onModeChange: (PlayerMode) -> Unit = {},
 ) {
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
     val playerMode by viewModel.playerMode.collectAsState()
@@ -474,7 +532,7 @@ private fun PlayerScreen(
                                 }
                             },
                             onMaximize = {
-                                viewModel.setPlayerMode(PlayerMode.FULLSCREEN)
+                                onModeChange(PlayerMode.FULLSCREEN)
                             },
                             onQualityClick = { /* Phase 3 */ },
                             onSubtitleClick = { /* Phase 3 */ },
@@ -545,7 +603,7 @@ private fun PlayerScreen(
                                 .padding(16.dp),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
                             color = Color.Black.copy(alpha = 0.5f),
-                            onClick = { viewModel.setPlayerMode(PlayerMode.MINIMIZED) },
+                            onClick = { onModeChange(PlayerMode.MINIMIZED) },
                         ) {
                             androidx.compose.material3.Text(
                                 "▼",
@@ -618,6 +676,14 @@ private fun PlayerScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
+        }
+
+        // ---- First-time prompt ----
+        if (showFirstTimePrompt) {
+            app.anikuta.player.controls.FirstTimePlayerPrompt(
+                onSelect = { view, remember -> onPromptSelect(view, remember) },
+                onDismiss = onPromptDismiss,
+            )
         }
     }
 }
