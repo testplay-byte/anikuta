@@ -76,7 +76,18 @@ class EpisodeMetadataFetcher(
         }
 
         coroutineScope {
-            // Source 1: AniList streaming episodes (already in the anime object)
+            // Source 1: Anikage.cc (TheTVDB) — PRIMARY: titles + descriptions + thumbnails + air dates
+            // Not behind Cloudflare — works with OkHttp directly (verified).
+            val anikageResults = async {
+                try {
+                    fetchFromAnikage(anilistId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Anikage fetch failed", e)
+                    emptyMap()
+                }
+            }
+
+            // Source 2: AniList streaming episodes (already in the anime object)
             val anilistResults = async {
                 try {
                     fetchFromAniList(anime)
@@ -86,7 +97,7 @@ class EpisodeMetadataFetcher(
                 }
             }
 
-            // Source 2: Jikan/MAL API (titles + air dates) — with retry for rate limiting
+            // Source 3: Jikan/MAL API (titles + air dates) — single attempt, no retries
             val jikanResults = async {
                 try {
                     malId?.let { fetchFromJikanWithRetry(it) } ?: run {
@@ -99,7 +110,7 @@ class EpisodeMetadataFetcher(
                 }
             }
 
-            // Source 3: Kitsu (thumbnails + descriptions + titles) — needs MAL→Kitsu ID mapping
+            // Source 4: Kitsu (thumbnails + descriptions + titles) — needs MAL→Kitsu ID mapping
             val kitsuResults = async {
                 try {
                     malId?.let { fetchFromKitsu(it) } ?: run {
@@ -112,33 +123,89 @@ class EpisodeMetadataFetcher(
                 }
             }
 
+            val anikage = anikageResults.await()
             val anilist = anilistResults.await()
             val jikan = jikanResults.await()
             val kitsu = kitsuResults.await()
 
-            Log.i(TAG, "Sources: AniList=${anilist.size}, Jikan=${jikan.size}, Kitsu=${kitsu.size}, malId=$malId, fallbackThumb=${fallbackThumbnail != null}")
+            Log.i(TAG, "Sources: Anikage=${anikage.size}, AniList=${anilist.size}, Jikan=${jikan.size}, Kitsu=${kitsu.size}, malId=$malId")
 
-            // Merge priority:
-            // Title: Jikan → Kitsu → AniList
-            // Description: Kitsu (only source with descriptions)
-            // Thumbnail: Kitsu → AniList → fallback (only if real data exists)
-            // Air date: Jikan → Kitsu
-            val hasAnyRealData = jikan.isNotEmpty() || anilist.isNotEmpty() || kitsu.isNotEmpty()
+            // Merge priority (matching AniKoto extension):
+            // Title:       Jikan → Anikage → Kitsu → AniList
+            // Description: Anikage → Kitsu
+            // Thumbnail:   Anikage → AniList → Kitsu → banner fallback
+            // Air date:    Jikan → Anikage → Kitsu
+            val hasAnyRealData = anikage.isNotEmpty() || jikan.isNotEmpty() || anilist.isNotEmpty() || kitsu.isNotEmpty()
             for (i in 1..episodeCount) {
+                val ag = anikage[i]
                 val a = anilist[i]
                 val j = jikan[i]
                 val k = kitsu[i]
-                val thumb = k?.thumbnailUrl ?: a?.thumbnailUrl ?: if (hasAnyRealData) fallbackThumbnail else null
+                val thumb = ag?.thumbnailUrl ?: a?.thumbnailUrl ?: k?.thumbnailUrl ?: if (hasAnyRealData) fallbackThumbnail else null
                 results[i] = EpisodeMetadata(
-                    title = j?.title ?: k?.title ?: a?.title,
-                    description = k?.description,
+                    title = j?.title ?: ag?.title ?: k?.title ?: a?.title,
+                    description = ag?.description ?: k?.description,
                     thumbnailUrl = thumb,
-                    airDate = j?.airDate ?: k?.airDate,
+                    airDate = j?.airDate ?: ag?.airDate ?: k?.airDate,
                 )
             }
         }
 
         return results
+    }
+
+    /**
+     * Fetch from Anikage.cc (TheTVDB-based) — PRIMARY source.
+     * Provides: titles, descriptions, thumbnails, air dates.
+     * Not behind Cloudflare — works with OkHttp directly.
+     * Endpoint: https://anikage.cc/api/media/anime/{anilistId}/episodes
+     */
+    private suspend fun fetchFromAnikage(anilistId: Int): Map<Int, EpisodeMetadata> =
+        withContext(Dispatchers.IO) {
+            val results = mutableMapOf<Int, EpisodeMetadata>()
+            try {
+                val response = networkHelper.client
+                    .newCall(
+                        GET(
+                            "https://anikage.cc/api/media/anime/$anilistId/episodes",
+                            headers = Headers.Builder()
+                                .set("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+                                .set("Accept", "application/json")
+                                .build(),
+                        )
+                    )
+                    .execute()
+
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Anikage HTTP ${response.code} for anilistId=$anilistId")
+                    return@withContext results
+                }
+
+                val body = response.body?.string() ?: return@withContext results
+                val anikageResponse = json.decodeFromString<AnikageResponse>(body)
+
+                anikageResponse.episodes.forEach { ep ->
+                    val num = ep.number ?: return@forEach
+                    results[num] = EpisodeMetadata(
+                        title = ep.title?.takeIf { it.isNotBlank() },
+                        description = ep.description?.takeIf { it.isNotBlank() }?.let { stripHtml(it) },
+                        thumbnailUrl = ep.image?.takeIf { it.isNotBlank() },
+                        airDate = ep.airDate?.takeIf { it.isNotBlank() }?.let { parseDate("${it}T00:00:00+00:00") },
+                    )
+                }
+
+                Log.d(TAG, "Anikage returned ${results.size} episodes for anilistId=$anilistId")
+            } catch (e: Exception) {
+                Log.e(TAG, "Anikage fetch failed for anilistId=$anilistId", e)
+            }
+            results
+        }
+
+    /**
+     * Strip HTML tags from a string.
+     */
+    private fun stripHtml(text: String): String {
+        return text.replace(Regex("<[^>]+>"), "").trim()
     }
 
     /**
@@ -206,35 +273,17 @@ class EpisodeMetadataFetcher(
     }
 
     /**
-     * Fetch from Jikan with retry for rate limiting (504/429/empty response).
-     * Jikan sometimes returns HTTP 200 with an empty data array when rate
-     * limited, so we retry on empty results too.
+     * Fetch from Jikan (MAL API) — single attempt, no retries.
      */
     private suspend fun fetchFromJikanWithRetry(malId: Int): Map<Int, EpisodeMetadata> =
         withContext(Dispatchers.IO) {
-            var lastError: Exception? = null
-            for (attempt in 1..JIKAN_MAX_RETRIES) {
-                try {
-                    // Delay before each attempt: 1s initial, 3s retry
-                    delay(if (attempt == 1) 1000L else JIKAN_RETRY_DELAY_MS)
-                    val result = fetchFromJikan(malId)
-                    if (result.isNotEmpty()) {
-                        Log.d(TAG, "Jikan returned ${result.size} episodes for malId=$malId (attempt $attempt)")
-                        return@withContext result
-                    }
-                    // Empty result — Jikan might be rate limiting with a 200 + empty data
-                    Log.w(TAG, "Jikan returned 0 episodes for malId=$malId (attempt $attempt/$JIKAN_MAX_RETRIES) — will retry")
-                    if (attempt < JIKAN_MAX_RETRIES) {
-                        delay(JIKAN_RETRY_DELAY_MS)
-                    }
-                } catch (e: Exception) {
-                    lastError = e
-                    Log.w(TAG, "Jikan attempt $attempt/$JIKAN_MAX_RETRIES failed: ${e.message}")
-                    if (attempt < JIKAN_MAX_RETRIES) delay(JIKAN_RETRY_DELAY_MS)
-                }
+            delay(500) // courtesy delay
+            try {
+                fetchFromJikan(malId)
+            } catch (e: Exception) {
+                Log.w(TAG, "Jikan fetch failed: ${e.message}")
+                emptyMap()
             }
-            Log.e(TAG, "Jikan failed after $JIKAN_MAX_RETRIES attempts for malId=$malId", lastError)
-            emptyMap()
         }
 
     /**
@@ -390,5 +439,20 @@ class EpisodeMetadataFetcher(
         val malId: Int? = null,
         val title: String? = null,
         val aired: String? = null,
+    )
+
+    // Anikage.cc (TheTVDB) response models
+    @Serializable
+    private data class AnikageResponse(
+        val episodes: List<AnikageEpisode> = emptyList(),
+    )
+
+    @Serializable
+    private data class AnikageEpisode(
+        val number: Int? = null,
+        val title: String? = null,
+        val description: String? = null,
+        val image: String? = null,
+        val airDate: String? = null,
     )
 }
