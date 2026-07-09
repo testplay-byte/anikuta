@@ -142,18 +142,17 @@ fun DetailScreen(
                 }
             }
 
-            // Dynamic theming: extract multiple colors from the cover image
-            // using the Android Palette API. Used for episode card backgrounds,
-            // inner elements, and page background tint.
-            var dynamicColors by remember(anime.id) {
-                mutableStateOf<DynamicColorScheme?>(null)
-            }
-            androidx.compose.runtime.LaunchedEffect(anime.id, dynamicThemingEnabled) {
-                if (dynamicThemingEnabled) {
-                    dynamicColors = extractDynamicColors(anime)
-                } else {
-                    dynamicColors = null
+            // Dynamic theming: generate a color scheme from the AniList cover color.
+            // AniList provides coverImage.color as a hex string — we use that single
+            // color and generate variants (darker/lighter/desaturated) for the whole
+            // page: background, episode card alternating colors, accent, etc.
+            // No Palette API / image loading needed — fast and reliable.
+            val dynamicColors = if (dynamicThemingEnabled) {
+                remember(coverColor, dynamicThemingEnabled) {
+                    generateDynamicScheme(coverColor)
                 }
+            } else {
+                null
             }
 
             // When dynamic theming is enabled, apply the extracted background
@@ -1077,11 +1076,9 @@ private fun EpisodeRowRich(
                 }
 
                 // Date above synopsis (if position is right_above_synopsis)
-                if (datePosition == "right_above_synopsis" && !hasThumbnail || (datePosition == "right_above_synopsis" && hasThumbnail)) {
-                    if (hasAnyPills) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        DateAudioPillsRow()
-                    }
+                if (datePosition == "right_above_synopsis" && hasAnyPills) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    DateAudioPillsRow()
                 }
 
                 // Synopsis on the right side
@@ -1091,11 +1088,10 @@ private fun EpisodeRowRich(
                 }
 
                 // Date below synopsis (if position is right_below_synopsis)
-                if (datePosition == "right_below_synopsis" && hasThumbnail) {
-                    if (hasAnyPills) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        DateAudioPillsRow()
-                    }
+                // Shows on the right side regardless of whether there's a thumbnail.
+                if (datePosition == "right_below_synopsis" && hasAnyPills) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    DateAudioPillsRow()
                 }
             }
 
@@ -1170,6 +1166,12 @@ private fun EpisodeRowRich(
             }
 
             // Date + audio pills below (if position is 'below')
+            if (datePosition == "below" && hasAnyPills) {
+                Spacer(modifier = Modifier.height(8.dp))
+                DateAudioPillsRow()
+            }
+        } else {
+            // No thumbnail — "below" position still shows date/pills after content
             if (datePosition == "below" && hasAnyPills) {
                 Spacer(modifier = Modifier.height(8.dp))
                 DateAudioPillsRow()

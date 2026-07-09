@@ -103,9 +103,6 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
-    // Palette (color extraction from cover images for dynamic theming)
-    implementation(libs.palette.ktx)
-
     implementation(libs.mpv.lib)
     // FFmpeg native libraries required by libmpv.so. libmpv.so is dynamically
     // linked against libavcodec/libavformat/libavutil/etc.; without these the

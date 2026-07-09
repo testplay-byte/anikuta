@@ -1,5 +1,8 @@
 package app.anikuta.ui.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,7 +26,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.anikuta.player.PlayerPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -31,8 +36,8 @@ import uy.kohesive.injekt.api.get
 /**
  * Details → Metadata fetching subpage.
  *
- * Minimal layout: master toggle + per-field fetch toggles.
- * No data sources listed, no detailed explanations — just clean controls.
+ * Layout: sticky live preview at top + master toggle + conditional per-field toggles.
+ * When the master toggle is off, the 3 per-field toggles are hidden.
  */
 @Composable
 fun MetadataSettingsScreen(onBack: () -> Unit) {
@@ -42,68 +47,122 @@ fun MetadataSettingsScreen(onBack: () -> Unit) {
     val fetchThumbnails by prefs.fetchMetadataThumbnails().stateIn(scope).collectAsState()
     val fetchTitles by prefs.fetchMetadataTitles().stateIn(scope).collectAsState()
     val fetchSummaries by prefs.fetchMetadataSummaries().stateIn(scope).collectAsState()
+    // Read display prefs for the live preview
+    val showTitles by prefs.showEpisodeTitles().stateIn(scope).collectAsState()
+    val showSummaries by prefs.showEpisodeSummaries().stateIn(scope).collectAsState()
+    val showThumbnails by prefs.showEpisodeThumbnails().stateIn(scope).collectAsState()
+    val showDates by prefs.showEpisodeDates().stateIn(scope).collectAsState()
+    val showEpisodeNumber by prefs.showEpisodeNumber().stateIn(scope).collectAsState()
+    val showAudioPills by prefs.showAudioPills().stateIn(scope).collectAsState()
+    val synopsisPos by prefs.synopsisPosition().stateIn(scope).collectAsState()
+    val datePos by prefs.datePosition().stateIn(scope).collectAsState()
+    val thumbSize by prefs.thumbnailSize().stateIn(scope).collectAsState()
+    val titlePos by prefs.titlePosition().stateIn(scope).collectAsState()
+    val epNumPos by prefs.episodeNumberPosition().stateIn(scope).collectAsState()
+    val thumbPos by prefs.thumbnailPosition().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Metadata fetching", onBack = onBack) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // ---- Master toggle ----
-            item {
-                SettingsGroupCard(title = "Fetching") {
-                    SwitchSettingsRow(
-                        icon = Icons.Default.AutoAwesome,
-                        title = "Fetch episode metadata",
-                        subtitle = "Automatically fetch missing episode info from external sources",
-                        checked = enableMetadataFetch,
-                        onCheckedChange = { prefs.enableInAppMetadataFetch().set(it) },
+        Column(modifier = Modifier.fillMaxSize()) {
+            // ---- Sticky live preview at top ----
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp),
+            ) {
+                Text(
+                    "LIVE PREVIEW",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    EpisodeRowPreview(
+                        showThumbnails = showThumbnails,
+                        showSummaries = showSummaries,
+                        showTitles = showTitles,
+                        showDates = showDates,
+                        showEpisodeNumber = showEpisodeNumber,
+                        showAudioPills = showAudioPills,
+                        synopsisPosition = synopsisPos,
+                        datePosition = datePos,
+                        thumbnailSize = thumbSize,
+                        titlePosition = titlePos,
+                        episodeNumberPosition = epNumPos,
+                        thumbnailPosition = thumbPos,
                     )
                 }
             }
 
-            // ---- What to fetch ----
-            item {
-                SettingsGroupCard(title = "What to fetch") {
-                    SwitchSettingsRow(
-                        icon = Icons.Default.Image,
-                        title = "Thumbnails",
-                        subtitle = "Fetch episode preview images",
-                        checked = fetchThumbnails,
-                        onCheckedChange = { prefs.fetchMetadataThumbnails().set(it) },
-                    )
-                    HorizontalDivider()
-                    SwitchSettingsRow(
-                        icon = Icons.Default.Title,
-                        title = "Titles",
-                        subtitle = "Fetch episode titles",
-                        checked = fetchTitles,
-                        onCheckedChange = { prefs.fetchMetadataTitles().set(it) },
-                    )
-                    HorizontalDivider()
-                    SwitchSettingsRow(
-                        icon = Icons.Default.Subtitles,
-                        title = "Summaries",
-                        subtitle = "Fetch episode descriptions",
-                        checked = fetchSummaries,
-                        onCheckedChange = { prefs.fetchMetadataSummaries().set(it) },
-                    )
+            // ---- Scrollable settings ----
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // Master toggle
+                item {
+                    SettingsGroupCard(title = "Fetching") {
+                        SwitchSettingsRow(
+                            icon = Icons.Default.AutoAwesome,
+                            title = "Fetch episode metadata",
+                            subtitle = "Automatically fetch missing episode info from external sources",
+                            checked = enableMetadataFetch,
+                            onCheckedChange = { prefs.enableInAppMetadataFetch().set(it) },
+                        )
+                    }
                 }
-            }
 
-            // ---- Minimal note ----
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                ) {
-                    Text(
-                        text = "Metadata is fetched when you open an anime's detail page. Only fields missing from the extension are enriched.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
-                    )
+                // Per-field toggles — only visible when master toggle is on
+                item {
+                    AnimatedVisibility(
+                        visible = enableMetadataFetch,
+                        enter = expandVertically(),
+                        exit = shrinkVertically(),
+                    ) {
+                        SettingsGroupCard(title = "What to fetch") {
+                            SwitchSettingsRow(
+                                icon = Icons.Default.Image,
+                                title = "Thumbnails",
+                                subtitle = "Fetch episode preview images",
+                                checked = fetchThumbnails,
+                                onCheckedChange = { prefs.fetchMetadataThumbnails().set(it) },
+                            )
+                            HorizontalDivider()
+                            SwitchSettingsRow(
+                                icon = Icons.Default.Title,
+                                title = "Titles",
+                                subtitle = "Fetch episode titles",
+                                checked = fetchTitles,
+                                onCheckedChange = { prefs.fetchMetadataTitles().set(it) },
+                            )
+                            HorizontalDivider()
+                            SwitchSettingsRow(
+                                icon = Icons.Default.Subtitles,
+                                title = "Summaries",
+                                subtitle = "Fetch episode descriptions",
+                                checked = fetchSummaries,
+                                onCheckedChange = { prefs.fetchMetadataSummaries().set(it) },
+                            )
+                        }
+                    }
+                }
+
+                // Minimal note
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ) {
+                        Text(
+                            text = "Metadata is fetched when you open an anime's detail page. Only fields missing from the extension are enriched.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
                 }
             }
         }

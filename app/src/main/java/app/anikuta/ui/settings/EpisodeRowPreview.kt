@@ -321,7 +321,8 @@ fun EpisodeRowPreview(
                     }
 
                     // Date below synopsis (if position is right_below_synopsis)
-                    if (datePosition == "right_below_synopsis" && hasThumbnail && hasAnyPills) {
+                    // Shows on the right side regardless of whether there's a thumbnail.
+                    if (datePosition == "right_below_synopsis" && hasAnyPills) {
                         Spacer(modifier = Modifier.height(6.dp))
                         DateAudioPillsRow()
                     }
@@ -349,6 +350,12 @@ fun EpisodeRowPreview(
                 }
 
                 // Date + audio pills below (if position is 'below')
+                if (datePosition == "below" && hasAnyPills) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DateAudioPillsRow()
+                }
+            } else {
+                // No thumbnail — "below" position still shows date/pills after content
                 if (datePosition == "below" && hasAnyPills) {
                     Spacer(modifier = Modifier.height(8.dp))
                     DateAudioPillsRow()

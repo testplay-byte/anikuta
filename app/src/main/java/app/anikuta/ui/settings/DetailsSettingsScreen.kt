@@ -131,8 +131,24 @@ fun DetailsSettingsScreen(
                         ClickableSettingsRow(
                             icon = Icons.Default.AutoAwesome,
                             title = "Metadata fetching",
-                            subtitle = "Fetch episode thumbnails, titles, and descriptions from MAL + AniList",
+                            subtitle = "Fetch episode thumbnails, titles, and descriptions from external sources",
                             onClick = onOpenMetadata,
+                        )
+                    }
+                }
+            }
+
+            // ---- Dynamic theming toggle ----
+            item {
+                val dynamicTheming by prefs.dynamicDetailTheming().stateIn(scope).collectAsState()
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    SettingsGroupCard(title = "Appearance") {
+                        SwitchSettingsRow(
+                            icon = androidx.compose.material.icons.Icons.Default.Palette,
+                            title = "Dynamic theming",
+                            subtitle = "Color the detail page based on the anime's cover image",
+                            checked = dynamicTheming,
+                            onCheckedChange = { prefs.dynamicDetailTheming().set(it) },
                         )
                     }
                 }

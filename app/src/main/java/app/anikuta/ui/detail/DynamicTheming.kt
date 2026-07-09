@@ -1,39 +1,36 @@
 package app.anikuta.ui.detail
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.Color
-import androidx.palette.graphics.Palette
-import app.anikuta.data.anilist.model.AniListAnime
-import eu.kanade.tachiyomi.network.NetworkHelper
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.Request
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import java.io.InputStream
+import kotlin.math.max
+import kotlin.math.min
 
 /**
- * Dynamic color scheme extracted from an anime's cover image.
+ * Dynamic color scheme derived from a single AniList cover color.
  *
- * Multiple colors are extracted using the Android Palette API:
- * - [primary]: vibrant accent color (used for source badge, enrichment indicator)
- * - [surfaceLow]: dark muted — even-index episode card background
- * - [surfaceHigh]: muted — odd-index episode card background
- * - [surfaceContainer]: light muted — inner elements (title, synopsis, thumbnail bg)
- * - [background]: very dark version — page background tint
- * - [onSurface]: text color on surface (auto-contrast: black or white)
- * - [onSurfaceVariant]: secondary text color
- * - [scrim]: dark scrim for overlays (episode number overlay, etc.)
+ * AniList provides `coverImage.color` as a hex string (e.g., "#FF5722").
+ * We take that single color and generate a full set of variants for the
+ * detail page theming:
  *
- * Fallback strategy: if Palette can't extract a specific swatch, we derive it
- * from the dominant swatch or fall back to the theme's default colors.
+ * - [accent]: the original cover color — used for buttons, source badge,
+ *   enrichment indicator, and other accent elements.
+ * - [surfaceLow]: a dark, desaturated variant — even-index episode card background.
+ * - [surfaceHigh]: a slightly lighter variant — odd-index episode card background.
+ * - [surfaceContainer]: a medium variant — inner elements (title, synopsis, thumbnail bg).
+ * - [background]: a very dark variant — page background tint.
+ * - [onSurface]: text color on surfaces (auto black/white based on luminance).
+ * - [onSurfaceVariant]: secondary text color (slightly muted).
+ * - [scrim]: dark scrim for overlays.
  *
- * The color extraction is reliable because Palette always returns a dominant
- * swatch — the question is just how vibrant/muted the variants are.
+ * The variant generation uses HSL manipulation:
+ *  - Convert RGB → HSL
+ *  - Adjust lightness and saturation to create the variants
+ *  - Keep the same hue so all colors feel cohesive
+ *
+ * This approach is reliable, fast (no network/image loading), and uses the
+ * exact color AniList curates for each anime.
  */
 data class DynamicColorScheme(
-    val primary: Color,
+    val accent: Color,
     val surfaceLow: Color,
     val surfaceHigh: Color,
     val surfaceContainer: Color,
@@ -43,114 +40,33 @@ data class DynamicColorScheme(
 )
 
 /**
- * Extract a [DynamicColorScheme] from an anime's cover image.
+ * Generate a [DynamicColorScheme] from an AniList cover color.
  *
- * Loads the cover image bitmap via OkHttp (the same network stack used
- * throughout the app), then passes it to Palette for color extraction.
- *
- * @param anime The AniList anime (uses coverImage.extraLarge or best())
- * @return A DynamicColorScheme, or null if the image couldn't be loaded
+ * @param coverColor The AniList cover color (already parsed as a Compose Color)
+ * @return A full color scheme with 7 variants derived from the cover color
  */
-suspend fun extractDynamicColors(anime: AniListAnime): DynamicColorScheme? =
-    withContext(Dispatchers.IO) {
-        val imageUrl = anime.coverImage.extraLarge ?: anime.coverImage.best()
-        if (imageUrl.isNullOrBlank()) return@withContext null
+fun generateDynamicScheme(coverColor: Color): DynamicColorScheme {
+    val (h, s, l) = rgbToHsl(coverColor)
 
-        val networkHelper: NetworkHelper = try { Injekt.get() } catch (e: Exception) { return@withContext null }
-        val bitmap = loadBitmap(networkHelper, imageUrl) ?: return@withContext null
+    // Accent: the original color, maybe slightly boosted saturation for vibrancy
+    val accent = hslToColor(h, min(s, 1f), l)
 
-        val palette = Palette.from(bitmap).generate()
-        paletteToColorScheme(palette)
-    }
+    // Surface variants — dark, desaturated versions of the same hue
+    // These create the alternating episode card colors
+    val surfaceLow = hslToColor(h, s * 0.25f, 0.12f)   // very dark, low saturation
+    val surfaceHigh = hslToColor(h, s * 0.30f, 0.18f)  // slightly lighter
+    val surfaceContainer = hslToColor(h, s * 0.35f, 0.24f) // medium for inner elements
 
-/**
- * Load a bitmap from a URL using OkHttp.
- * Downscales to 100px width for faster Palette extraction (we don't need
- * full resolution for color analysis).
- */
-private fun loadBitmap(networkHelper: NetworkHelper, url: String): Bitmap? {
-    return try {
-        val request = Request.Builder().url(url).build()
-        networkHelper.client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
-            val inputStream: InputStream = response.body?.byteStream() ?: return null
+    // Background — very dark with a hint of the cover hue
+    val background = hslToColor(h, s * 0.20f, 0.08f)
 
-            // First decode bounds to check dimensions
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
-            BitmapFactory.decodeStream(inputStream, null, options)
-
-            // Calculate sample size to downscale to ~100px width
-            val targetWidth = 100
-            options.inSampleSize = calculateSampleSize(options.outWidth, targetWidth)
-            options.inJustDecodeBounds = false
-
-            // Re-open the stream (it was consumed by the bounds decode)
-            // Actually, we need a fresh request since the stream was consumed
-            val request2 = Request.Builder().url(url).build()
-            networkHelper.client.newCall(request2).execute().use { response2 ->
-                if (!response2.isSuccessful) return null
-                val stream2 = response2.body?.byteStream() ?: return null
-                BitmapFactory.decodeStream(stream2, null, options)
-            }
-        }
-    } catch (e: Exception) {
-        null
-    }
-}
-
-/**
- * Calculate the sample size to downscale a bitmap to approximately the target width.
- */
-private fun calculateSampleSize(currentWidth: Int, targetWidth: Int): Int {
-    var sampleSize = 1
-    while (currentWidth / (sampleSize * 2) > targetWidth) {
-        sampleSize *= 2
-    }
-    return sampleSize
-}
-
-/**
- * Convert a Palette to a DynamicColorScheme.
- *
- * Extraction priority for each color:
- * - primary: vibrant → dominant (fallback)
- * - surfaceLow: darkMuted → darkVibrant → dominant darkened
- * - surfaceHigh: muted → vibrant darkened → dominant
- * - surfaceContainer: lightMuted → lightVibrant → dominant lightened
- * - background: darkMuted further darkened → dominant at 15% brightness
- * - onSurface: swatch bodyTextColor → auto black/white
- * - onSurfaceVariant: swatch titleTextColor at 70% alpha → auto gray
- */
-private fun paletteToColorScheme(palette: Palette): DynamicColorScheme {
-    val vibrant = palette.vibrantSwatch
-    val darkVibrant = palette.darkVibrantSwatch
-    val lightVibrant = palette.lightVibrantSwatch
-    val muted = palette.mutedSwatch
-    val darkMuted = palette.darkMutedSwatch
-    val lightMuted = palette.lightMutedSwatch
-    val dominant = palette.dominantSwatch
-
-    // Primary: vibrant color, fall back to dominant
-    val primary = Color(vibrant?.rgb ?: dominant?.rgb ?: 0xFF6750A4.toInt())
-
-    // Surface colors for episode cards (alternating)
-    val surfaceLow = Color(darkMuted?.rgb ?: muted?.rgb ?: dominant?.rgb?.darken(0.3f) ?: 0xFF1C1B1F.toInt())
-    val surfaceHigh = Color(muted?.rgb ?: darkVibrant?.rgb ?: dominant?.rgb?.darken(0.15f) ?: 0xFF2B2930.toInt())
-
-    // Inner elements (title, synopsis, thumbnail backgrounds)
-    val surfaceContainer = Color(lightMuted?.rgb ?: lightVibrant?.rgb ?: dominant?.rgb?.lighten(0.1f) ?: 0xFF322F35.toInt())
-
-    // Background — very dark
-    val background = Color(darkMuted?.rgb?.darken(0.5f) ?: dominant?.rgb?.darken(0.6f) ?: 0xFF141318.toInt())
-
-    // Text colors — auto-contrast based on surface luminance
-    val onSurface = Color(dominant?.bodyTextColor ?: 0xFFFFFFFF.toInt())
-    val onSurfaceVariant = Color(dominant?.titleTextColor ?: 0xFFCAC4D0.toInt()).copy(alpha = 0.7f)
+    // Text colors — auto-contrast
+    // On dark surfaces, use white-ish; on light surfaces, use dark
+    val onSurface = Color.White.copy(alpha = 0.92f)
+    val onSurfaceVariant = Color.White.copy(alpha = 0.65f)
 
     return DynamicColorScheme(
-        primary = primary,
+        accent = accent,
         surfaceLow = surfaceLow,
         surfaceHigh = surfaceHigh,
         surfaceContainer = surfaceContainer,
@@ -160,28 +76,60 @@ private fun paletteToColorScheme(palette: Palette): DynamicColorScheme {
     )
 }
 
-// --- Color manipulation extensions ---
-
 /**
- * Darken an RGB int color by the given factor (0.0 = black, 1.0 = unchanged).
+ * Convert a Compose Color to HSL (Hue: 0-360, Saturation: 0-1, Lightness: 0-1).
  */
-private fun Int.darken(factor: Float): Int {
-    val r = (android.graphics.Color.red(this) * factor).toInt().coerceIn(0, 255)
-    val g = (android.graphics.Color.green(this) * factor).toInt().coerceIn(0, 255)
-    val b = (android.graphics.Color.blue(this) * factor).toInt().coerceIn(0, 255)
-    return android.graphics.Color.rgb(r, g, b)
+private fun rgbToHsl(color: Color): Triple<Float, Float, Float> {
+    val r = color.red
+    val g = color.green
+    val b = color.blue
+
+    val maxVal = max(r, max(g, b))
+    val minVal = min(r, min(g, b))
+    val delta = maxVal - minVal
+
+    // Lightness
+    val l = (maxVal + minVal) / 2f
+
+    // Saturation
+    val s = if (delta == 0f) {
+        0f
+    } else {
+        delta / (1f - kotlin.math.abs(2f * l - 1f))
+    }
+
+    // Hue
+    val h = when {
+        delta == 0f -> 0f
+        maxVal == r -> ((g - b) / delta) % 6f
+        maxVal == g -> (b - r) / delta + 2f
+        else -> (r - g) / delta + 4f
+    } * 60f
+
+    val hue = if (h < 0) h + 360f else h
+
+    return Triple(hue, s, l)
 }
 
 /**
- * Lighten an RGB int color by blending towards white.
- * @param factor 0.0 = unchanged, 1.0 = white
+ * Convert HSL to a Compose Color.
+ * @param h Hue 0-360
+ * @param s Saturation 0-1
+ * @param l Lightness 0-1
  */
-private fun Int.lighten(factor: Float): Int {
-    val r = android.graphics.Color.red(this)
-    val g = android.graphics.Color.green(this)
-    val b = android.graphics.Color.blue(this)
-    val nr = (r + (255 - r) * factor).toInt().coerceIn(0, 255)
-    val ng = (g + (255 - g) * factor).toInt().coerceIn(0, 255)
-    val nb = (b + (255 - b) * factor).toInt().coerceIn(0, 255)
-    return android.graphics.Color.rgb(nr, ng, nb)
+private fun hslToColor(h: Float, s: Float, l: Float): Color {
+    val c = (1f - kotlin.math.abs(2f * l - 1f)) * s
+    val x = c * (1f - kotlin.math.abs((h / 60f) % 2f - 1f))
+    val m = l - c / 2f
+
+    val (r, g, b) = when {
+        h < 60f -> Triple(c, x, 0f)
+        h < 120f -> Triple(x, c, 0f)
+        h < 180f -> Triple(0f, c, x)
+        h < 240f -> Triple(0f, x, c)
+        h < 300f -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+
+    return Color(r + m, g + m, b + m)
 }

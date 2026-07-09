@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -32,8 +33,7 @@ import uy.kohesive.injekt.api.get
 /**
  * Details → Episode display subpage.
  *
- * Layout: live preview at top + show/hide toggles below.
- * The live preview updates in real-time as toggles are changed.
+ * Layout: sticky live preview at top (non-scrolling) + scrollable toggles below.
  */
 @Composable
 fun DisplaySettingsScreen(onBack: () -> Unit) {
@@ -45,7 +45,6 @@ fun DisplaySettingsScreen(onBack: () -> Unit) {
     val showDates by prefs.showEpisodeDates().stateIn(scope).collectAsState()
     val showEpisodeNumber by prefs.showEpisodeNumber().stateIn(scope).collectAsState()
     val showAudioPills by prefs.showAudioPills().stateIn(scope).collectAsState()
-    // Read layout prefs too so the preview reflects the full state
     val synopsisPos by prefs.synopsisPosition().stateIn(scope).collectAsState()
     val datePos by prefs.datePosition().stateIn(scope).collectAsState()
     val thumbSize by prefs.thumbnailSize().stateIn(scope).collectAsState()
@@ -54,92 +53,96 @@ fun DisplaySettingsScreen(onBack: () -> Unit) {
     val thumbPos by prefs.thumbnailPosition().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Episode display", onBack = onBack) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // ---- Live preview at top ----
-            item {
-                Column {
-                    Text(
-                        "LIVE PREVIEW",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        Column(modifier = Modifier.fillMaxSize()) {
+            // ---- Sticky live preview (non-scrolling) ----
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp),
+            ) {
+                Text(
+                    "LIVE PREVIEW",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    EpisodeRowPreview(
+                        showThumbnails = showThumbnails,
+                        showSummaries = showSummaries,
+                        showTitles = showTitles,
+                        showDates = showDates,
+                        showEpisodeNumber = showEpisodeNumber,
+                        showAudioPills = showAudioPills,
+                        synopsisPosition = synopsisPos,
+                        datePosition = datePos,
+                        thumbnailSize = thumbSize,
+                        titlePosition = titlePos,
+                        episodeNumberPosition = epNumPos,
+                        thumbnailPosition = thumbPos,
                     )
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        EpisodeRowPreview(
-                            showThumbnails = showThumbnails,
-                            showSummaries = showSummaries,
-                            showTitles = showTitles,
-                            showDates = showDates,
-                            showEpisodeNumber = showEpisodeNumber,
-                            showAudioPills = showAudioPills,
-                            synopsisPosition = synopsisPos,
-                            datePosition = datePos,
-                            thumbnailSize = thumbSize,
-                            titlePosition = titlePos,
-                            episodeNumberPosition = epNumPos,
-                            thumbnailPosition = thumbPos,
-                        )
-                    }
                 }
             }
 
-            // ---- Show/hide toggles ----
-            item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    SettingsGroupCard(title = "Show or hide elements") {
-                        SwitchSettingsRow(
-                            icon = Icons.Default.Numbers,
-                            title = "Episode number",
-                            subtitle = "Show the episode number on each card",
-                            checked = showEpisodeNumber,
-                            onCheckedChange = { prefs.showEpisodeNumber().set(it) },
-                        )
-                        HorizontalDivider()
-                        SwitchSettingsRow(
-                            icon = Icons.Default.Title,
-                            title = "Episode titles",
-                            subtitle = "Show the parsed episode title",
-                            checked = showTitles,
-                            onCheckedChange = { prefs.showEpisodeTitles().set(it) },
-                        )
-                        HorizontalDivider()
-                        SwitchSettingsRow(
-                            icon = Icons.Default.Subtitles,
-                            title = "Episode summaries",
-                            subtitle = "Show the episode description",
-                            checked = showSummaries,
-                            onCheckedChange = { prefs.showEpisodeSummaries().set(it) },
-                        )
-                        HorizontalDivider()
-                        SwitchSettingsRow(
-                            icon = Icons.Default.Image,
-                            title = "Episode thumbnails",
-                            subtitle = "Show the preview image for each episode",
-                            checked = showThumbnails,
-                            onCheckedChange = { prefs.showEpisodeThumbnails().set(it) },
-                        )
-                        HorizontalDivider()
-                        SwitchSettingsRow(
-                            icon = Icons.Default.CalendarMonth,
-                            title = "Episode dates",
-                            subtitle = "Show the air date",
-                            checked = showDates,
-                            onCheckedChange = { prefs.showEpisodeDates().set(it) },
-                        )
-                        HorizontalDivider()
-                        SwitchSettingsRow(
-                            icon = Icons.Default.RecordVoiceOver,
-                            title = "Audio pills",
-                            subtitle = "Show SUB / DUB / HSUB tags",
-                            checked = showAudioPills,
-                            onCheckedChange = { prefs.showAudioPills().set(it) },
-                        )
+            // ---- Scrollable toggles ----
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        SettingsGroupCard(title = "Show or hide elements") {
+                            SwitchSettingsRow(
+                                icon = Icons.Default.Numbers,
+                                title = "Episode number",
+                                subtitle = "Show the episode number on each card",
+                                checked = showEpisodeNumber,
+                                onCheckedChange = { prefs.showEpisodeNumber().set(it) },
+                            )
+                            HorizontalDivider()
+                            SwitchSettingsRow(
+                                icon = Icons.Default.Title,
+                                title = "Episode titles",
+                                subtitle = "Show the parsed episode title",
+                                checked = showTitles,
+                                onCheckedChange = { prefs.showEpisodeTitles().set(it) },
+                            )
+                            HorizontalDivider()
+                            SwitchSettingsRow(
+                                icon = Icons.Default.Subtitles,
+                                title = "Episode summaries",
+                                subtitle = "Show the episode description",
+                                checked = showSummaries,
+                                onCheckedChange = { prefs.showEpisodeSummaries().set(it) },
+                            )
+                            HorizontalDivider()
+                            SwitchSettingsRow(
+                                icon = Icons.Default.Image,
+                                title = "Episode thumbnails",
+                                subtitle = "Show the preview image for each episode",
+                                checked = showThumbnails,
+                                onCheckedChange = { prefs.showEpisodeThumbnails().set(it) },
+                            )
+                            HorizontalDivider()
+                            SwitchSettingsRow(
+                                icon = Icons.Default.CalendarMonth,
+                                title = "Episode dates",
+                                subtitle = "Show the air date",
+                                checked = showDates,
+                                onCheckedChange = { prefs.showEpisodeDates().set(it) },
+                            )
+                            HorizontalDivider()
+                            SwitchSettingsRow(
+                                icon = Icons.Default.RecordVoiceOver,
+                                title = "Audio pills",
+                                subtitle = "Show SUB / DUB / HSUB tags",
+                                checked = showAudioPills,
+                                onCheckedChange = { prefs.showAudioPills().set(it) },
+                            )
+                        }
                     }
                 }
             }
