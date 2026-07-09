@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -240,125 +241,218 @@ fun DetailScreen(
                     item(key = "info") { infoContent() }
                 }
 
-                // Episodes
-                item(key = "episodes") {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Episodes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            // Metadata enrichment indicator
-                            if (isEnrichingMetadata) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
+                // Episodes section
+                // When anime info is ABOVE episodes: episodes render directly as items
+                // in the outer LazyColumn (no inner scrollable container) so the whole
+                // screen scrolls as one long list — the user can scroll from the header
+                // all the way to the last episode without a nested scroll area.
+                // When anime info is BELOW episodes: episodes stay in an inner
+                // scrollable LazyColumn with a max height so the info section below
+                // remains reachable without scrolling through the entire episode list.
+                val isInfoAbove = animeInfoPosition == "above"
+                val loadedEpisodes = episodeState as? EpisodeState.Loaded
+
+                if (isInfoAbove && loadedEpisodes != null) {
+                    // Episodes header (title + enrichment indicator + count + source)
+                    item(key = "episodes_header") {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Episodes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                // Metadata enrichment indicator
+                                if (isEnrichingMetadata) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
                                     ) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(12.dp),
-                                            strokeWidth = 1.5.dp,
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            "Fetching metadata…",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(12.dp),
+                                                strokeWidth = 1.5.dp,
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                "Fetching metadata…",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
                                     }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "${loadedEpisodes.episodeList.size} episodes",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                ) {
+                                    Text(
+                                        loadedEpisodes.sourceName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        when (val es = episodeState) {
-                            is EpisodeState.Idle, is EpisodeState.Searching -> {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    }
+                    // Episodes directly as items — full page scroll, no inner container
+                    itemsIndexed(loadedEpisodes.episodeList, key = { _, it -> it.url }) { index, episode ->
+                        EpisodeRow(
+                            episode = episode,
+                            onClick = { viewModel.playEpisode(episode) },
+                            showThumbnails = showThumbnails,
+                            showSummaries = showSummaries,
+                            showTitles = showTitles,
+                            showDates = showDates,
+                            showEpisodeNumber = showEpisodeNumber,
+                            showAudioPills = showAudioPills,
+                            synopsisPosition = synopsisPosition,
+                            datePosition = datePosition,
+                            thumbnailSize = thumbnailSize,
+                            titlePosition = titlePosition,
+                            episodeNumberPosition = episodeNumberPosition,
+                            thumbnailPosition = thumbnailPosition,
+                            index = index,
+                        )
+                    }
+                } else {
+                    // Below mode OR not-yet-loaded: episodes in a section with an
+                    // inner scrollable container (max height) when loaded.
+                    item(key = "episodes") {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Episodes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                // Metadata enrichment indicator
+                                if (isEnrichingMetadata) {
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Searching extensions…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                            is EpisodeState.LoadingEpisodes -> {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Loading episodes…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                            is EpisodeState.NotAired -> {
-                                InfoCard(
-                                    title = "Not yet available",
-                                    body = "This anime hasn't aired yet. It will be available to stream after it airs." +
-                                        (es.seasonYear?.let { " Expected: ${es.season ?: ""} $it".trim() } ?: ""),
-                                )
-                            }
-                            is EpisodeState.NoMatch -> {
-                                InfoCard(
-                                    title = "No streaming source available",
-                                    body = "No installed extension has '${es.searchedTitle}'. Install more extensions to stream this anime.",
-                                )
-                            }
-                            is EpisodeState.Loaded -> {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        "${es.episodeList.size} episodes",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.weight(1f),
-                                    )
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(12.dp),
+                                                strokeWidth = 1.5.dp,
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                "Fetching metadata…",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            when (val es = episodeState) {
+                                is EpisodeState.Idle, is EpisodeState.Searching -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Searching extensions…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                is EpisodeState.LoadingEpisodes -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Loading episodes…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                is EpisodeState.NotAired -> {
+                                    InfoCard(
+                                        title = "Not yet available",
+                                        body = "This anime hasn't aired yet. It will be available to stream after it airs." +
+                                            (es.seasonYear?.let { " Expected: ${es.season ?: ""} $it".trim() } ?: ""),
+                                    )
+                                }
+                                is EpisodeState.NoMatch -> {
+                                    InfoCard(
+                                        title = "No streaming source available",
+                                        body = "No installed extension has '${es.searchedTitle}'. Install more extensions to stream this anime.",
+                                    )
+                                }
+                                is EpisodeState.Loaded -> {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Text(
-                                            es.sourceName,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            "${es.episodeList.size} episodes",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.weight(1f),
                                         )
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                        ) {
+                                            Text(
+                                                es.sourceName,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    // Episode list — inner scrollable container (max height 1.5x)
+                                    androidx.compose.foundation.lazy.LazyColumn(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 600.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        itemsIndexed(es.episodeList, key = { _, it -> it.url }) { index, episode ->
+                                            EpisodeRow(
+                                                episode = episode,
+                                                onClick = { viewModel.playEpisode(episode) },
+                                                showThumbnails = showThumbnails,
+                                                showSummaries = showSummaries,
+                                                showTitles = showTitles,
+                                                showDates = showDates,
+                                                showEpisodeNumber = showEpisodeNumber,
+                                                showAudioPills = showAudioPills,
+                                                synopsisPosition = synopsisPosition,
+                                                datePosition = datePosition,
+                                                thumbnailSize = thumbnailSize,
+                                                titlePosition = titlePosition,
+                                                episodeNumberPosition = episodeNumberPosition,
+                                                thumbnailPosition = thumbnailPosition,
+                                                index = index,
+                                            )
+                                        }
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                // Episode list — proper LazyColumn with max height
-                                androidx.compose.foundation.lazy.LazyColumn(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(max = 400.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    items(es.episodeList, key = { it.url }) { episode ->
-                                        EpisodeRow(
-                                            episode = episode,
-                                            onClick = { viewModel.playEpisode(episode) },
-                                            showThumbnails = showThumbnails,
-                                            showSummaries = showSummaries,
-                                            showTitles = showTitles,
-                                            showDates = showDates,
-                                            showEpisodeNumber = showEpisodeNumber,
-                                            showAudioPills = showAudioPills,
-                                            synopsisPosition = synopsisPosition,
-                                            datePosition = datePosition,
-                                            thumbnailSize = thumbnailSize,
-                                            availableAudioVersions = viewModel.getAvailableAudioVersions(episode.url),
-                                            titlePosition = titlePosition,
-                                            episodeNumberPosition = episodeNumberPosition,
-                                            thumbnailPosition = thumbnailPosition,
-                                        )
-                                    }
+                                is EpisodeState.Error -> {
+                                    InfoCard(
+                                        title = "Couldn't load episodes",
+                                        body = es.message,
+                                    )
                                 }
-                            }
-                            is EpisodeState.Error -> {
-                                InfoCard(
-                                    title = "Couldn't load episodes",
-                                    body = es.message,
-                                )
                             }
                         }
                     }
@@ -551,32 +645,43 @@ private fun EpisodeRow(
     synopsisPosition: String = "right",
     datePosition: String = "right_below_synopsis",
     thumbnailSize: String = "medium",
-    availableAudioVersions: Set<String> = emptySet(),
     titlePosition: String = "right",
     episodeNumberPosition: String = "overlay",
     thumbnailPosition: String = "left",
+    index: Int = 0,
 ) {
     val hasThumbnail = showThumbnails && !episode.preview_url.isNullOrBlank()
     val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
     val isRich = hasThumbnail || hasSummary
 
+    // Alternating row colors: even rows use surfaceContainerLow, odd rows use
+    // surfaceContainerHigh. Both are standard M3 surface container levels that
+    // blend naturally with the theme. Inner elements (title, synopsis, thumbnail
+    // backgrounds) use surfaceContainer (the middle level), so they always
+    // contrast with the card background regardless of which level the card uses.
+    val cardColor = if (index % 2 == 0) {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = cardColor,
         onClick = onClick,
     ) {
         if (isRich) {
             EpisodeRowRich(
                 episode, hasThumbnail, hasSummary, showTitles, showDates,
                 showEpisodeNumber, showAudioPills, synopsisPosition, datePosition,
-                thumbnailSize, availableAudioVersions, titlePosition,
+                thumbnailSize, titlePosition,
                 episodeNumberPosition, thumbnailPosition,
             )
         } else {
             EpisodeRowSimple(
                 episode, showTitles, showEpisodeNumber, episodeNumberPosition,
-                showAudioPills, showDates, availableAudioVersions,
+                showAudioPills, showDates,
             )
         }
     }
@@ -594,13 +699,14 @@ private fun EpisodeRowSimple(
     episodeNumberPosition: String = "overlay",
     showAudioPills: Boolean = true,
     showDates: Boolean = true,
-    availableAudioVersions: Set<String> = emptySet(),
 ) {
-    // Audio detection from scanlator + video cache
+    // Audio detection from the scanlator field only.
+    // The AniKoto extension puts sub/dub info in SEpisode.scanlator:
+    // "Sub", "Dub", "Sub / Dub", or "Raw" (see Anikoto.kt lines 478-483).
     val scanlatorUpper = episode.scanlator?.uppercase() ?: ""
-    val hasSub = "SUB" in availableAudioVersions || scanlatorUpper.contains("SUB")
-    val hasDub = "DUB" in availableAudioVersions || scanlatorUpper.contains("DUB")
-    val hasHsub = "HSUB" in availableAudioVersions
+    val hasSub = scanlatorUpper.contains("SUB")
+    val hasDub = scanlatorUpper.contains("DUB")
+    val hasHsub = scanlatorUpper.contains("HSUB")
     val hasDate = showDates && episode.date_upload > 0
     val hasAnyPills = hasDate || (showAudioPills && (hasSub || hasDub || hasHsub))
 
@@ -698,7 +804,7 @@ private fun EpisodeRowSimple(
  * Rich episode row — with thumbnail and/or summary.
  *
  * Episode number is OVERLAID on the thumbnail (top-left corner).
- * Audio pills come from the video cache (not episode name).
+ * Audio pills come from the scanlator field (not video cache).
  * Date position: right_below_synopsis, right_above_synopsis, or below.
  * Synopsis position: right or below.
  * Thumbnail size: small (100dp), medium (120dp), large (160dp).
@@ -715,7 +821,6 @@ private fun EpisodeRowRich(
     synopsisPosition: String,
     datePosition: String,
     thumbnailSize: String,
-    availableAudioVersions: Set<String>,
     titlePosition: String,
     episodeNumberPosition: String,
     thumbnailPosition: String,
@@ -729,15 +834,13 @@ private fun EpisodeRowRich(
         else -> 120.dp to 68.dp  // medium (default)
     }
 
-    // Audio versions: check video cache first, then scanlator field.
+    // Audio detection from the scanlator field only.
     // The AniKoto extension puts sub/dub info in SEpisode.scanlator:
     // "Sub", "Dub", "Sub / Dub", or "Raw" (see Anikoto.kt lines 478-483).
     val scanlatorUpper = episode.scanlator?.uppercase() ?: ""
-    val hasSubFromScanlator = scanlatorUpper.contains("SUB")
-    val hasDubFromScanlator = scanlatorUpper.contains("DUB")
-    val hasSub = "SUB" in availableAudioVersions || hasSubFromScanlator
-    val hasDub = "DUB" in availableAudioVersions || hasDubFromScanlator
-    val hasHsub = "HSUB" in availableAudioVersions
+    val hasSub = scanlatorUpper.contains("SUB")
+    val hasDub = scanlatorUpper.contains("DUB")
+    val hasHsub = scanlatorUpper.contains("HSUB")
     val hasDate = showDates && episode.date_upload > 0
     val hasAnyPills = hasDate || (showAudioPills && (hasSub || hasDub || hasHsub))
 

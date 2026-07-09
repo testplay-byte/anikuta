@@ -132,48 +132,6 @@ class DetailViewModel(
         private val videoCache = mutableMapOf<String, CachedVideoData>()
     }
 
-    /**
-     * Phase 7.5: Get available audio versions for an episode.
-     * Checks the in-memory video cache first, then falls back to a persistent
-     * PreferenceStore cache (survives app restart). Returns a set of audio
-     * version names (e.g. "SUB", "DUB", "HSUB") if the episode's videos have
-     * been resolved before. Empty if not cached yet.
-     */
-    fun getAvailableAudioVersions(episodeUrl: String): Set<String> {
-        // Check in-memory cache first
-        val cached = videoCache[episodeUrl]
-        if (cached != null) {
-            return cached.serverSections
-                .flatMap { it.audioSections }
-                .map { it.audio.name }
-                .filter { it != "ANY" }
-                .toSet()
-        }
-        // Fall back to persistent cache (survives app restart)
-        val prefs = preferenceStore ?: return emptySet()
-        val key = "audio_versions_${episodeUrl.hashCode()}"
-        val stored = prefs.getString(key, "").get()
-        if (stored.isBlank()) return emptySet()
-        return stored.split(",").filter { it.isNotBlank() }.toSet()
-    }
-
-    /**
-     * Persist audio versions for an episode to PreferenceStore.
-     * Called when videos are resolved.
-     */
-    private fun persistAudioVersions(episodeUrl: String, serverSections: List<ServerSection>) {
-        val prefs = preferenceStore ?: return
-        val audioVersions = serverSections
-            .flatMap { it.audioSections }
-            .map { it.audio.name }
-            .filter { it != "ANY" }
-            .toSet()
-        if (audioVersions.isNotEmpty()) {
-            val key = "audio_versions_${episodeUrl.hashCode()}"
-            prefs.getString(key, "").set(audioVersions.joinToString(","))
-        }
-    }
-
     private val preferenceStore: app.anikuta.core.preference.PreferenceStore? = try { Injekt.get() } catch (e: Exception) { null }
 
     init {
@@ -390,42 +348,56 @@ class DetailViewModel(
                     return@launch
                 }
 
-                // Enrich episodes with fetched metadata
+                // Enrich episodes with fetched metadata.
+                // CRITICAL: create NEW SEpisode objects instead of mutating in place.
+                // Compose's LazyColumn skips recomposition when it receives the same
+                // object references (equality check passes). By creating new objects,
+                // Compose detects the change and recomposes visible items immediately —
+                // no need to scroll to trigger a refresh.
                 var enrichedCount = 0
-                episodes.forEach { ep ->
+                val enrichedEpisodes = episodes.map { ep ->
                     val epNum = ep.episode_number.toInt().coerceAtLeast(1)
-                    val meta = metadata[epNum] ?: return@forEach
-                    var changed = false
+                    val meta = metadata[epNum]
+                    if (meta == null) {
+                        ep  // no metadata for this episode — keep original
+                    } else {
+                        var changed = false
+                        val newPreviewUrl = if (ep.preview_url.isNullOrBlank() && !meta.thumbnailUrl.isNullOrBlank()) {
+                            changed = true; meta.thumbnailUrl
+                        } else ep.preview_url
 
-                    // Only enrich fields that are missing
-                    if (ep.preview_url.isNullOrBlank() && !meta.thumbnailUrl.isNullOrBlank()) {
-                        ep.preview_url = meta.thumbnailUrl
-                        changed = true
-                    }
-                    if (ep.summary.isNullOrBlank() && !meta.description.isNullOrBlank()) {
-                        ep.summary = meta.description
-                        changed = true
-                    }
-                    // Enrich name if it's a generic "Episode N" and we have a title
-                    if ((ep.name.isBlank() || ep.name.matches(Regex("(?i)episode\\s*\\d+"))) && !meta.title.isNullOrBlank()) {
-                        ep.name = "Episode $epNum - ${meta.title}"
-                        changed = true
-                    }
-                    // Enrich date if missing
-                    if (ep.date_upload <= 0 && meta.airDate != null && meta.airDate > 0) {
-                        ep.date_upload = meta.airDate
-                        changed = true
-                    }
+                        val newSummary = if (ep.summary.isNullOrBlank() && !meta.description.isNullOrBlank()) {
+                            changed = true; meta.description
+                        } else ep.summary
 
-                    if (changed) enrichedCount++
+                        val newName = if ((ep.name.isBlank() || ep.name.matches(Regex("(?i)episode\\s*\\d+"))) && !meta.title.isNullOrBlank()) {
+                            changed = true; "Episode $epNum - ${meta.title}"
+                        } else ep.name
+
+                        val newDate = if (ep.date_upload <= 0 && meta.airDate != null && meta.airDate > 0) {
+                            changed = true; meta.airDate
+                        } else ep.date_upload
+
+                        if (changed) enrichedCount++
+                        // Create a NEW SEpisode so Compose sees a different object reference
+                        app.anikuta.source.api.model.SEpisode.create().apply {
+                            url = ep.url
+                            name = newName
+                            episode_number = ep.episode_number
+                            date_upload = newDate
+                            scanlator = ep.scanlator
+                            summary = newSummary
+                            preview_url = newPreviewUrl
+                            fillermark = ep.fillermark
+                        }
+                    }
                 }
 
                 if (enrichedCount > 0) {
                     Log.i(TAG, "Enriched $enrichedCount/${episodes.size} episodes with in-app metadata")
-                    // Update the episode cache + UI
-                    episodeCache[anilistId] = Pair(episodes, (episodeCache[anilistId]?.second ?: ""))
                     val sourceName = (episodeCache[anilistId]?.second ?: "")
-                    _episodes.value = EpisodeState.Loaded(episodes, sourceName)
+                    episodeCache[anilistId] = Pair(enrichedEpisodes, sourceName)
+                    _episodes.value = EpisodeState.Loaded(enrichedEpisodes, sourceName)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "In-app metadata enrichment failed (keeping original data)", e)
@@ -488,8 +460,6 @@ class DetailViewModel(
                     Log.d(TAG, "${allVideos.size} videos in ${audioSections.size} server section(s) — showing picker")
                     // Cache the result
                     videoCache[episode.url] = CachedVideoData(audioSections, now)
-                    // Persist audio versions for cross-session pill display
-                    persistAudioVersions(episode.url, audioSections)
                     _videoPicker.value = VideoPickerState.Show(episode, audioSections)
                 }
             } catch (e: Exception) {
@@ -512,7 +482,6 @@ class DetailViewModel(
                 val newSections = resolveVideos(episode, source)
                 val now = System.currentTimeMillis()
                 videoCache[episode.url] = CachedVideoData(newSections, now)
-                persistAudioVersions(episode.url, newSections)
                 // Smooth swap: update the picker state. If the data is the same,
                 // the UI won't visibly change. If different, new qualities/servers
                 // appear in their sorted positions.
