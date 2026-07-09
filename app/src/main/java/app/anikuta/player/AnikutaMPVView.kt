@@ -76,6 +76,73 @@ class AnikutaMPVView(
     val hwdecActive: String
         get() = getPropertyString("hwdec-current") ?: "no"
 
+    // ---- Track API (Phase 1.3) ----
+    // Based on aniyomi's TrackDelegate pattern. MPV exposes tracks via the
+    // "track-list" property. Each track has: type (audio/sub/video), id, title, lang.
+    // Select a track by setting "sid" (subtitle) or "aid" (audio) to the track ID.
+    // Set to -1 to disable (off).
+
+    /** Currently selected subtitle track ID (-1 = off). */
+    var sid: Int
+        get() = getPropertyInt("sid") ?: -1
+        set(value) { MPVLib.setPropertyInt("sid", value) }
+
+    /** Currently selected audio track ID (-1 = off). */
+    var aid: Int
+        get() = getPropertyInt("aid") ?: -1
+        set(value) { MPVLib.setPropertyInt("aid", value) }
+
+    /** Number of tracks in MPV's track-list. */
+    fun getTrackCount(): Int = MPVLib.getPropertyInt("track-list/count") ?: 0
+
+    /** Track type for track at index n: "audio", "sub", or "video". */
+    fun getTrackType(index: Int): String? = MPVLib.getPropertyString("track-list/$index/type")
+
+    /** MPV track ID for track at index n. */
+    fun getTrackId(index: Int): Int = MPVLib.getPropertyInt("track-list/$index/id") ?: -1
+
+    /** Title for track at index n (may be empty). */
+    fun getTrackTitle(index: Int): String = MPVLib.getPropertyString("track-list/$index/title") ?: ""
+
+    /** Language code for track at index n (e.g., "jpn", "eng"; may be empty). */
+    fun getTrackLang(index: Int): String = MPVLib.getPropertyString("track-list/$index/lang") ?: ""
+
+    /**
+     * Load all audio and subtitle tracks from MPV's track-list.
+     * Returns a pair: (subtitleTracks, audioTracks).
+     * Each track is a [VideoTrack] with id, name, and language.
+     * Audio tracks include an "Off" entry (id = -1) at the start.
+     * Subtitle tracks include an "Off" entry (id = -1) at the start.
+     *
+     * Called when MPV reports a "track-list" property change.
+     */
+    fun loadTracks(): Pair<List<VideoTrack>, List<VideoTrack>> {
+        val subTracks = mutableListOf(VideoTrack(-1, "Off", null))
+        val audioTracks = mutableListOf(VideoTrack(-1, "Off", null))
+        try {
+            val count = getTrackCount()
+            for (i in 0 until count) {
+                val type = getTrackType(i) ?: continue
+                val id = getTrackId(i)
+                val title = getTrackTitle(i)
+                val lang = getTrackLang(i)
+                val name = when {
+                    title.isNotBlank() && lang.isNotBlank() -> "$title ($lang)"
+                    title.isNotBlank() -> title
+                    lang.isNotBlank() -> lang
+                    else -> "Track $id"
+                }
+                when (type) {
+                    "sub" -> subTracks.add(VideoTrack(id, name, lang.ifBlank { null }))
+                    "audio" -> audioTracks.add(VideoTrack(id, name, lang.ifBlank { null }))
+                }
+            }
+        } catch (e: Exception) {
+            // MPV may have been destroyed — return what we have
+        }
+        return Pair(subTracks, audioTracks)
+    }
+
     // ---- MPV lifecycle hooks ----
 
     override fun initOptions(vo: String) {
