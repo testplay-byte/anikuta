@@ -138,16 +138,16 @@ class PlayerActivity : ComponentActivity() {
         val defaultView = prefs.defaultPlayerView().get()
         when (defaultView) {
             "fullscreen" -> {
-                viewModel.setPlayerMode(PlayerMode.FULLSCREEN)
+                viewModel?.setPlayerMode(PlayerMode.FULLSCREEN)
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             }
             "minimized" -> {
-                viewModel.setPlayerMode(PlayerMode.MINIMIZED)
+                viewModel?.setPlayerMode(PlayerMode.MINIMIZED)
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             }
             else -> {
                 // "ask" — default to minimized for now (prompt will be added in Phase 1.7+)
-                viewModel.setPlayerMode(PlayerMode.MINIMIZED)
+                viewModel?.setPlayerMode(PlayerMode.MINIMIZED)
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             }
         }
