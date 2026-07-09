@@ -3,7 +3,7 @@ package app.anikuta.ui.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GestureTap
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -114,7 +114,7 @@ fun PlayerSettingsScreen(onBack: () -> Unit) {
             item {
                 SettingsGroupCard(title = "Player behavior") {
                     SwitchSettingsRow(
-                        icon = Icons.Default.GestureTap,
+                        icon = Icons.Default.TouchApp,
                         title = "Gestures",
                         subtitle = "Swipe to seek, brightness, volume, double-tap",
                         checked = gesturesEnabled,
