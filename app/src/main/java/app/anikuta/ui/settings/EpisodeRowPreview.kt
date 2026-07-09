@@ -7,12 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -35,11 +35,17 @@ import app.anikuta.ui.detail.EpisodeTitleParser
 /**
  * Phase 7.5 — Demo live preview of an episode row.
  *
- * Renders a sample episode row with dummy data using the same layout logic
- * as the real EpisodeRowRich. Updates live as the user changes settings.
+ * Renders a sample episode row with dummy data using the SAME layout logic
+ * as the real EpisodeRowRich on the detail page. Updates live as the user
+ * changes settings.
  *
- * The preview is a standalone card (not wrapped in SettingsGroupCard) so
- * it looks exactly like a real episode row on the detail page.
+ * The preview is a bare episode card (NOT wrapped in SettingsGroupCard) so
+ * it looks exactly like a real episode row on the detail page — same padding,
+ * same card structure, same pill format, same gradient thumbnail.
+ *
+ * The gradient uses bright non-theme colors (yellow → orange → red) in a
+ * 3-way diagonal: top-left (yellow) → middle (orange, between yellow and red
+ * on the color wheel for smooth transition) → bottom-right (red).
  */
 @Composable
 fun EpisodeRowPreview(
@@ -59,7 +65,6 @@ fun EpisodeRowPreview(
     val demoTitle = "The Dragon's Labyrinth"
     val demoSynopsis = "A young adventurer discovers a hidden labyrinth beneath the ancient city, where a mysterious dragon guards a long-forgotten secret that could change the fate of the realm forever."
     val demoDate = "Mar 15, 2024"
-    val demoAudioVersions = setOf("SUB", "DUB")
     val demoEpisodeNumber = 5f
 
     val hasThumbnail = showThumbnails
@@ -71,19 +76,23 @@ fun EpisodeRowPreview(
         else -> 120.dp to 68.dp
     }
 
-    val hasSub = "SUB" in demoAudioVersions
-    val hasDub = "DUB" in demoAudioVersions
+    // Demo audio versions (simulating what an extension would put in scanlator)
+    val hasSub = true
+    val hasDub = true
+    val hasHsub = false
     val hasDate = showDates
-    val hasAnyPills = hasDate || (showAudioPills && (hasSub || hasDub))
+    val hasAnyPills = hasDate || (showAudioPills && (hasSub || hasDub || hasHsub))
 
     var summaryExpanded by remember { mutableStateOf(false) }
 
-    // Gradient colors for demo thumbnail — smooth 3-way gradient
-    // Using adjacent colors on the color wheel for a smooth transition
+    // Bright 3-way diagonal gradient: yellow (top-left) → orange (middle) → red (bottom-right).
+    // Orange sits between yellow and red on the color wheel, giving a smooth transition.
+    // These are fixed bright colors — NOT theme colors — so the preview is always vibrant
+    // regardless of light/dark mode.
     val gradientColors = listOf(
-        MaterialTheme.colorScheme.primary,
-        MaterialTheme.colorScheme.primaryContainer,
-        MaterialTheme.colorScheme.secondaryContainer,
+        Color(0xFFFFEB3B),  // Bright yellow — top-left
+        Color(0xFFFF9800),  // Orange — middle (between yellow and red on the color wheel)
+        Color(0xFFEF5350),  // Red — bottom-right
     )
 
     @Composable
@@ -96,7 +105,7 @@ fun EpisodeRowPreview(
                 .background(Brush.linearGradient(gradientColors)),
             contentAlignment = Alignment.Center,
         ) {
-            // Episode number overlay on thumbnail
+            // Episode number overlay — only when position is 'overlay'
             if (showEpisodeNumber && episodeNumberPosition == "overlay") {
                 Surface(
                     shape = RoundedCornerShape(6.dp),
@@ -128,11 +137,14 @@ fun EpisodeRowPreview(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
     }
 
+    // Date + audio pills row — MATCHES the real EpisodeRowRich format:
+    // date in its own pill, then audio versions combined in ONE Surface with
+    // dot separators between them.
     @Composable
     fun DateAudioPillsRow() {
         if (hasAnyPills) {
@@ -140,19 +152,56 @@ fun EpisodeRowPreview(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Date pill (separate)
                 if (hasDate) {
-                    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.outlineVariant) {
-                        Text(demoDate, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    ) {
+                        Text(
+                            text = demoDate,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
                     }
                 }
-                if (showAudioPills && hasSub) {
-                    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.outlineVariant) {
-                        Text("SUB", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
-                    }
-                }
-                if (showAudioPills && hasDub) {
-                    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.outlineVariant) {
-                        Text("DUB", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                // Audio pills — combined in one Surface with dot separators
+                if (showAudioPills && (hasSub || hasDub || hasHsub)) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            val audioParts = mutableListOf<String>()
+                            if (hasSub) audioParts.add("SUB")
+                            if (hasDub) audioParts.add("DUB")
+                            if (hasHsub) audioParts.add("HSUB")
+                            audioParts.forEachIndexed { idx, label ->
+                                if (idx > 0) {
+                                    // Circular dot separator
+                                    Box(
+                                        modifier = Modifier
+                                            .size(3.dp)
+                                            .background(
+                                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                                CircleShape,
+                                            ),
+                                    )
+                                }
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -193,7 +242,7 @@ fun EpisodeRowPreview(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Episode number badge (if position is 'badge' and no thumbnail, or always when not overlay)
+                    // Episode number badge (if position is 'badge')
                     if (showEpisodeNumber && episodeNumberPosition == "badge") {
                         EpisodeNumberBadge()
                         Spacer(modifier = Modifier.width(8.dp))
@@ -211,7 +260,8 @@ fun EpisodeRowPreview(
         }
     }
 
-    // The episode row card — standalone, looks like a real episode row
+    // The episode row card — standalone, looks exactly like a real episode row.
+    // Uses surfaceContainerLow to match the even-index card color on the detail page.
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -228,60 +278,77 @@ fun EpisodeRowPreview(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top,
             ) {
-                // Thumbnail (left or right based on thumbnailPosition)
+                // Thumbnail (left, if position is 'left')
                 if (hasThumbnail && thumbnailPosition == "left") {
                     DemoThumbnail()
                     Spacer(modifier = Modifier.width(12.dp))
+                } else if (!hasThumbnail && showEpisodeNumber && episodeNumberPosition != "badge") {
+                    // No thumbnail — show episode number badge
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = EpisodeTitleParser.formatEpisodeNumber(demoEpisodeNumber),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
                 }
 
-                // Right side content — ALWAYS renders (even if title is "below")
+                // Right side content column
                 Column(modifier = Modifier.weight(1f)) {
-                    // Title on right (if position is 'right')
+                    // Title on the right side (if position is 'right')
                     if (titlePosition == "right" || !hasThumbnail) {
                         TitleContent()
                     }
 
-                    // Date above synopsis (right side)
+                    // Date above synopsis (if position is right_above_synopsis)
                     if (datePosition == "right_above_synopsis" && hasAnyPills) {
                         Spacer(modifier = Modifier.height(6.dp))
                         DateAudioPillsRow()
                     }
 
-                    // Synopsis on right side
+                    // Synopsis on the right side
                     if ((synopsisPosition == "right" || !hasThumbnail) && hasSummary) {
                         Spacer(modifier = Modifier.height(6.dp))
                         SynopsisContent()
                     }
 
-                    // Date below synopsis (right side)
-                    if (datePosition == "right_below_synopsis" && hasAnyPills) {
+                    // Date below synopsis (if position is right_below_synopsis)
+                    if (datePosition == "right_below_synopsis" && hasThumbnail && hasAnyPills) {
                         Spacer(modifier = Modifier.height(6.dp))
                         DateAudioPillsRow()
                     }
                 }
 
-                // Thumbnail on right
+                // Thumbnail (right, if position is 'right')
                 if (hasThumbnail && thumbnailPosition == "right") {
                     Spacer(modifier = Modifier.width(12.dp))
                     DemoThumbnail()
                 }
             }
 
-            // Below-thumbnail content (full width, only when thumbnail is present)
+            // Below-thumbnail content (full width)
             if (hasThumbnail) {
-                // Title below
+                // Title below thumbnail (if position is 'below')
                 if (titlePosition == "below" && showTitles) {
                     Spacer(modifier = Modifier.height(8.dp))
                     TitleContent()
                 }
 
-                // Synopsis below
-                if (synopsisPosition == "below" && hasSummary) {
+                // Synopsis below (if position is 'below')
+                if (hasSummary && synopsisPosition == "below") {
                     Spacer(modifier = Modifier.height(8.dp))
                     SynopsisContent()
                 }
 
-                // Date below (full width)
+                // Date + audio pills below (if position is 'below')
                 if (datePosition == "below" && hasAnyPills) {
                     Spacer(modifier = Modifier.height(8.dp))
                     DateAudioPillsRow()

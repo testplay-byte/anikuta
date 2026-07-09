@@ -217,7 +217,21 @@ fun AnikutaNavGraph() {
                 app.anikuta.ui.settings.PlayerSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable("settings/details") {
-                app.anikuta.ui.settings.DetailsSettingsScreen(onBack = { navController.popBackStack() })
+                app.anikuta.ui.settings.DetailsSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenDisplay = { navController.navigate("settings/details/display") },
+                    onOpenLayout = { navController.navigate("settings/details/layout") },
+                    onOpenMetadata = { navController.navigate("settings/details/metadata") },
+                )
+            }
+            composable("settings/details/display") {
+                app.anikuta.ui.settings.DisplaySettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/details/layout") {
+                app.anikuta.ui.settings.LayoutSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/details/metadata") {
+                app.anikuta.ui.settings.MetadataSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable("settings/extensions") {
                 app.anikuta.ui.settings.ExtensionsSettingsScreen(

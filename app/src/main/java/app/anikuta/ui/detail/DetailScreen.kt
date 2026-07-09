@@ -311,25 +311,29 @@ fun DetailScreen(
                             }
                         }
                     }
-                    // Episodes directly as items — full page scroll, no inner container
+                    // Episodes directly as items — full page scroll, no inner container.
+                    // Each episode gets 16dp horizontal padding (to align with the
+                    // header) and 4dp vertical padding (so 8dp total between episodes).
                     itemsIndexed(loadedEpisodes.episodeList, key = { _, it -> it.url }) { index, episode ->
-                        EpisodeRow(
-                            episode = episode,
-                            onClick = { viewModel.playEpisode(episode) },
-                            showThumbnails = showThumbnails,
-                            showSummaries = showSummaries,
-                            showTitles = showTitles,
-                            showDates = showDates,
-                            showEpisodeNumber = showEpisodeNumber,
-                            showAudioPills = showAudioPills,
-                            synopsisPosition = synopsisPosition,
-                            datePosition = datePosition,
-                            thumbnailSize = thumbnailSize,
-                            titlePosition = titlePosition,
-                            episodeNumberPosition = episodeNumberPosition,
-                            thumbnailPosition = thumbnailPosition,
-                            index = index,
-                        )
+                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                            EpisodeRow(
+                                episode = episode,
+                                onClick = { viewModel.playEpisode(episode) },
+                                showThumbnails = showThumbnails,
+                                showSummaries = showSummaries,
+                                showTitles = showTitles,
+                                showDates = showDates,
+                                showEpisodeNumber = showEpisodeNumber,
+                                showAudioPills = showAudioPills,
+                                synopsisPosition = synopsisPosition,
+                                datePosition = datePosition,
+                                thumbnailSize = thumbnailSize,
+                                titlePosition = titlePosition,
+                                episodeNumberPosition = episodeNumberPosition,
+                                thumbnailPosition = thumbnailPosition,
+                                index = index,
+                            )
+                        }
                     }
                 } else {
                     // Below mode OR not-yet-loaded: episodes in a section with an
@@ -424,7 +428,7 @@ fun DetailScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .heightIn(max = 600.dp),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
                                         itemsIndexed(es.episodeList, key = { _, it -> it.url }) { index, episode ->
                                             EpisodeRow(
