@@ -354,7 +354,7 @@ fun DetailScreen(
                                 episodeNumberPosition = episodeNumberPosition,
                                 thumbnailPosition = thumbnailPosition,
                                 index = index,
-                                dynamicColors = dynamicColors,
+                                dynamicColors = null,
                             )
                         }
                     }
@@ -470,7 +470,7 @@ fun DetailScreen(
                                                 episodeNumberPosition = episodeNumberPosition,
                                                 thumbnailPosition = thumbnailPosition,
                                                 index = index,
-                                                dynamicColors = dynamicColors,
+                                                dynamicColors = null,
                                             )
                                         }
                                     }
