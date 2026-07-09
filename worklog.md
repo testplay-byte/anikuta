@@ -373,3 +373,27 @@ Stage Summary:
 - Metadata fetching is per-field customizable
 - Player UX analysis document ready for user review
 - Build 69a7258 SUCCESS, ntfy sent
+
+---
+
+## Session 24 (Settings fixes + AniList-color dynamic theming + player UX web page)
+
+Task ID: P7.5-SETTINGS-FIXES-V2 (Session 24)
+Agent: main (Z.ai Code)
+
+Work Log:
+- Fixed date/sub-dub pills disappearing when thumbnails are off (removed hasThumbnail requirement from right_below_synopsis condition + added below fallback)
+- Made live preview sticky in all 3 subpages (Column preview + LazyColumn pattern)
+- Created custom StyledSegmentedRow with better visual styling (rounded container, clear selected state)
+- Moved dynamic theming toggle from Layout subpage to hub page (Appearance section)
+- Metadata subpage: 3 per-field toggles now hide when master toggle off (AnimatedVisibility)
+- Rewrote DynamicTheming.kt: removed Palette API entirely, uses AniList coverImage.color + HSL variant generation (7 colors)
+- Removed androidx.palette dependency
+- Build #168 failed (missing Palette import) → fixed → Build #169 SUCCESS
+- Created live-preview/player-ux-analysis.html: visual comparison + 4-phase plan + 5 questions
+
+Stage Summary:
+- All 6 settings fixes applied and built successfully (a1fe919)
+- Dynamic theming now uses AniList color (fast, reliable, no image loading)
+- Player UX analysis web page created for user review
+- ntfy notification sent
