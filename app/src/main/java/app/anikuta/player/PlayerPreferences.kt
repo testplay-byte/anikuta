@@ -173,13 +173,6 @@ class PlayerPreferences(
         preferenceStore.getBoolean("pref_player_gestures_enabled", true)
 
     /**
-     * Auto-hide player controls after inactivity.
-     * Default: true.
-     */
-    fun autoHideControls(): Preference<Boolean> =
-        preferenceStore.getBoolean("pref_auto_hide_controls", true)
-
-    /**
      * Whether the first-time player prompt has been shown.
      * Used to only show the "choose your default view" dialog once.
      * Default: false.
