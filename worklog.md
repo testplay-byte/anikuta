@@ -324,3 +324,23 @@ Stage Summary:
 - Build artifacts: anikuta-debug-arm64-v8a APK available in Actions run #164.
 - Previous build b45431e did NOT include these fixes (previous session's edits were lost in sandbox reset before being committed). This was my mistake — I should have committed immediately.
 - Environment fully restored: repo cloned, credentials saved (gitignored), git config set, remote URL configured with token for push access.
+
+---
+
+## Session 22 (Episode spacing + live preview accuracy + settings redesign)
+
+Task ID: P7.5-SETTINGS-REDESIGN (Session 22)
+Agent: main (Z.ai Code)
+
+Work Log:
+- Episode spacing: above mode wrapped each episode in Box(16dp h-padding, 4dp v-padding); below mode spacedBy 4→8dp.
+- Live preview rewrite: combined audio pills with dot separators (matches real EpisodeRowRich), bare card in 16dp padding (no SettingsGroupCard wrapper), bright 3-way gradient (yellow→orange→red diagonal), episode number badge fallback.
+- Settings split into 4 files: DetailsSettingsScreen (hub), DisplaySettingsScreen, LayoutSettingsScreen, MetadataSettingsScreen.
+- 3 new NavGraph routes: settings/details/display, /layout, /metadata.
+- Committed d666280, pushed, build #165 SUCCESS, ntfy sent.
+
+Stage Summary:
+- All 6 improvements applied and built successfully.
+- Settings now modular: hub page with live preview + 3 subpages (Display, Layout, Metadata).
+- Live preview now matches the real detail page exactly (same padding, same pill format, same card structure).
+- Gradient uses fixed bright colors (not theme colors) for consistent vibrancy.
