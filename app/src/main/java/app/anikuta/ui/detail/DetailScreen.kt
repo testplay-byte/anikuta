@@ -782,16 +782,18 @@ private fun EpisodeRowSimple(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // Episode number badge (if position is 'badge')
+                    // Uses primaryContainer so the badge is a clearly distinct
+                    // colored pill, separate from the title's surfaceContainer bg.
                     if (showEpisodeNumber && episodeNumberPosition == "badge") {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            color = MaterialTheme.colorScheme.primaryContainer,
                         ) {
                             Text(
                                 text = "EP ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             )
                         }
@@ -1094,16 +1096,18 @@ private fun EpisodeRowRich(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             // Episode number badge (if position is 'badge')
+                            // Uses primaryContainer so the badge is a clearly distinct
+                            // colored pill, separate from the title's surfaceContainer bg.
                             if (showEpisodeNumber && episodeNumberPosition == "badge") {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
                                 ) {
                                     Text(
                                         text = "EP ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     )
                                 }

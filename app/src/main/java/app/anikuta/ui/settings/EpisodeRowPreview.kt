@@ -128,15 +128,17 @@ fun EpisodeRowPreview(
 
     @Composable
     fun EpisodeNumberBadge() {
+        // Uses primaryContainer so the badge is a clearly distinct colored pill
+        // (separate from the title's surfaceContainer background)
         Surface(
             shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
+            color = MaterialTheme.colorScheme.primaryContainer,
         ) {
             Text(
                 text = "EP ${EpisodeTitleParser.formatEpisodeNumber(demoEpisodeNumber)}",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
@@ -232,30 +234,30 @@ fun EpisodeRowPreview(
 
     @Composable
     fun TitleContent() {
-        if (showTitles) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = Modifier.fillMaxWidth(),
+        // Always render — when titles are off, show "Episode N" as fallback
+        // (matches the actual details page behavior)
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Episode number badge (if position is 'badge')
-                    if (showEpisodeNumber && episodeNumberPosition == "badge") {
-                        EpisodeNumberBadge()
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text(
-                        text = demoTitle,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                // Episode number badge (if position is 'badge')
+                if (showEpisodeNumber && episodeNumberPosition == "badge") {
+                    EpisodeNumberBadge()
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
+                Text(
+                    text = if (showTitles) demoTitle else "Episode ${EpisodeTitleParser.formatEpisodeNumber(demoEpisodeNumber)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }
