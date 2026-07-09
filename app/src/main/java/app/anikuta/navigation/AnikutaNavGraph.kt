@@ -67,10 +67,9 @@ fun AnikutaNavGraph() {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
-                // Floating pill-style bottom nav — both the area behind the pill
-                // AND the pill Surface itself are transparent so content scrolls
-                // under it. The pill is defined by its shadow (8dp elevation) and
-                // the selected nav item's secondaryContainer background.
+                // Floating pill-style bottom nav — the area behind the pill
+                // is completely transparent so the content scrolls under it.
+                // Only the pill Surface itself has a background.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -79,7 +78,7 @@ fun AnikutaNavGraph() {
                 ) {
                     Surface(
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                        color = androidx.compose.ui.graphics.Color.Transparent,
+                        color = MaterialTheme.colorScheme.surfaceContainer,
                         tonalElevation = 0.dp,
                         shadowElevation = 8.dp,
                     ) {
