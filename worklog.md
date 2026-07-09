@@ -397,3 +397,27 @@ Stage Summary:
 - Dynamic theming now uses AniList color (fast, reliable, no image loading)
 - Player UX analysis web page created for user review
 - ntfy notification sent
+
+---
+
+## Session 25 (Comprehensive UI fixes + dynamic theming via MaterialTheme override)
+
+Task ID: P7.5-COMPREHENSIVE-UI-FIXES (Session 25)
+Agent: main (Z.ai Code)
+
+Work Log:
+- EpisodeRowSimple: complete rewrite — date/pills below title (not beside), respects badge/overlay position
+- EpisodeRowRich: no-thumbnail layout — synopsis/date/pills full-width below episode number + title
+- EpisodeRowPreview: same no-thumbnail fixes for consistency
+- Sticky preview spacing: 4dp → 20dp in all 3 subpages
+- Metadata page preview: all display toggles forced ON, only layout applies
+- DynamicColorScheme.toM3ColorScheme(): converts dynamic colors to full M3 ColorScheme
+- DetailScreen: MaterialTheme(colorScheme = themedColorScheme) wrapper — ALL elements auto-themed
+- Banner gradient automatically uses dynamic background color via MaterialTheme override
+- Build #170 (3a9ce15): SUCCESS, ntfy sent
+
+Stage Summary:
+- 8 tasks all completed in one build
+- Dynamic theming now applies to EVERYTHING via MaterialTheme override (cleanest approach)
+- Episode layout without thumbnail now matches live preview
+- Title no longer gets cut off when date/pills are present
