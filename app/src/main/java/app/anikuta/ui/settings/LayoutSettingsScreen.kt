@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
@@ -269,7 +271,7 @@ fun LayoutSettingsScreen(onBack: () -> Unit) {
                         // Dynamic theming toggle
                         val dynamicTheming by prefs.dynamicDetailTheming().stateIn(scope).collectAsState()
                         SwitchSettingsRow(
-                            icon = androidx.compose.material.icons.Icons.Default.Palette,
+                            icon = Icons.Default.Palette,
                             title = "Dynamic theming",
                             subtitle = "Color the detail page based on the anime's cover image",
                             checked = dynamicTheming,
