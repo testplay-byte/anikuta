@@ -146,4 +146,44 @@ class PlayerPreferences(
      */
     fun dynamicDetailTheming(): Preference<Boolean> =
         preferenceStore.getBoolean("pref_dynamic_detail_theming", true)
+
+    // ---- Phase 1: Player mode + combined screen preferences ----
+
+    /**
+     * Default player view mode: "minimized", "fullscreen", or "ask".
+     * When "ask", shows a prompt the first time (then remembers the user's choice
+     * by switching to the selected mode).
+     * Default: "ask".
+     */
+    fun defaultPlayerView(): Preference<String> =
+        preferenceStore.getString("pref_default_player_view", "ask")
+
+    /**
+     * Skip button duration in seconds. Used for the "skip opening" button.
+     * Default: 85 (common anime opening duration).
+     */
+    fun skipButtonDuration(): Preference<Int> =
+        preferenceStore.getInt("pref_skip_button_duration", 85)
+
+    /**
+     * Master toggle for all gesture controls in the player.
+     * Default: true.
+     */
+    fun playerGesturesEnabled(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_player_gestures_enabled", true)
+
+    /**
+     * Auto-hide player controls after inactivity.
+     * Default: true.
+     */
+    fun autoHideControls(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_auto_hide_controls", true)
+
+    /**
+     * Whether the first-time player prompt has been shown.
+     * Used to only show the "choose your default view" dialog once.
+     * Default: false.
+     */
+    fun playerPromptShown(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_player_prompt_shown", false)
 }
