@@ -23,7 +23,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -147,19 +146,20 @@ fun DetailScreen(
             // color and generate variants (darker/lighter/desaturated) for the whole
             // page: background, episode card alternating colors, accent, etc.
             // No Palette API / image loading needed — fast and reliable.
-            val dynamicColors = if (dynamicThemingEnabled) {
-                remember(coverColor, dynamicThemingEnabled) {
-                    generateDynamicScheme(coverColor)
+            //
+            // CRITICAL: both generateDynamicScheme() AND toM3ColorScheme() must be
+            // remembered. If toM3ColorScheme() is called on every recomposition, it
+            // creates a new ColorScheme object each frame → MaterialTheme sees a
+            // different object → forces ALL children to recompose on every scroll
+            // frame → massive jank.
+            val defaultScheme = MaterialTheme.colorScheme
+            val themedColorScheme = remember(coverColor, dynamicThemingEnabled, defaultScheme) {
+                if (dynamicThemingEnabled) {
+                    generateDynamicScheme(coverColor).toM3ColorScheme()
+                } else {
+                    defaultScheme
                 }
-            } else {
-                null
             }
-
-            // When dynamic theming is enabled, override the ENTIRE M3 ColorScheme
-            // so every composable using MaterialTheme.colorScheme.* automatically
-            // gets the dynamic colors — save button, show more, source badge,
-            // episode elements, video picker, loading indicators, etc.
-            val themedColorScheme = dynamicColors?.toM3ColorScheme() ?: MaterialTheme.colorScheme
             val pageBgColor = themedColorScheme.background
 
             MaterialTheme(colorScheme = themedColorScheme) {
@@ -172,7 +172,7 @@ fun DetailScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
-                // Edge-to-edge banner with blur + theme color tint
+                // Edge-to-edge banner with cover image + theme color tint
                 item(key = "header") {
                     DetailHeader(
                         anime = anime,
@@ -524,26 +524,29 @@ private fun DetailHeader(
     onShare: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
-        // Edge-to-edge blurred banner with theme color tint
+        // Edge-to-edge banner with cover image + theme color tint.
+        // NOTE: removed Modifier.blur() — it's extremely expensive (renders to
+        // offscreen buffer + Gaussian blur on every frame) and was a major cause
+        // of scroll jank on the detail page. Instead, we use a heavier semi-
+        // transparent overlay (cover color at 50% alpha) which gives a similar
+        // "faded background" effect at zero performance cost.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(360.dp),  // Taller to truly cover behind status bar
         ) {
-            // Blurred cover image as background
+            // Cover image as background (no blur — performance)
             AsyncImage(
                 model = anime.coverImage.extraLarge ?: anime.coverImage.best(),
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(radius = 8.dp),  // Very subtle blur — just enough to make text readable
+                modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
-            // Theme color tint overlay — very subtle
+            // Theme color tint overlay — heavier to compensate for removed blur
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(coverColor.copy(alpha = 0.2f)),
+                    .background(coverColor.copy(alpha = 0.5f)),
             )
             // Gradient overlay for text readability (bottom fade to background)
             Box(
