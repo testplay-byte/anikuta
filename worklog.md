@@ -344,3 +344,32 @@ Stage Summary:
 - Settings now modular: hub page with live preview + 3 subpages (Display, Layout, Metadata).
 - Live preview now matches the real detail page exactly (same padding, same pill format, same card structure).
 - Gradient uses fixed bright colors (not theme colors) for consistent vibrancy.
+
+---
+
+## Session 23 (Dynamic theming + settings redesign + player UX analysis)
+
+Task ID: P7.5-DYNAMIC-THEMING-AND-SETTINGS (Session 23)
+Agent: main (Z.ai Code)
+
+Work Log:
+- Added live preview to top of all 3 settings subpages (Display, Layout, Metadata)
+- Redesigned Layout subpage into 5 organized sections with clear titles + descriptions
+- Redesigned Metadata subpage: removed data sources + how-it-works, added 3 fetch toggles
+- Added 3 new preferences (fetchMetadataThumbnails/Titles/Summaries) + dynamicDetailTheming
+- Updated DetailViewModel.enrichEpisodesWithMetadata to respect per-field toggles
+- Created DynamicTheming.kt: Palette-based color extraction from cover image
+  - 7 colors: primary, surfaceLow/High, surfaceContainer, background, onSurface, onSurfaceVariant
+  - Loads cover bitmap via OkHttp (downscaled to 100px), extracts via Palette API
+- DetailScreen: LaunchedEffect extracts colors on anime load; page bg + episode card colors use palette
+- EpisodeRow: accepts optional DynamicColorScheme; uses extracted surfaceLow/High for alternating
+- Added palette dependency (androidx.palette:palette-ktx)
+- Build #166 failed (2 missing imports) → fixed → Build #167 SUCCESS
+- Wrote DOCS/PLAN/PLAYER-UX-PLAN.md: comprehensive analysis of current player + 4-phase plan
+
+Stage Summary:
+- Dynamic theming fully implemented and toggleable
+- All settings subpages have live preview at top
+- Metadata fetching is per-field customizable
+- Player UX analysis document ready for user review
+- Build 69a7258 SUCCESS, ntfy sent
