@@ -15,7 +15,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
@@ -131,8 +133,25 @@ class PlayerActivity : ComponentActivity() {
         // http-header-fields on MPV before loadfile.
         val videoHeaders = intent.getStringExtra(EXTRA_VIDEO_HEADERS) ?: ""
 
-        // Landscape + fullscreen + keep screen on.
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        // Read default player view preference
+        val prefs: PlayerPreferences = try { uy.kohesive.injekt.Injekt.get() } catch (e: Exception) { null }!!
+        val defaultView = prefs.defaultPlayerView().get()
+        when (defaultView) {
+            "fullscreen" -> {
+                viewModel.setPlayerMode(PlayerMode.FULLSCREEN)
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+            "minimized" -> {
+                viewModel.setPlayerMode(PlayerMode.MINIMIZED)
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            }
+            else -> {
+                // "ask" — default to minimized for now (prompt will be added in Phase 1.7+)
+                viewModel.setPlayerMode(PlayerMode.MINIMIZED)
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            }
+        }
+
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         enableEdgeToEdge()
         hideSystemBars()
@@ -283,11 +302,35 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun handlePropertyString(property: String, value: String) {
-        // track-list / hwdec changes — minimal player ignores for now.
+        when (property) {
+            "track-list" -> {
+                // Track list changed — load tracks from MPV and push to ViewModel
+                mpvViewRef?.let { view ->
+                    val (subTracks, audioTracks) = view.loadTracks()
+                    viewModel?.setSubtitleTracks(subTracks)
+                    viewModel?.setAudioTracks(audioTracks)
+                    viewModel?.setCurrentSubtitleId(view.sid)
+                    viewModel?.setCurrentAudioId(view.aid)
+                    Log.d(TAG, "Tracks loaded: ${subTracks.size} sub, ${audioTracks.size} audio")
+                }
+            }
+        }
     }
 
     private fun handlePropertyString(property: String) {
-        // Property changed (no value) — minimal player ignores.
+        // Property changed (no value) — track-list is observed as MPV_FORMAT_NONE
+        when (property) {
+            "track-list" -> {
+                mpvViewRef?.let { view ->
+                    val (subTracks, audioTracks) = view.loadTracks()
+                    viewModel?.setSubtitleTracks(subTracks)
+                    viewModel?.setAudioTracks(audioTracks)
+                    viewModel?.setCurrentSubtitleId(view.sid)
+                    viewModel?.setCurrentAudioId(view.aid)
+                    Log.d(TAG, "Tracks loaded (no-value): ${subTracks.size} sub, ${audioTracks.size} audio")
+                }
+            }
+        }
     }
 
     private fun handlePropertyDouble(property: String, value: Double) {
@@ -348,7 +391,16 @@ class PlayerActivity : ComponentActivity() {
 
 /**
  * The Compose screen: hosts the MPV surface + controls overlay.
- * The Activity owns the [viewModel]; this is pure presentation.
+ *
+ * Phase 1.8: Now supports two modes:
+ *  - MINIMIZED: Video at top (16:9), server/version dropdowns, episode list below
+ *  - FULLSCREEN: Video fills screen with overlay controls
+ *
+ * The MPV AndroidView is ALWAYS present (fills the screen). It is never
+ * disposed/recreated during mode transitions — only the overlay layout changes.
+ * MPV handles its own aspect ratio (letterboxing), so in MINIMIZED mode the
+ * bottom portion of the video is covered by an opaque Surface showing the
+ * dropdowns + episodes list.
  */
 @androidx.compose.runtime.Composable
 private fun PlayerScreen(
@@ -359,49 +411,32 @@ private fun PlayerScreen(
     videoHeaders: String = "",
 ) {
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
+    val playerMode by viewModel.playerMode.collectAsState()
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures { viewModel.toggleControls() }
-            },
+            .background(Color.Black),
     ) {
+        // ---- MPV video surface (always present, always fills screen) ----
         AndroidView(
             factory = { ctx ->
                 val view = android.view.LayoutInflater
                     .from(ctx)
                     .inflate(R.layout.mpv_view, null) as AnikutaMPVView
                 mpvView = view
-                onViewCreated(view)  // Pass to Activity for onDestroy
+                onViewCreated(view)
                 val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
-
-                // Always initialize — we destroy() in onDestroy, so MPV is
-                // clean on every open. This matches aniyomi's lifecycle:
-                //   onCreate → initialize() → loadfile
-                //   onDestroy → destroy()
-                view.initialize(
-                    mpvDir.absolutePath,
-                    ctx.cacheDir.absolutePath,
-                    "warn",
-                )
+                view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "warn")
                 PlayerActivity.mpvInitialized = true
                 Log.d("PlayerActivity", "MPV initialized")
-
                 MPVLib.addLogObserver(observer)
                 MPVLib.addObserver(observer)
-
-                // Set HTTP headers before loadfile — many streaming servers
-                // require Referer + User-Agent headers or return 403 Forbidden.
                 if (videoHeaders.isNotBlank()) {
                     MPVLib.setOptionString("http-header-fields", videoHeaders)
-                    Log.d("PlayerActivity", "Set HTTP headers: $videoHeaders")
                 } else {
                     MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
-                    Log.d("PlayerActivity", "Set default User-Agent header")
                 }
-
                 Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
                 MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
                 view
@@ -409,36 +444,121 @@ private fun PlayerScreen(
             modifier = Modifier.fillMaxSize(),
         )
 
-        PlayerControls(
-            viewModel = viewModel,
-            onBack = onBack,
-            onSeekTo = { seconds ->
-                mpvView?.timePos = seconds
-                viewModel.onPositionUpdate(seconds)
-            },
-            onTogglePause = {
-                mpvView?.let { v ->
-                    val now = v.paused ?: true
-                    v.paused = !now
-                    viewModel.onPauseChanged(!now)
-                }
-            },
-            onSeekRelative = { delta ->
-                mpvView?.let { v ->
-                    val cur = v.timePos ?: 0
-                    val target = (cur + delta).coerceAtLeast(0)
-                    v.timePos = target
-                    viewModel.onPositionUpdate(target)
-                }
-            },
-        )
+        // ---- Mode-specific overlay ----
+        when (playerMode) {
+            PlayerMode.MINIMIZED -> {
+                // Portrait: Column with transparent video area at top,
+                // opaque content below covering the rest of the video.
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Video area (transparent — shows MPV video behind)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f),
+                    ) {
+                        app.anikuta.player.controls.MinimizedControls(
+                            viewModel = viewModel,
+                            onTogglePlay = {
+                                mpvView?.let { v ->
+                                    val now = v.paused ?: true
+                                    v.paused = !now
+                                    viewModel.onPauseChanged(!now)
+                                }
+                            },
+                            onSeekRelative = { delta ->
+                                mpvView?.let { v ->
+                                    val cur = v.timePos ?: 0
+                                    val target = (cur + delta).coerceAtLeast(0)
+                                    v.timePos = target
+                                    viewModel.onPositionUpdate(target)
+                                }
+                            },
+                            onMaximize = {
+                                viewModel.setPlayerMode(PlayerMode.FULLSCREEN)
+                            },
+                            onQualityClick = { /* Phase 3 */ },
+                            onSubtitleClick = { /* Phase 3 */ },
+                        )
+                    }
 
-        // ---- Loading/error overlay ----
-        // Shows spinner while loading, error message if loading fails.
-        // MPV fires efEvent with the error message when loading fails
-        // (403, TLS, network error, etc.) — the ViewModel sets ERROR state
-        // immediately, so the user sees the error within 1-2 seconds
-        // instead of spinning forever.
+                    // Below-video content (opaque, covers the rest of the video)
+                    androidx.compose.material3.Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.background,
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            app.anikuta.player.controls.ServerVersionDropdowns(
+                                viewModel = viewModel,
+                                onServerSelected = { /* Phase 3 */ },
+                                onAudioVersionSelected = { /* Phase 3 */ },
+                            )
+                            app.anikuta.player.controls.EpisodeListView(
+                                viewModel = viewModel,
+                                onEpisodeClick = { index ->
+                                    viewModel.setCurrentEpisodeIndex(index)
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+            PlayerMode.FULLSCREEN -> {
+                // Fullscreen: overlay controls on top of video
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures { viewModel.toggleControls() }
+                        },
+                ) {
+                    PlayerControls(
+                        viewModel = viewModel,
+                        onBack = onBack,
+                        onSeekTo = { seconds ->
+                            mpvView?.timePos = seconds
+                            viewModel.onPositionUpdate(seconds)
+                        },
+                        onTogglePause = {
+                            mpvView?.let { v ->
+                                val now = v.paused ?: true
+                                v.paused = !now
+                                viewModel.onPauseChanged(!now)
+                            }
+                        },
+                        onSeekRelative = { delta ->
+                            mpvView?.let { v ->
+                                val cur = v.timePos ?: 0
+                                val target = (cur + delta).coerceAtLeast(0)
+                                v.timePos = target
+                                viewModel.onPositionUpdate(target)
+                            }
+                        },
+                    )
+
+                    // Minimize button (top-right) — switch back to minimized
+                    val controlsVisible by viewModel.controlsVisible.collectAsState()
+                    if (controlsVisible) {
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(16.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                            color = Color.Black.copy(alpha = 0.5f),
+                            onClick = { viewModel.setPlayerMode(PlayerMode.MINIMIZED) },
+                        ) {
+                            androidx.compose.material3.Text(
+                                "▼",
+                                color = Color.White,
+                                modifier = Modifier.padding(8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Loading/error overlay (both modes) ----
         val loadingState by viewModel.loadingState.collectAsState()
         val errorMessage by viewModel.errorMessage.collectAsState()
         if (loadingState != app.anikuta.player.PlayerLoadingState.READY) {
@@ -472,9 +592,7 @@ private fun PlayerScreen(
             }
         }
 
-        // ---- Resume "start over?" overlay (task 6.27, Q8) ----
-        // Shows for 10 seconds after resuming from a saved position.
-        // Auto-dismisses. Tapping → seeks to 0:00.
+        // ---- Resume "start over?" overlay ----
         val showStartOver by viewModel.showStartOverOverlay.collectAsState()
         if (showStartOver) {
             androidx.compose.runtime.LaunchedEffect(Unit) {
