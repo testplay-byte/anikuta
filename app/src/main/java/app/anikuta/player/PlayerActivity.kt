@@ -325,6 +325,10 @@ class PlayerActivity : ComponentActivity() {
                         onEpisodeSwitch = { index ->
                             activity.switchEpisode(index)
                         },
+                        onSwitchServer = { server -> activity.switchServer(server) },
+                        onSwitchAudioVersion = { audio -> activity.switchAudioVersion(audio) },
+                        onSwitchQuality = { video -> activity.switchQuality(video) },
+                        currentVideoUrl = activity.currentVideoUrl,
                         coverColor = coverColor,
                     )
                 }
@@ -1182,6 +1186,11 @@ private fun PlayerScreen(
     onPromptDismiss: () -> Unit = {},
     onModeChange: (PlayerMode) -> Unit = {},
     onEpisodeSwitch: (Int) -> Unit = {},
+    // Parts 2+3+4: switching callbacks (route to Activity methods)
+    onSwitchServer: (String) -> Unit = {},
+    onSwitchAudioVersion: (String) -> Unit = {},
+    onSwitchQuality: (eu.kanade.tachiyomi.animesource.model.Video) -> Unit = {},
+    currentVideoUrl: String = "",
     coverColor: Int = 0,  // ARGB color for dynamic theming (0 = use default theme)
 ) {
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
@@ -1531,8 +1540,8 @@ private fun PlayerScreen(
                     item(key = "dropdowns") {
                         app.anikuta.player.controls.ServerVersionDropdowns(
                             viewModel = viewModel,
-                            onServerSelected = { server -> switchServer(server) },
-                            onAudioVersionSelected = { audio -> switchAudioVersion(audio) },
+                            onServerSelected = { server -> onSwitchServer(server) },
+                            onAudioVersionSelected = { audio -> onSwitchAudioVersion(audio) },
                         )
                     }
 
@@ -1792,7 +1801,7 @@ private fun PlayerScreen(
             onSelect = { video ->
                 Log.d("PlayerActivity", "Quality selected: ${video.videoTitle}")
                 showQualitySheet = false
-                switchQuality(video)
+                onSwitchQuality(video)
             },
             onDismiss = { showQualitySheet = false },
         )
@@ -1836,7 +1845,7 @@ private fun PlayerScreen(
             currentServer = currentServer.ifBlank { "Default" },
             onSelect = { server ->
                 showServerSheet = false
-                switchServer(server)
+                onSwitchServer(server)
             },
             onDismiss = { showServerSheet = false },
         )
