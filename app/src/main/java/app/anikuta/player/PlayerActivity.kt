@@ -49,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +67,7 @@ import app.anikuta.ui.detail.toM3ColorScheme
 import app.anikuta.ui.theme.AnikutaTheme
 import `is`.xyz.mpv.MPVLib
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import uy.kohesive.injekt.api.get
 
@@ -711,7 +713,13 @@ private fun PlayerScreen(
         try { uy.kohesive.injekt.Injekt.get<PlayerPreferences>() }
         catch (e: Exception) { null }
     }
-    val showTopBar = remember { playerPrefs?.showPlayerTopBar()?.get() ?: true }
+    // FIX: Observe showTopBar reactively via stateIn().collectAsState() so the
+    // player UI updates immediately when the user toggles the setting in
+    // PlayerSettingsScreen. Previously this used `remember { ... .get() }`
+    // which only read the value once on first composition and never updated.
+    val prefsScope = rememberCoroutineScope()
+    val showTopBar by (playerPrefs?.showPlayerTopBar()?.stateIn(prefsScope)
+        ?: MutableStateFlow(true)).collectAsState()
 
     // ---- Current episode info (for episode details below video) ----
     val episodeList by viewModel.episodeList.collectAsState()
@@ -790,21 +798,33 @@ private fun PlayerScreen(
                     }
                 }
 
-                // ---- Video area (rounded corners + side padding) ----
+                // ---- Video area (themed background + rounded corners) ----
+                // FIX: Restructured video container to fix multiple issues:
+                //  1. Themed background (was Color.Black) — the side padding
+                //     gap now uses MaterialTheme.colorScheme.background so it
+                //     matches the rest of the player.
+                //  2. statusBarsPadding() when top bar is hidden — video starts
+                //     BELOW the status bar (YouTube-style), never under it.
+                //  3. Single clip (was double-clipped) — prevents the video
+                //     from being cut off at rounded corners.
+                //  4. Removed the inner padding Box that created an ugly black
+                //     border on all sides.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(
-                            horizontal = if (showTopBar) 0.dp else 0.dp,
+                        .then(
+                            if (!showTopBar) Modifier.statusBarsPadding()
+                            else Modifier,
                         )
-                        .aspectRatio(16f / 9f)
-                        .background(Color.Black),
+                        .background(MaterialTheme.colorScheme.background),
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 8.dp)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp)
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color.Black),
                     ) {
                         AndroidView(
                             factory = { ctx ->
@@ -832,7 +852,7 @@ private fun PlayerScreen(
                                 }
                                 view
                             },
-                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
+                            modifier = Modifier.fillMaxSize(),
                         )
 
                         // Controls overlay on top of the video
@@ -863,24 +883,49 @@ private fun PlayerScreen(
                 // ---- Below-video content (scrolls as one unit) ----
                 // Episode details (title, description, date) + server dropdowns + episodes list
                 // All in a single LazyColumn so they scroll together (YouTube-style).
+                //
+                // FIX: Added verticalArrangement = spacedBy(8.dp) for consistent
+                // spacing between episode rows (was missing — episodes were
+                // packed together with no gap, unlike the detail page).
+                // FIX: Episode details now use titleLarge + an episode-number
+                // badge for better prominence. A separator + "Episodes" header
+                // clearly divides the details section from the episode list.
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        horizontal = 12.dp,
+                        bottom = 24.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    // Episode details (title + description + date)
+                    // Episode details (episode-number badge + bigger title + date + description)
                     if (currentEpisode != null) {
                         item(key = "episode_details") {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    .padding(top = 8.dp),
                             ) {
-                                // Episode title
+                                // Episode number badge (prominent)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                ) {
+                                    Text(
+                                        text = "EPISODE ${app.anikuta.ui.detail.EpisodeTitleParser.formatEpisodeNumber(currentEpisode.episode_number)}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                // Episode title (bigger — titleLarge for prominence)
                                 Text(
                                     text = app.anikuta.ui.detail.EpisodeTitleParser.getDisplayTitle(
                                         currentEpisode.name, currentEpisode.episode_number,
                                     ),
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
                                 )
@@ -896,10 +941,10 @@ private fun PlayerScreen(
                                 // Episode description
                                 val summaryText = currentEpisode.summary
                                 if (!summaryText.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
                                     Text(
                                         text = summaryText,
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 3,
                                         overflow = TextOverflow.Ellipsis,
@@ -918,10 +963,28 @@ private fun PlayerScreen(
                         )
                     }
 
-                    // Episodes list (no longer a separate LazyColumn — items added directly)
+                    // Separator between details section and episodes list
+                    item(key = "separator") {
+                        androidx.compose.material3.HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                            thickness = 1.dp,
+                        )
+                    }
+
+                    // Episodes section header
+                    item(key = "episodes_header") {
+                        Text(
+                            text = "Episodes",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        )
+                    }
+
+                    // Episodes list (items added directly — scrolls with the details)
                     itemsIndexed(episodeList, key = { _, ep -> "ep_${ep.url}" }) { index, episode ->
-                        // Use the same PlayerEpisodeRow from EpisodeListView
-                        // but rendered inline (not in a separate LazyColumn)
                         app.anikuta.player.controls.PlayerEpisodeRowInline(
                             episode = episode,
                             index = index,

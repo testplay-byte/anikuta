@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -81,26 +80,34 @@ fun MinimizedControls(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .aspectRatio(16f / 9f)
+            .fillMaxSize()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
             ) { viewModel.toggleControls() },
     ) {
-        // Gradient overlay for control readability (always present, subtle)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = 0.3f),
-                        0.3f to Color.Transparent,
-                        0.7f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.5f),
+        // Gradient overlay for control readability — ONLY visible when controls
+        // are shown. Previously this was always-on, creating an ugly permanent
+        // dark shadow at the top (0.3 alpha) and bottom (0.5 alpha) of the video
+        // even when no controls were displayed.
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.35f),
+                            0.25f to Color.Transparent,
+                            0.65f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = 0.55f),
+                        ),
                     ),
-                ),
-        )
+            )
+        }
 
         // Loading / switching episode indicator
         if (buffering || loadingState == PlayerLoadingState.LOADING || isSwitchingEpisode) {

@@ -1,6 +1,7 @@
 package app.anikuta.player.controls
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -189,11 +190,28 @@ private fun PlayerEpisodeRow(
         MaterialTheme.colorScheme.surfaceContainerHigh
     }
 
-    // Highlight current episode
+    // FIX: Highlight current episode with a prominent border + full-strength
+    // primaryContainer background. Previously used primaryContainer.copy(
+    // alpha = 0.5f) which was barely noticeable. Now the currently-playing
+    // row has a 2dp primary-colored border + tonal elevation for a clear
+    // "glow" effect that's immediately distinguishable from other rows.
     val finalCardColor = if (isCurrent) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        MaterialTheme.colorScheme.primaryContainer
     } else {
         cardColor
+    }
+    val borderColor = if (isCurrent) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        Color.Transparent
+    }
+    val borderWidth = if (isCurrent) 2.dp else 0.dp
+    val cardModifier = if (isCurrent) {
+        Modifier
+            .fillMaxWidth()
+            .border(borderWidth, borderColor, RoundedCornerShape(12.dp))
+    } else {
+        Modifier.fillMaxWidth()
     }
 
     val (thumbWidth, thumbHeight) = when (thumbnailSize) {
@@ -203,9 +221,11 @@ private fun PlayerEpisodeRow(
     }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = cardModifier,
         shape = RoundedCornerShape(12.dp),
         color = finalCardColor,
+        tonalElevation = if (isCurrent) 3.dp else 0.dp,
+        shadowElevation = if (isCurrent) 4.dp else 0.dp,
         onClick = onClick,
     ) {
         if (isRich) {

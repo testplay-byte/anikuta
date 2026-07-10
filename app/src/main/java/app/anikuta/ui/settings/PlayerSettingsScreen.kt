@@ -39,6 +39,11 @@ fun PlayerSettingsScreen(
     val skipDuration by prefs.skipButtonDuration().stateIn(scope).collectAsState()
     val gesturesEnabled by prefs.playerGesturesEnabled().stateIn(scope).collectAsState()
     val autoHide by prefs.autoHideControls().stateIn(scope).collectAsState()
+    // FIX: showTopBar must be observed via stateIn() so the Switch recomposes
+    // immediately when toggled. Previously it used prefs.showPlayerTopBar().get()
+    // which is read once and never updates — causing the toggle to appear "stuck"
+    // until another control triggered a recomposition.
+    val showTopBar by prefs.showPlayerTopBar().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Player", onBack = onBack) {
         LazyColumn(
@@ -143,7 +148,7 @@ fun PlayerSettingsScreen(
                         icon = Icons.Default.Visibility,
                         title = "Show top bar",
                         subtitle = "Show the floating navigation bar in minimized mode",
-                        checked = prefs.showPlayerTopBar().get(),
+                        checked = showTopBar,
                         onCheckedChange = { prefs.showPlayerTopBar().set(it) },
                     )
                     HorizontalDivider()
