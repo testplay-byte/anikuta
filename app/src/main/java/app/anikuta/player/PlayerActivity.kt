@@ -188,7 +188,10 @@ class PlayerActivity : ComponentActivity() {
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         enableEdgeToEdge()
-        hideSystemBars()
+        // Only hide system bars in fullscreen mode — minimized mode shows the status bar
+        if (viewModel?.playerMode?.value == PlayerMode.FULLSCREEN) {
+            hideSystemBars()
+        }
 
         observer = PlayerObserver(object : PlayerObserver.Callback {
             override fun onEvent(eventId: Int) = runOnUiThread { handleEvent(eventId) }
@@ -394,11 +397,26 @@ class PlayerActivity : ComponentActivity() {
      */
     fun handleModeChange(mode: PlayerMode) {
         viewModel?.setPlayerMode(mode)
-        requestedOrientation = when (mode) {
-            PlayerMode.FULLSCREEN -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            PlayerMode.MINIMIZED -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        when (mode) {
+            PlayerMode.FULLSCREEN -> {
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                hideSystemBars()
+            }
+            PlayerMode.MINIMIZED -> {
+                showSystemBars()
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            }
         }
         Log.d(TAG, "Mode changed to: $mode")
+    }
+
+    @Suppress("DEPRECATION")
+    private fun showSystemBars() {
+        window.decorView.systemUiVisibility = (
+            android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            )
     }
 
     /**
@@ -579,16 +597,14 @@ private fun PlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        // ---- MPV video surface (always present, resizes based on mode) ----
-        // In MINIMIZED mode: fills only the 16:9 video area at the top
-        // In FULLSCREEN mode: fills the entire screen
-        // This prevents the video from being centered behind the opaque content surface
-        val mpvModifier = when (playerMode) {
-            PlayerMode.MINIMIZED -> Modifier.fillMaxWidth().aspectRatio(16f / 9f)
-            PlayerMode.FULLSCREEN -> Modifier.fillMaxSize()
-        }
+        // ---- MPV video surface (always present, fills entire screen) ----
+        // The AndroidView fills the ENTIRE screen. In MINIMIZED mode, the
+        // Crossfade overlay (app bar + content) sits on top and covers the
+        // parts of the video that shouldn't be visible. The video area Box
+        // in the minimized layout has a transparent background so the MPV
+        // view shows through.
         AndroidView(
             factory = { ctx ->
                 val view = android.view.LayoutInflater
@@ -607,9 +623,6 @@ private fun PlayerScreen(
                 } else {
                     MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                 }
-                // Only load the video immediately if the prompt is NOT showing.
-                // If the prompt is showing, the video will be loaded after the
-                // prompt is resolved (via loadVideoIfPending()).
                 if (!shouldDelayVideoLoad) {
                     Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
                     MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
@@ -618,7 +631,7 @@ private fun PlayerScreen(
                 }
                 view
             },
-            modifier = mpvModifier,
+            modifier = Modifier.fillMaxSize(),
         )
 
         // ---- Mode-specific overlay (Crossfade for smooth transition) ----
@@ -652,8 +665,6 @@ private fun PlayerScreen(
                         onDragEnd = {},
                         onDragCancel = {},
                     ) { _, dragAmount ->
-                        // Swipe up (negative dragAmount) → fullscreen
-                        // Swipe down (positive dragAmount) → minimized
                         if (dragAmount < -80f && playerMode == PlayerMode.MINIMIZED) {
                             onModeChange(PlayerMode.FULLSCREEN)
                         } else if (dragAmount > 80f && playerMode == PlayerMode.FULLSCREEN) {
@@ -663,10 +674,7 @@ private fun PlayerScreen(
                 },
         )
 
-        // Lock button — shown when controls are locked AND lock button is visible.
-        // Pattern from reference: no parent consuming taps. The lock button is
-        // a standalone overlay. Tapping anywhere else on the screen is handled
-        // by the gesture handler (which checks controlsLocked).
+        // Lock button (standalone overlay — no parent consuming taps)
         if (controlsLocked && lockButtonVisible) {
             Surface(
                 shape = androidx.compose.foundation.shape.CircleShape,
@@ -695,47 +703,68 @@ private fun PlayerScreen(
         ) { mode ->
             when (mode) {
                 PlayerMode.MINIMIZED -> {
-                    // Portrait: Top app bar + video area + content below
+                    // Portrait: Floating pill top bar + video area + content below
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                     ) {
-                        // ---- Top app bar (back + AniKuta title + settings) ----
-                        androidx.compose.material3.TopAppBar(
-                            title = {
-                                Text(
-                                    "AniKuta",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            },
-                            navigationIcon = {
-                                androidx.compose.material3.IconButton(onClick = onBack) {
+                        // ---- Floating pill-shaped top bar ----
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            // Back button (pill-shaped)
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = Modifier.clickable { onBack() },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back",
+                                        modifier = Modifier.size(20.dp),
                                     )
                                 }
-                            },
-                            actions = {
-                                androidx.compose.material3.IconButton(onClick = { /* Player settings */ }) {
+                            }
+                            // Title (center)
+                            Text(
+                                "AniKuta",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                            )
+                            // Settings button (pill-shaped)
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = Modifier.clickable { /* Player settings */ },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
                                     Icon(
                                         Icons.Default.Settings,
                                         contentDescription = "Settings",
+                                        modifier = Modifier.size(20.dp),
                                     )
                                 }
-                            },
-                            colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                            ),
-                        )
-                        // ---- Video area (16:9, with controls overlay) ----
+                            }
+                        }
+                        // ---- Video area (16:9, transparent — shows MPV video behind) ----
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(16f / 9f)
-                                .background(Color.Black),
+                                .aspectRatio(16f / 9f),
                         ) {
                             app.anikuta.player.controls.MinimizedControls(
                                 viewModel = viewModel,
@@ -783,7 +812,6 @@ private fun PlayerScreen(
                     // Fullscreen: gesture handler + controls overlay
                     if (!controlsLocked) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                            // Gesture handler (Phase 4) — handles all touch input
                             app.anikuta.player.controls.PlayerGestureHandler(
                                 viewModel = viewModel,
                                 onSeekRelative = { delta ->
@@ -801,7 +829,6 @@ private fun PlayerScreen(
                                 onToggleControls = { viewModel.toggleControls() },
                             )
 
-                            // Controls overlay (on top of gesture handler)
                             app.anikuta.player.controls.FullscreenControls(
                                 viewModel = viewModel,
                                 onBack = onBack,
@@ -841,11 +868,10 @@ private fun PlayerScreen(
                                     }
                                 },
                                 onPiPClick = { /* Phase 6 */ },
-                                onRotateClick = { /* Phase 4 — rotation toggle */ },
+                                onRotateClick = { /* Phase 4 */ },
                             )
                         }
                     } else {
-                        // Locked: only show lock button on tap
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -861,8 +887,6 @@ private fun PlayerScreen(
         }
 
         // ---- Loading/error overlay ----
-        // In MINIMIZED mode: only covers the video area (16:9 at top)
-        // In FULLSCREEN mode: covers the entire screen
         val loadingState by viewModel.loadingState.collectAsState()
         val errorMessage by viewModel.errorMessage.collectAsState()
         if (loadingState != app.anikuta.player.PlayerLoadingState.READY) {
@@ -879,23 +903,23 @@ private fun PlayerScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     if (loadingState == app.anikuta.player.PlayerLoadingState.ERROR) {
-                        androidx.compose.material3.Text("⚠️", color = Color.White, style = androidx.compose.material3.MaterialTheme.typography.headlineLarge)
-                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
-                        androidx.compose.material3.Text(
+                        Text("⚠️", color = Color.White, style = MaterialTheme.typography.headlineLarge)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
                             errorMessage ?: "Video failed to load.",
                             color = Color.White,
-                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodyMedium,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             modifier = Modifier.padding(horizontal = 32.dp),
                         )
-                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
                         androidx.compose.material3.Button(onClick = onBack) {
-                            androidx.compose.material3.Text("Go Back")
+                            Text("Go Back")
                         }
                     } else {
                         androidx.compose.material3.CircularProgressIndicator(color = Color.White)
-                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(12.dp))
-                        androidx.compose.material3.Text("Loading…", color = Color.White, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Loading…", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
@@ -904,7 +928,7 @@ private fun PlayerScreen(
         // ---- Resume "start over?" overlay ----
         val showStartOver by viewModel.showStartOverOverlay.collectAsState()
         if (showStartOver) {
-            androidx.compose.runtime.LaunchedEffect(Unit) {
+            LaunchedEffect(Unit) {
                 kotlinx.coroutines.delay(10_000)
                 viewModel.dismissStartOverOverlay()
             }
@@ -917,13 +941,13 @@ private fun PlayerScreen(
                         viewModel.onPositionUpdate(0)
                         viewModel.dismissStartOverOverlay()
                     },
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = Color.Black.copy(alpha = 0.8f),
             ) {
-                androidx.compose.material3.Text(
+                Text(
                     "Do you want to start over? Click to start over.",
                     color = Color.White,
-                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
@@ -937,20 +961,18 @@ private fun PlayerScreen(
             )
         }
 
-        // ---- Selection sheets (Phase 3.7) ----
+        // ---- Selection sheets ----
         if (showQualitySheet) {
             app.anikuta.player.controls.sheets.QualitySheet(
                 videos = availableVideos.value,
                 currentVideoUrl = viewModel.videoUrl,
                 onSelect = { video ->
-                    // Reload video at new quality — Phase 3 wiring
                     Log.d("PlayerActivity", "Quality selected: ${video.videoTitle}")
                 },
                 onDismiss = { showQualitySheet = false },
             )
         }
         if (showSubtitleSheet) {
-            // Refresh tracks when sheet opens (MPV may have loaded tracks since last refresh)
             mpvView?.let { view ->
                 val (subTracks, audioTracks) = view.loadTracks()
                 viewModel.setSubtitleTracks(subTracks)
@@ -963,13 +985,11 @@ private fun PlayerScreen(
                 onSelect = { trackId ->
                     mpvView?.sid = trackId
                     viewModel.setCurrentSubtitleId(trackId)
-                    Log.d("PlayerActivity", "Subtitle track: $trackId")
                 },
                 onDismiss = { showSubtitleSheet = false },
             )
         }
         if (showAudioSheet) {
-            // Refresh tracks when sheet opens
             mpvView?.let { view ->
                 val (subTracks, audioTracks) = view.loadTracks()
                 viewModel.setSubtitleTracks(subTracks)
@@ -981,7 +1001,6 @@ private fun PlayerScreen(
                 onSelect = { trackId ->
                     mpvView?.aid = trackId
                     viewModel.setCurrentAudioId(trackId)
-                    Log.d("PlayerActivity", "Audio track: $trackId")
                 },
                 onDismiss = { showAudioSheet = false },
             )
@@ -992,7 +1011,6 @@ private fun PlayerScreen(
                 currentServer = currentServer.ifBlank { "Default" },
                 onSelect = { server ->
                     viewModel.setCurrentServer(server)
-                    Log.d("PlayerActivity", "Server: $server")
                 },
                 onDismiss = { showServerSheet = false },
             )
@@ -1001,24 +1019,21 @@ private fun PlayerScreen(
             app.anikuta.player.controls.sheets.SpeedSheet(
                 currentSpeed = currentSpeed,
                 onSelect = { speed ->
-                    mpvView?.let { v ->
-                        try {
-                            `is`.xyz.mpv.MPVLib.setPropertyDouble("speed", speed.toDouble())
-                        } catch (e: Exception) {
-                            Log.w("PlayerActivity", "Could not set speed", e)
-                        }
+                    try {
+                        `is`.xyz.mpv.MPVLib.setPropertyDouble("speed", speed.toDouble())
+                    } catch (e: Exception) {
+                        Log.w("PlayerActivity", "Could not set speed", e)
                     }
-                    Log.d("PlayerActivity", "Speed: $speed")
                 },
                 onDismiss = { showSpeedSheet = false },
             )
         }
         if (showMoreSheet) {
             app.anikuta.player.controls.sheets.MoreOptionsSheet(
-                onSubtitleDelay = { /* Phase 5 */ },
-                onAudioDelay = { /* Phase 5 */ },
-                onScreenshot = { /* Phase 5 */ },
-                onSleepTimer = { /* Phase 5 */ },
+                onSubtitleDelay = { },
+                onAudioDelay = { },
+                onScreenshot = { },
+                onSleepTimer = { },
                 onDismiss = { showMoreSheet = false },
             )
         }
