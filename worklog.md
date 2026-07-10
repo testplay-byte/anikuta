@@ -442,3 +442,24 @@ Stage Summary:
 - Player has: minimized + fullscreen modes, smooth transitions, lock, auto-hide,
   all selection sheets, full gesture support, pinch zoom with magnetic resistance
 - Ready for Phase 5 (Subtitle Customization) + Phase 6 (Polish)
+
+---
+
+## Session 29 (Phase 5 + Phase 6 + final verification)
+
+Task ID: PLAYER-PHASES-5-6 (Session 29)
+Agent: main (Z.ai Code)
+
+Work Log:
+- Phase 5: 15 subtitle preferences + applySubtitlePreferences() + SubtitleSettingsPanel + live preview
+- Phase 6: MpvConfigManager (mpv.conf/input.conf) + PiP mode + PlayerMediaSession + release-debuggable variant
+- Build #199 failed (CI SDK issue, not code) → rebuilt → Build #200 SUCCESS
+- 3 final completion notifications sent
+- Full verification: 19 player files, ~4,420 lines
+
+Stage Summary:
+- ALL 6 PHASES COMPLETE
+- Player has: minimized + fullscreen modes, smooth transitions, lock, auto-hide,
+  all selection sheets (6), full gesture support, pinch zoom with magnetic resistance,
+  subtitle customization (15 prefs + live preview), MPV config files, PiP, media session
+- Ready for full on-device testing
