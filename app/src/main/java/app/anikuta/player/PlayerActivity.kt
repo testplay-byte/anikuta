@@ -656,33 +656,23 @@ private fun PlayerScreen(
 
         // Lock button overlay (when controls are locked)
         if (controlsLocked && lockButtonVisible) {
-            // Full-screen tap area — tapping anywhere shows the lock button
-            // (the lock button itself handles the unlock tap separately)
+            // Use clickable (not pointerInput) — clickable properly dispatches
+            // to children: if the lock button is tapped, only the button's
+            // clickable fires, not the parent's.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            // Tapping the screen just keeps the lock button visible
-                            // (resets the auto-hide timer)
-                            viewModel.showLockButton()
-                        }
-                    },
+                    .clickable { viewModel.showLockButton() },
                 contentAlignment = Alignment.TopStart,
             ) {
-                // Lock/unlock button — aligned to top-left, uses proper icon
+                // Lock/unlock button — top-left, Material 3 icon
                 Surface(
                     shape = androidx.compose.foundation.shape.CircleShape,
                     color = Color.Black.copy(alpha = 0.6f),
                     modifier = Modifier
                         .padding(start = 16.dp, top = 16.dp)
                         .size(44.dp)
-                        .pointerInput(Unit) {
-                            // Separate pointerInput so this doesn't get consumed by the parent
-                            detectTapGestures {
-                                viewModel.unlockControls()
-                            }
-                        },
+                        .clickable { viewModel.unlockControls() },
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
@@ -703,12 +693,12 @@ private fun PlayerScreen(
         ) { mode ->
             when (mode) {
                 PlayerMode.MINIMIZED -> {
-                    // Portrait: Column with status bar padding, transparent video area at top,
-                    // opaque content below covering the rest of the video.
+                    // Portrait: Column with top padding for status bar + rounded corners,
+                    // transparent video area at top, opaque content below.
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .statusBarsPadding(),
+                            .padding(top = 24.dp),  // Gap for status bar + rounded corners
                     ) {
                         // Video area (transparent — shows MPV video behind)
                         Box(
@@ -927,6 +917,14 @@ private fun PlayerScreen(
             )
         }
         if (showSubtitleSheet) {
+            // Refresh tracks when sheet opens (MPV may have loaded tracks since last refresh)
+            mpvView?.let { view ->
+                val (subTracks, audioTracks) = view.loadTracks()
+                viewModel.setSubtitleTracks(subTracks)
+                viewModel.setAudioTracks(audioTracks)
+                viewModel.setCurrentSubtitleId(view.sid)
+                viewModel.setCurrentAudioId(view.aid)
+            }
             app.anikuta.player.controls.sheets.SubtitleTracksSheet(
                 viewModel = viewModel,
                 onSelect = { trackId ->
@@ -938,6 +936,13 @@ private fun PlayerScreen(
             )
         }
         if (showAudioSheet) {
+            // Refresh tracks when sheet opens
+            mpvView?.let { view ->
+                val (subTracks, audioTracks) = view.loadTracks()
+                viewModel.setSubtitleTracks(subTracks)
+                viewModel.setAudioTracks(audioTracks)
+                viewModel.setCurrentAudioId(view.aid)
+            }
             app.anikuta.player.controls.sheets.AudioTracksSheet(
                 viewModel = viewModel,
                 onSelect = { trackId ->
