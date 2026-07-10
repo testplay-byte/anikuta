@@ -3,6 +3,7 @@ package app.anikuta.player
 import android.content.Context
 import android.os.Build
 import android.util.AttributeSet
+import android.util.Log
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPVLib
 import uy.kohesive.injekt.Injekt
@@ -194,6 +195,46 @@ class AnikutaMPVView(
         MPVLib.setOptionString("volume-max", (playerPreferences.volumeBoostCap().get() + 100).toString())
         // Workaround for https://github.com/mpv-player/mpv/issues/14651
         MPVLib.setOptionString("vd-lavc-film-grain", "cpu")
+
+        // ---- Phase 5.2: Subtitle preferences → MPV properties ----
+        applySubtitlePreferences()
+    }
+
+    /**
+     * Apply subtitle preferences to MPV in real-time.
+     * Called from initOptions() and can be called again when preferences change.
+     */
+    fun applySubtitlePreferences() {
+        try {
+            MPVLib.setOptionString("sub-font", playerPreferences.subtitleFont().get())
+            MPVLib.setOptionString("sub-font-size", playerPreferences.subtitleFontSize().get().toString())
+            MPVLib.setOptionString("sub-scale", playerPreferences.subtitleFontScale().get().toString())
+            MPVLib.setOptionString("sub-border-size", playerPreferences.subtitleBorderSize().get().toString())
+            MPVLib.setOptionString("sub-bold", if (playerPreferences.boldSubtitles().get()) "yes" else "no")
+            MPVLib.setOptionString("sub-italic", if (playerPreferences.italicSubtitles().get()) "yes" else "no")
+            MPVLib.setOptionString("sub-color", colorToHex(playerPreferences.textColorSubtitles().get()))
+            MPVLib.setOptionString("sub-border-color", colorToHex(playerPreferences.borderColorSubtitles().get()))
+            MPVLib.setOptionString("sub-back-color", colorToHex(playerPreferences.backgroundColorSubtitles().get()))
+            MPVLib.setOptionString("sub-pos", playerPreferences.subtitlePosition().get().toString())
+            MPVLib.setOptionString("sub-shadow-offset", playerPreferences.subtitleShadowOffset().get().toString())
+            if (playerPreferences.overrideSubsASS().get()) {
+                MPVLib.setOptionString("sub-ass-override", "force")
+            } else {
+                MPVLib.setOptionString("sub-ass-override", "no")
+            }
+            MPVLib.setOptionString("sub-delay", (playerPreferences.subtitlesDelay().get() / 1000.0).toString())
+        } catch (e: Exception) {
+            Log.w("AnikutaMPVView", "Could not apply subtitle preferences", e)
+        }
+    }
+
+    /** Convert an ARGB int to an MPV hex color string (e.g., "#FFFFFFFF" for white). */
+    private fun colorToHex(color: Int): String {
+        val a = (color shr 24) and 0xFF
+        val r = (color shr 16) and 0xFF
+        val g = (color shr 8) and 0xFF
+        val b = color and 0xFF
+        return String.format("#%02X%02X%02X%02X", a, r, g, b)
     }
 
     override fun observeProperties() {
