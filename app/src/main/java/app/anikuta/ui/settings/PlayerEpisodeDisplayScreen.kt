@@ -3,8 +3,10 @@ package app.anikuta.ui.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -287,5 +289,3 @@ fun PlayerEpisodeDisplayScreen(onBack: () -> Unit) {
         }
     }
 }
-
-private fun Modifier.height(dp: androidx.compose.ui.unit.Dp) = this.then(androidx.compose.foundation.layout.height(dp))

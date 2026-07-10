@@ -257,6 +257,9 @@ class PlayerActivity : ComponentActivity() {
                         onModeChange = { mode ->
                             activity.handleModeChange(mode)
                         },
+                        onEpisodeSwitch = { index ->
+                            activity.switchEpisode(index)
+                        },
                     )
                 }
             }
@@ -641,6 +644,7 @@ private fun PlayerScreen(
     onPromptSelect: (String, Boolean) -> Unit = { _, _ -> },
     onPromptDismiss: () -> Unit = {},
     onModeChange: (PlayerMode) -> Unit = {},
+    onEpisodeSwitch: (Int) -> Unit = {},
 ) {
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
     val playerMode by viewModel.playerMode.collectAsState()
@@ -822,8 +826,7 @@ private fun PlayerScreen(
                     app.anikuta.player.controls.EpisodeListView(
                         viewModel = viewModel,
                         onEpisodeClick = { index ->
-                            // Switch episode: pause current, load new video, play
-                            switchEpisode(index)
+                            onEpisodeSwitch(index)
                         },
                         modifier = Modifier.weight(1f),
                     )
