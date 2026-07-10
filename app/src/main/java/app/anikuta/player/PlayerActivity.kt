@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -59,6 +60,7 @@ import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.launch
 import uy.kohesive.injekt.api.get
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 /**
  * ANI-KUTA PlayerActivity — hosts the MPV video player.
  *
@@ -710,7 +712,7 @@ private fun PlayerScreen(
                             navigationIcon = {
                                 androidx.compose.material3.IconButton(onClick = onBack) {
                                     Icon(
-                                        androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                                        Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back",
                                     )
                                 }
@@ -718,7 +720,7 @@ private fun PlayerScreen(
                             actions = {
                                 androidx.compose.material3.IconButton(onClick = { /* Player settings */ }) {
                                     Icon(
-                                        androidx.compose.material.icons.Icons.Default.Settings,
+                                        Icons.Default.Settings,
                                         contentDescription = "Settings",
                                     )
                                 }
