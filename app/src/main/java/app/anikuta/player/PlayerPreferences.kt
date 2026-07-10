@@ -179,4 +179,58 @@ class PlayerPreferences(
      */
     fun playerPromptShown(): Preference<Boolean> =
         preferenceStore.getBoolean("pref_player_prompt_shown", false)
+
+    // ---- Phase 5: Subtitle customization preferences ----
+
+    /** Subtitle font family. Default: "Sans Serif". */
+    fun subtitleFont(): Preference<String> =
+        preferenceStore.getString("pref_subtitle_font", "Sans Serif")
+
+    /** Subtitle font size (MPV sub-font-size). Default: 55. */
+    fun subtitleFontSize(): Preference<Int> =
+        preferenceStore.getInt("pref_subtitle_font_size", 55)
+
+    /** Subtitle font scale multiplier. Default: 1.0. */
+    fun subtitleFontScale(): Preference<Float> =
+        preferenceStore.getFloat("pref_sub_scale", 1f)
+
+    /** Subtitle border/outline size. Default: 3. */
+    fun subtitleBorderSize(): Preference<Int> =
+        preferenceStore.getInt("pref_sub_border_size", 3)
+
+    /** Bold subtitles. Default: false. */
+    fun boldSubtitles(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_bold_subtitles", false)
+
+    /** Italic subtitles. Default: false. */
+    fun italicSubtitles(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_italic_subtitles", false)
+
+    /** Subtitle text color (ARGB int). Default: White. */
+    fun textColorSubtitles(): Preference<Int> =
+        preferenceStore.getInt("pref_text_color_subtitles", 0xFFFFFFFF.toInt())
+
+    /** Subtitle border/outline color (ARGB int). Default: Black. */
+    fun borderColorSubtitles(): Preference<Int> =
+        preferenceStore.getInt("pref_border_color_subtitles", 0xFF000000.toInt())
+
+    /** Subtitle background color (ARGB int). Default: transparent. */
+    fun backgroundColorSubtitles(): Preference<Int> =
+        preferenceStore.getInt("pref_background_color_subtitles", 0x00000000)
+
+    /** Subtitle vertical position (0-100, 100 = bottom). Default: 100. */
+    fun subtitlePosition(): Preference<Int> =
+        preferenceStore.getInt("pref_sub_pos", 100)
+
+    /** Subtitle shadow offset. Default: 0. */
+    fun subtitleShadowOffset(): Preference<Int> =
+        preferenceStore.getInt("pref_sub_shadow_offset", 0)
+
+    /** Override ASS/SSA subtitle styling. Default: false. */
+    fun overrideSubsASS(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_override_subtitles_ass", false)
+
+    /** Subtitle delay in milliseconds (can be negative). Default: 0. */
+    fun subtitlesDelay(): Preference<Int> =
+        preferenceStore.getInt("pref_subtitles_delay", 0)
 }
