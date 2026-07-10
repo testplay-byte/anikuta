@@ -35,6 +35,17 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // Phase 6.4: Release build with debugging enabled for performance testing.
+        // Has R8 optimization (no minification yet) but allows debugging.
+        // This lets us test real performance without the debug-build overhead.
+        create("release-debuggable") {
+            isMinifyEnabled = false
+            isDebuggable = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
     }
 
     compileOptions {
@@ -102,6 +113,9 @@ dependencies {
     implementation(platform(libs.coil.bom))
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+
+    // Media session (notification controls)
+    implementation(libs.androidx.media)
 
     implementation(libs.mpv.lib)
     // FFmpeg native libraries required by libmpv.so. libmpv.so is dynamically

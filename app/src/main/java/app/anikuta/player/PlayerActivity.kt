@@ -3,6 +3,9 @@ package app.anikuta.player
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.app.PictureInPictureParams
+import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
@@ -401,6 +404,41 @@ class PlayerActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    /**
+     * Phase 6.2 — Enter Picture-in-Picture mode when user leaves the app.
+     * Called automatically when the user presses Home while video is playing.
+     */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val params = PictureInPictureParams.Builder()
+                    .setAspectRatio(android.util.Rational(16, 9))
+                    .build()
+                enterPictureInPictureMode(params)
+                Log.d(TAG, "Entered PiP mode")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not enter PiP mode", e)
+            }
+        }
+    }
+
+    /**
+     * Phase 6.2 — Manually enter PiP mode (from the PiP button in fullscreen).
+     */
+    fun enterPiP() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val params = PictureInPictureParams.Builder()
+                    .setAspectRatio(android.util.Rational(16, 9))
+                    .build()
+                enterPictureInPictureMode(params)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not enter PiP mode", e)
+            }
         }
     }
 
