@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.anikuta.R
-import app.anikuta.player.controls.PlayerControls
 import app.anikuta.ui.theme.AnikutaTheme
 import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.launch
@@ -123,8 +122,10 @@ class PlayerActivity : ComponentActivity() {
     @Volatile private var mpvViewRef: AnikutaMPVView? = null
     /** Player preferences — used for mode switching + first-time prompt. */
     private var playerPrefs: PlayerPreferences? = null
-    /** Whether to show the first-time prompt on launch. */
-    @Volatile private var showFirstTimePrompt: Boolean = false
+    /** Whether to show the first-time prompt on launch (read once, passed to Compose as state). */
+    private var showFirstTimePrompt: Boolean = false
+    /** Whether the video has been loaded yet (delayed if prompt is showing). */
+    @Volatile private var videoLoaded: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -190,9 +191,11 @@ class PlayerActivity : ComponentActivity() {
         })
 
         val vm = viewModel!!
-        val promptVisible = showFirstTimePrompt
+        val initialPrompt = showFirstTimePrompt
         val activity = this
         setContent {
+            // Compose state for the prompt — changes trigger recomposition
+            var promptVisible by remember { mutableStateOf(initialPrompt) }
             AnikutaTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
                     PlayerScreen(
@@ -202,11 +205,14 @@ class PlayerActivity : ComponentActivity() {
                         onViewCreated = { view -> mpvViewRef = view },
                         videoHeaders = videoHeaders,
                         showFirstTimePrompt = promptVisible,
+                        shouldDelayVideoLoad = promptVisible,  // Don't load video while prompt is showing
                         onPromptSelect = { view, remember ->
                             activity.handleFirstTimePrompt(view, remember)
+                            promptVisible = false
                         },
                         onPromptDismiss = {
-                            showFirstTimePrompt = false
+                            promptVisible = false
+                            activity.loadVideoIfPending()  // Load video if user skips prompt
                         },
                         onModeChange = { mode ->
                             activity.handleModeChange(mode)
@@ -385,7 +391,8 @@ class PlayerActivity : ComponentActivity() {
 
     /**
      * Handle first-time prompt selection.
-     * Saves the preference and switches to the selected mode.
+     * Saves the preference, switches to the selected mode, and loads the video
+     * (which was delayed until the prompt was resolved).
      */
     fun handleFirstTimePrompt(view: String, remember: Boolean) {
         showFirstTimePrompt = false
@@ -397,7 +404,24 @@ class PlayerActivity : ComponentActivity() {
             "fullscreen" -> handleModeChange(PlayerMode.FULLSCREEN)
             "minimized" -> handleModeChange(PlayerMode.MINIMIZED)
         }
+        // Now that the prompt is resolved, load the video if it hasn't been loaded yet
+        loadVideoIfPending()
         Log.d(TAG, "First-time prompt: view=$view, remember=$remember")
+    }
+
+    /**
+     * Load the video if it hasn't been loaded yet (delayed by the first-time prompt).
+     */
+    fun loadVideoIfPending() {
+        if (videoLoaded) return
+        videoLoaded = true
+        try {
+            val url = viewModel?.videoUrl ?: return
+            Log.d(TAG, "Loading video (after prompt): $url")
+            MPVLib.command(arrayOf("loadfile", url, "replace"))
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not load video", e)
+        }
     }
 
     private fun hideSystemBars() {
@@ -508,6 +532,7 @@ private fun PlayerScreen(
     onViewCreated: (AnikutaMPVView) -> Unit = {},
     videoHeaders: String = "",
     showFirstTimePrompt: Boolean = false,
+    shouldDelayVideoLoad: Boolean = false,
     onPromptSelect: (String, Boolean) -> Unit = { _, _ -> },
     onPromptDismiss: () -> Unit = {},
     onModeChange: (PlayerMode) -> Unit = {},
@@ -534,7 +559,14 @@ private fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        // ---- MPV video surface (always present, always fills screen) ----
+        // ---- MPV video surface (always present, resizes based on mode) ----
+        // In MINIMIZED mode: fills only the 16:9 video area at the top
+        // In FULLSCREEN mode: fills the entire screen
+        // This prevents the video from being centered behind the opaque content surface
+        val mpvModifier = when (playerMode) {
+            PlayerMode.MINIMIZED -> Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+            PlayerMode.FULLSCREEN -> Modifier.fillMaxSize()
+        }
         AndroidView(
             factory = { ctx ->
                 val view = android.view.LayoutInflater
@@ -553,11 +585,19 @@ private fun PlayerScreen(
                 } else {
                     MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                 }
-                Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
-                MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
+                // Only load the video immediately if the prompt is NOT showing.
+                // If the prompt is showing, the video will be loaded after the
+                // prompt is resolved (via loadVideoIfPending()).
+                if (!shouldDelayVideoLoad) {
+                    Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
+                    MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
+                    videoLoaded = true
+                } else {
+                    Log.d("PlayerActivity", "Video load delayed (prompt showing)")
+                }
                 view
             },
-            modifier = Modifier.fillMaxSize(),
+            modifier = mpvModifier,
         )
 
         // ---- Mode-specific overlay (Crossfade for smooth transition) ----
