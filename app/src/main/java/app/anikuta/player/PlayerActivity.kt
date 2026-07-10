@@ -654,15 +654,28 @@ private fun PlayerScreen(
                     }
                 }
                 PlayerMode.FULLSCREEN -> {
-                    // Fullscreen: new FullscreenControls overlay
+                    // Fullscreen: gesture handler + controls overlay
                     if (!controlsLocked) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .pointerInput(Unit) {
-                                    detectTapGestures { viewModel.toggleControls() }
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            // Gesture handler (Phase 4) — handles all touch input
+                            app.anikuta.player.controls.PlayerGestureHandler(
+                                viewModel = viewModel,
+                                onSeekRelative = { delta ->
+                                    mpvView?.let { v ->
+                                        val cur = v.timePos ?: 0
+                                        val target = (cur + delta).coerceAtLeast(0)
+                                        v.timePos = target
+                                        viewModel.onPositionUpdate(target)
+                                    }
                                 },
-                        ) {
+                                onSeekTo = { seconds ->
+                                    mpvView?.timePos = seconds
+                                    viewModel.onPositionUpdate(seconds)
+                                },
+                                onToggleControls = { viewModel.toggleControls() },
+                            )
+
+                            // Controls overlay (on top of gesture handler)
                             app.anikuta.player.controls.FullscreenControls(
                                 viewModel = viewModel,
                                 onBack = onBack,
@@ -702,7 +715,7 @@ private fun PlayerScreen(
                                     }
                                 },
                                 onPiPClick = { /* Phase 6 */ },
-                                onRotateClick = { /* Phase 4 */ },
+                                onRotateClick = { /* Phase 4 — rotation toggle */ },
                             )
                         }
                     } else {
