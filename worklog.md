@@ -500,3 +500,22 @@ Stage Summary:
 - Episode list has proper spacing matching detail page
 - Episode details are prominent (big title + episode number badge)
 - Currently playing episode has clear border + glow effect
+
+---
+
+## Session 30 — Build Results
+
+Task ID: PLAYER-UI-FIXES-V2 (Build)
+Agent: main (Z.ai Code)
+
+Work Log:
+- Build #218 (314577d): FAILED — PaddingValues(horizontal=, bottom=) is not
+  a valid constructor. Must use start=/end= instead of horizontal=
+- Build #219 (8bb0997): SUCCESS — fixed PaddingValues constructor
+- ntfy notification sent to anikuta-builds topic
+
+Stage Summary:
+- Build #219 SUCCESS (8bb0997)
+- All 6 player UI fixes compiled and built into APK
+- APK available as GitHub Actions artifact: anikuta-debug-arm64-v8a
+- Ready for on-device testing

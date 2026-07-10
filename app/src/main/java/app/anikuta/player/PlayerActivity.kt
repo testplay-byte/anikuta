@@ -69,6 +69,7 @@ import `is`.xyz.mpv.MPVLib
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uy.kohesive.injekt.api.get
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -100,6 +101,13 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_EPISODE_NUMBER = "app.anikuta.player.EPISODE_NUMBER"
         const val EXTRA_VIDEO_HEADERS = "app.anikuta.player.VIDEO_HEADERS"
         const val EXTRA_COVER_COLOR = "app.anikuta.player.COVER_COLOR"
+        // ---- Episode switching: current video metadata + source ID ----
+        // These allow the player to re-resolve videos for a different episode
+        // using the SAME server / audio version / quality as the current video.
+        const val EXTRA_SOURCE_ID = "app.anikuta.player.SOURCE_ID"
+        const val EXTRA_VIDEO_SERVER = "app.anikuta.player.VIDEO_SERVER"
+        const val EXTRA_VIDEO_AUDIO = "app.anikuta.player.VIDEO_AUDIO"
+        const val EXTRA_VIDEO_QUALITY = "app.anikuta.player.VIDEO_QUALITY"
         const val MPV_DIR = "mpv"
 
         /**
@@ -116,6 +124,12 @@ class PlayerActivity : ComponentActivity() {
          * Build a launch Intent for the player.
          * [anilistId] + [episodeUrl] + [episodeNumber] are optional — when
          * provided, watch progress is saved/resumed + AniList sync happens.
+         *
+         * [sourceId] + [videoServer] + [videoAudio] + [videoQuality] are used
+         * for episode switching: when the user taps a different episode in the
+         * player's episode list, the player re-resolves the video for that
+         * episode using the same source, then auto-selects the video matching
+         * the current server / audio / quality.
          */
         fun newIntent(
             context: Context,
@@ -126,6 +140,10 @@ class PlayerActivity : ComponentActivity() {
             episodeNumber: Float = -1f,
             videoHeaders: String = "",
             coverColor: Int = 0,
+            sourceId: Long = -1L,
+            videoServer: String = "",
+            videoAudio: String = "",
+            videoQuality: Int = -1,
         ): Intent =
             Intent(context, PlayerActivity::class.java).apply {
                 putExtra(EXTRA_VIDEO_URL, videoUrl)
@@ -135,6 +153,10 @@ class PlayerActivity : ComponentActivity() {
                 if (episodeUrl.isNotBlank()) putExtra(EXTRA_EPISODE_URL, episodeUrl)
                 if (episodeNumber > 0) putExtra(EXTRA_EPISODE_NUMBER, episodeNumber)
                 if (videoHeaders.isNotBlank()) putExtra(EXTRA_VIDEO_HEADERS, videoHeaders)
+                if (sourceId > 0) putExtra(EXTRA_SOURCE_ID, sourceId)
+                if (videoServer.isNotBlank()) putExtra(EXTRA_VIDEO_SERVER, videoServer)
+                if (videoAudio.isNotBlank()) putExtra(EXTRA_VIDEO_AUDIO, videoAudio)
+                if (videoQuality > 0) putExtra(EXTRA_VIDEO_QUALITY, videoQuality)
             }
     }
 
@@ -153,6 +175,20 @@ class PlayerActivity : ComponentActivity() {
     /** Whether the video has been loaded yet (delayed if prompt is showing). */
     @Volatile private var videoLoaded: Boolean = false
 
+    // ---- Episode switching: current video metadata + source ----
+    // These are read from the Intent and used when the user taps a different
+    // episode in the player's episode list. The player re-resolves the video
+    // for the new episode using the same source, then auto-selects the video
+    // matching the current server / audio / quality.
+    private var sourceId: Long = -1L
+    private var currentVideoServer: String = ""
+    private var currentVideoAudio: String = ""
+    private var currentVideoQuality: Int = -1
+    /** Current video URL — updated when switching episodes. */
+    @Volatile private var currentVideoUrl: String = ""
+    /** Current video headers — updated when switching episodes. */
+    @Volatile private var currentVideoHeaders: String = ""
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -162,6 +198,13 @@ class PlayerActivity : ComponentActivity() {
         episodeUrl = intent.getStringExtra(EXTRA_EPISODE_URL) ?: ""
         vmEpisodeNumber = intent.getFloatExtra(EXTRA_EPISODE_NUMBER, -1f).takeIf { it > 0 }
         val coverColor = intent.getIntExtra(EXTRA_COVER_COLOR, 0)
+        // Episode switching metadata
+        sourceId = intent.getLongExtra(EXTRA_SOURCE_ID, -1L)
+        currentVideoServer = intent.getStringExtra(EXTRA_VIDEO_SERVER) ?: ""
+        currentVideoAudio = intent.getStringExtra(EXTRA_VIDEO_AUDIO) ?: ""
+        currentVideoQuality = intent.getIntExtra(EXTRA_VIDEO_QUALITY, -1)
+        currentVideoUrl = videoUrl ?: ""
+        currentVideoHeaders = intent.getStringExtra(EXTRA_VIDEO_HEADERS) ?: ""
 
         if (videoUrl.isNullOrBlank()) {
             Log.e(TAG, "No video URL provided, finishing")
@@ -282,6 +325,13 @@ class PlayerActivity : ComponentActivity() {
         when (eventId) {
             MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
                 viewModel?.onFileLoaded()
+                // Episode switching: clear the loading state + timeout
+                val vm = viewModel
+                if (vm != null && vm.isSwitchingEpisode.value) {
+                    vm.setSwitchingEpisode(false)
+                    cancelSwitchTimeout()
+                    Log.d(TAG, "Episode switch: FILE_LOADED — clearing switching state")
+                }
                 // Resume from saved position (task 5.5).
                 seekToSavedPosition()
                 // Auto-play: the file is loaded, start playing immediately.
@@ -437,7 +487,19 @@ class PlayerActivity : ComponentActivity() {
      */
     /**
      * Switch to a different episode from the player's episode list.
-     * Pauses current video, loads the new episode's video URL, and plays.
+     *
+     * Workflow:
+     *  1. Show loading overlay on the video area (episode thumbnail + spinner).
+     *     Video player controls are hidden during loading.
+     *  2. Resolve the video for the new episode using the same source that
+     *     provided the current video. The source is looked up by [sourceId]
+     *     (passed via Intent from the detail page).
+     *  3. Auto-select the video matching the current server / audio / quality.
+     *     Falls back gracefully if an exact match isn't available.
+     *  4. Load the new video URL into MPV and auto-play.
+     *  5. On error: show error message, restore the previous episode index.
+     *
+     * All steps are logged with [TAG] for debugging.
      */
     fun switchEpisode(index: Int) {
         val vm = viewModel ?: return
@@ -446,33 +508,261 @@ class PlayerActivity : ComponentActivity() {
         if (index == vm.currentEpisodeIndex.value) return  // already playing
 
         val episode = episodes[index]
-        Log.d(TAG, "Switching to episode ${index}: ${episode.name}")
+        val previousIndex = vm.currentEpisodeIndex.value
+        Log.d(TAG, "=== Episode switch START ===")
+        Log.d(TAG, "Switching from episode $previousIndex to $index: ${episode.name}")
+        Log.d(TAG, "Current video prefs: server='$currentVideoServer' audio='$currentVideoAudio' quality=$currentVideoQuality")
 
-        // Show loading state
+        // Show loading state — this triggers the loading overlay in the UI
         vm.setSwitchingEpisode(true)
         vm.setCurrentEpisodeIndex(index)
+        // Hide controls during loading
+        vm.setControlsVisible(false)
 
         // Pause current video
-        try { MPVLib.setPropertyBoolean("pause", true) } catch (e: Exception) {}
+        try { MPVLib.setPropertyBoolean("pause", true) } catch (e: Exception) {
+            Log.w(TAG, "Could not pause current video during switch", e)
+        }
 
-        // Load new video
         lifecycleScope.launch {
             try {
-                // We need to resolve the video URL for the new episode.
-                // For now, we load from the same source using the episode URL.
-                // The detail page already resolved videos — we need to pass them
-                // or re-resolve here. For simplicity, we use the episode's URL
-                // directly if it's a direct video link, or we re-resolve.
-                //
-                // TODO: Pass resolved video data from detail page to player
-                // For now, just update the index and show a message
-                Log.w(TAG, "Episode switching needs video resolution — showing index update only")
-                vm.setSwitchingEpisode(false)
+                // Step 1: Get the source
+                val source = resolveSource()
+                if (source == null) {
+                    throw Exception("Could not find source for episode switching (sourceId=$sourceId)")
+                }
+                Log.d(TAG, "Source resolved: ${source.name} (id=${source.id})")
+
+                // Step 2: Resolve videos for the new episode
+                val allVideos = resolveVideoList(source, episode)
+                if (allVideos.isEmpty()) {
+                    throw Exception("No playable videos found for this episode")
+                }
+                Log.d(TAG, "Resolved ${allVideos.size} videos for episode ${episode.episode_number}")
+
+                // Step 3: Parse + select best matching video
+                val parsedVideos = allVideos.map { app.anikuta.ui.detail.VideoTitleParser.parse(it) }
+                val selected = selectBestVideo(parsedVideos)
+                Log.d(TAG, "Selected video: server='${selected.server}' audio='${selected.audio}' quality=${selected.quality} url=${selected.video.videoUrl.take(80)}...")
+
+                // Step 4: Build headers for the selected video
+                val headers = buildHeaders(selected.video)
+
+                // Step 5: Update state
+                currentVideoUrl = selected.video.videoUrl
+                currentVideoHeaders = headers
+                currentVideoServer = selected.server
+                currentVideoAudio = selected.audio.name
+                currentVideoQuality = selected.quality ?: -1
+                episodeUrl = episode.url
+                vmEpisodeNumber = episode.episode_number.takeIf { it > 0 }
+
+                // Update available servers in VM (for the server dropdown)
+                val servers = parsedVideos.map { it.server }.distinct()
+                vm.setAvailableServers(servers, selected.server)
+
+                // Step 6: Load new video into MPV
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    try {
+                        // Set headers BEFORE loadfile so MPV uses them for the request
+                        if (headers.isNotBlank()) {
+                            MPVLib.setOptionString("http-header-fields", headers)
+                            Log.d(TAG, "Set video headers (${headers.length} chars)")
+                        }
+                        Log.d(TAG, "Loading new video: ${currentVideoUrl.take(80)}...")
+                        MPVLib.command(arrayOf("loadfile", currentVideoUrl, "replace"))
+                        // Auto-play will happen when MPV_EVENT_FILE_LOADED fires
+                        // (see handleEvent). The loading overlay will be cleared
+                        // when onFileLoaded() is called.
+                    } catch (e: Exception) {
+                        throw Exception("Failed to load video into MPV: ${e.message}", e)
+                    }
+                }
+
+                Log.d(TAG, "=== Episode switch SUCCESS ===")
+                // Note: isSwitchingEpisode is cleared when MPV fires FILE_LOADED.
+                // But if the file fails to load, onFileEnded will fire with an
+                // error. We set a timeout to clear the switching state in case
+                // FILE_LOADED never fires.
+                launchSwitchTimeout()
+
             } catch (e: Exception) {
-                Log.e(TAG, "Episode switch failed", e)
+                Log.e(TAG, "=== Episode switch FAILED ===", e)
+                // Restore previous episode index
+                vm.setCurrentEpisodeIndex(previousIndex)
                 vm.setSwitchingEpisode(false)
+                vm.setControlsVisible(true)
+                // Show error as a Toast (less intrusive than full-screen overlay —
+                // the user can continue watching the current episode)
+                val errorMsg = e.message ?: "Unknown error"
+                runOnUiThread {
+                    android.widget.Toast.makeText(
+                        this@PlayerActivity,
+                        "Could not switch episode: $errorMsg",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                }
+                Log.w(TAG, "Episode switch error shown to user: $errorMsg")
             }
         }
+    }
+
+    /**
+     * Resolve the source for episode switching. Tries sourceId first, then
+     * falls back to looking up by name from the EpisodeCacheStore.
+     */
+    private suspend fun resolveSource(): app.anikuta.source.api.AnimeCatalogueSource? {
+        val mgr = try {
+            uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>()
+        } catch (e: Exception) {
+            Log.w(TAG, "AnimeSourceManager unavailable", e)
+            return null
+        }
+
+        // Try by sourceId first (most reliable)
+        if (sourceId > 0) {
+            val source = mgr.get(sourceId)
+            if (source is app.anikuta.source.api.AnimeCatalogueSource) {
+                return source
+            }
+            Log.w(TAG, "Source id=$sourceId is not a catalogue source (got ${source?.javaClass?.simpleName})")
+        }
+
+        // Fallback: look up by name from EpisodeCacheStore
+        if (anilistId > 0) {
+            try {
+                val cacheStore = uy.kohesive.injekt.Injekt.get<app.anikuta.data.cache.EpisodeCacheStore>()
+                val cached = cacheStore.load(anilistId)
+                if (cached != null) {
+                    val (_, sourceName) = cached
+                    val source = mgr.getCatalogueSources().find { it.name == sourceName }
+                    if (source != null) {
+                        Log.d(TAG, "Source found by name '$sourceName' from cache")
+                        return source
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not look up source from cache", e)
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * Resolve the video list for an episode. Tries getHosterList first (new
+     * API), falls back to getVideoList (old API) on any exception.
+     * Mirrors DetailViewModel.resolveVideos().
+     */
+    private suspend fun resolveVideoList(
+        source: app.anikuta.source.api.AnimeCatalogueSource,
+        episode: app.anikuta.source.api.model.SEpisode,
+    ): List<eu.kanade.tachiyomi.animesource.model.Video> {
+        return withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                Log.d(TAG, "Trying getHosterList for episode...")
+                val hosters = source.getHosterList(episode)
+                val videos = hosters.mapNotNull { hoster ->
+                    hoster.videoList?.filter { it.videoUrl.isNotBlank() }
+                }.flatten()
+                Log.d(TAG, "getHosterList returned ${hosters.size} hosters, ${videos.size} videos")
+                videos
+            } catch (e: Exception) {
+                Log.d(TAG, "getHosterList failed (${e.javaClass.simpleName}: ${e.message}), falling back to getVideoList")
+                val flat = source.getVideoList(episode)
+                flat.filter { it.videoUrl.isNotBlank() }
+            }
+        }
+    }
+
+    /**
+     * Select the best matching video from a list of parsed videos.
+     *
+     * Priority (matching the user's current video):
+     *  1. Exact match: same server AND same audio AND same quality
+     *  2. Same server AND same audio (any quality, pick highest)
+     *  3. Same server (any audio, prefer SUB, pick highest quality)
+     *  4. Same audio (any server, pick highest quality)
+     *  5. First video (best effort)
+     */
+    private fun selectBestVideo(
+        videos: List<app.anikuta.ui.detail.ParsedVideo>,
+    ): app.anikuta.ui.detail.ParsedVideo {
+        val targetServer = currentVideoServer
+        val targetAudio = app.anikuta.ui.detail.AudioVersion.fromToken(currentVideoAudio)
+        val targetQuality = currentVideoQuality
+
+        // 1. Exact match
+        videos.firstOrNull { it.server == targetServer && it.audio == targetAudio && it.quality == targetQuality }
+            ?.let { return it }
+
+        // 2. Same server + same audio, highest quality
+        videos.filter { it.server == targetServer && it.audio == targetAudio }
+            .maxByOrNull { it.quality ?: 0 }
+            ?.let { return it }
+
+        // 3. Same server, prefer same audio, highest quality
+        videos.filter { it.server == targetServer }
+            .sortedWith(compareByDescending<app.anikuta.ui.detail.ParsedVideo> { it.audio == targetAudio }
+                .thenByDescending { it.quality ?: 0 })
+            .firstOrNull()
+            ?.let { return it }
+
+        // 4. Same audio, any server, highest quality
+        videos.filter { it.audio == targetAudio }
+            .maxByOrNull { it.quality ?: 0 }
+            ?.let { return it }
+
+        // 5. Best effort: first video (highest quality overall)
+        Log.w(TAG, "No server/audio match found — using best-effort first video")
+        return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
+    }
+
+    /**
+     * Build HTTP headers string for MPV's http-header-fields option.
+     * Matches DetailViewModel.buildHeaders().
+     */
+    private fun buildHeaders(video: eu.kanade.tachiyomi.animesource.model.Video): String {
+        val headers = video.headers
+        return if (headers != null && headers.size > 0) {
+            headers.toMultimap()
+                .mapValues { it.value.firstOrNull() ?: "" }
+                .map { "${it.key}: ${it.value.replace(",", "\\,")}" }
+                .joinToString(",")
+        } else {
+            "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
+        }
+    }
+
+    /**
+     * Timeout for episode switching — if MPV doesn't fire FILE_LOADED within
+     * 30 seconds, clear the switching state and show an error.
+     */
+    private var switchTimeoutJob: kotlinx.coroutines.Job? = null
+    private fun launchSwitchTimeout() {
+        switchTimeoutJob?.cancel()
+        switchTimeoutJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(30_000)
+            val vm = viewModel ?: return@launch
+            if (vm.isSwitchingEpisode.value) {
+                Log.w(TAG, "Episode switch timed out after 30s — clearing state")
+                vm.setSwitchingEpisode(false)
+                vm.setControlsVisible(true)
+                runOnUiThread {
+                    android.widget.Toast.makeText(
+                        this@PlayerActivity,
+                        "Video loading timed out. Please try again.",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
+    }
+
+    /** Cancel the switch timeout when the video loads successfully. */
+    private fun cancelSwitchTimeout() {
+        switchTimeoutJob?.cancel()
+        switchTimeoutJob = null
     }
 
     fun handleModeChange(mode: PlayerMode) {
@@ -662,6 +952,18 @@ private fun PlayerScreen(
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
     val playerMode by viewModel.playerMode.collectAsState()
 
+    // ---- LazyColumn scroll state ----
+    // FIX: Explicitly create a LazyListState and scroll to item 0 on first
+    // composition. Without this, the LazyColumn could restore a non-zero
+    // scroll position (e.g. if the user previously scrolled) and the user
+    // would see the current episode instead of the episode details at top.
+    val episodeListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(Unit) {
+        // Guarantee the list starts at the very top (episode details) on entry
+        episodeListState.scrollToItem(0)
+        Log.d("PlayerActivity", "Episode list scrolled to top on entry")
+    }
+
     // ---- Sheet state (Phase 3.7) ----
     var showQualitySheet by remember { mutableStateOf(false) }
     var showSubtitleSheet by remember { mutableStateOf(false) }
@@ -679,6 +981,8 @@ private fun PlayerScreen(
     val controlsLocked by viewModel.controlsLocked.collectAsState()
     val lockButtonVisible by viewModel.lockButtonVisible.collectAsState()
     val controlsVisible by viewModel.controlsVisible.collectAsState()
+    // Episode switching state — drives the loading overlay on the video area
+    val isSwitchingEpisode by viewModel.isSwitchingEpisode.collectAsState()
 
     // Auto-hide controls in fullscreen after 4 seconds of inactivity
     LaunchedEffect(controlsVisible, playerMode, controlsLocked) {
@@ -855,28 +1159,44 @@ private fun PlayerScreen(
                             modifier = Modifier.fillMaxSize(),
                         )
 
-                        // Controls overlay on top of the video
-                        app.anikuta.player.controls.MinimizedControls(
-                            viewModel = viewModel,
-                            onTogglePlay = {
-                                mpvView?.let { v ->
-                                    val now = v.paused ?: true
-                                    v.paused = !now
-                                    viewModel.onPauseChanged(!now)
-                                }
-                            },
-                            onSeekRelative = { delta ->
-                                mpvView?.let { v ->
-                                    val cur = v.timePos ?: 0
-                                    val target = (cur + delta).coerceAtLeast(0)
-                                    v.timePos = target
-                                    viewModel.onPositionUpdate(target)
-                                }
-                            },
-                            onMaximize = { onModeChange(PlayerMode.FULLSCREEN) },
-                            onQualityClick = { showQualitySheet = true },
-                            onSubtitleClick = { showSubtitleSheet = true },
-                        )
+                        // ---- Episode switching loading overlay ----
+                        // When switching episodes, show a loading overlay that
+                        // covers the video area. The background uses the episode
+                        // thumbnail (if available) with a dark scrim, or a themed
+                        // dark surface. Video player controls are hidden.
+                        if (isSwitchingEpisode) {
+                            app.anikuta.player.controls.EpisodeSwitchingOverlay(
+                                episodeThumbnailUrl = currentEpisode?.preview_url,
+                                episodeTitle = currentEpisode?.let {
+                                    app.anikuta.ui.detail.EpisodeTitleParser.getDisplayTitle(
+                                        it.name, it.episode_number,
+                                    )
+                                },
+                            )
+                        } else {
+                            // Controls overlay on top of the video (hidden during switching)
+                            app.anikuta.player.controls.MinimizedControls(
+                                viewModel = viewModel,
+                                onTogglePlay = {
+                                    mpvView?.let { v ->
+                                        val now = v.paused ?: true
+                                        v.paused = !now
+                                        viewModel.onPauseChanged(!now)
+                                    }
+                                },
+                                onSeekRelative = { delta ->
+                                    mpvView?.let { v ->
+                                        val cur = v.timePos ?: 0
+                                        val target = (cur + delta).coerceAtLeast(0)
+                                        v.timePos = target
+                                        viewModel.onPositionUpdate(target)
+                                    }
+                                },
+                                onMaximize = { onModeChange(PlayerMode.FULLSCREEN) },
+                                onQualityClick = { showQualitySheet = true },
+                                onSubtitleClick = { showSubtitleSheet = true },
+                            )
+                        }
                     }
                 }
 
@@ -890,11 +1210,17 @@ private fun PlayerScreen(
                 // FIX: Episode details now use titleLarge + an episode-number
                 // badge for better prominence. A separator + "Episodes" header
                 // clearly divides the details section from the episode list.
+                // FIX: Added top content padding (16dp) so there's visible
+                // breathing room between the video player and the scrollable
+                // section. Episodes also "disappear" into this padding when
+                // scrolling up, so they don't touch the video player edge.
                 LazyColumn(
+                    state = episodeListState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
                         start = 12.dp,
                         end = 12.dp,
+                        top = 16.dp,
                         bottom = 24.dp,
                     ),
                     verticalArrangement = Arrangement.spacedBy(8.dp),

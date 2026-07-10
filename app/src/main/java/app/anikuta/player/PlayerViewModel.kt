@@ -205,9 +205,26 @@ class PlayerViewModel(
     }
 
     fun onError(message: String) {
-        Log.e(TAG, "Player error: $message")
-        _loadingState.value = PlayerLoadingState.ERROR
-        _errorMessage.value = message
+        if (message.isBlank()) {
+            // Clear error state — back to READY (or INITIALIZING if never ready)
+            _errorMessage.value = null
+            if (_loadingState.value == PlayerLoadingState.ERROR) {
+                _loadingState.value = PlayerLoadingState.READY
+            }
+            Log.d(TAG, "Error cleared")
+        } else {
+            Log.e(TAG, "Player error: $message")
+            _loadingState.value = PlayerLoadingState.ERROR
+            _errorMessage.value = message
+        }
+    }
+
+    /** Clear the error state without a message. */
+    fun clearError() {
+        _errorMessage.value = null
+        if (_loadingState.value == PlayerLoadingState.ERROR) {
+            _loadingState.value = PlayerLoadingState.READY
+        }
     }
 
     fun toggleControls() {

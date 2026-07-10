@@ -98,6 +98,10 @@ fun DetailScreen(
                     episodeNumber = req.episodeNumber,
                     videoHeaders = req.videoHeaders,
                     coverColor = coverColorInt,
+                    sourceId = req.sourceId,
+                    videoServer = req.videoServer,
+                    videoAudio = req.videoAudio,
+                    videoQuality = req.videoQuality,
                 )
                 context.startActivity(intent)
                 viewModel.consumePlayRequest()

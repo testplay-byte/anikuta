@@ -480,14 +480,7 @@ class DetailViewModel(
                 } else if (audioSections.flatMap { it.audioSections }.flatMap { it.videos }.size == 1) {
                     val v = audioSections.first().audioSections.first().videos.first()
                     _videoPicker.value = VideoPickerState.Hidden
-                    _playRequest.value = PlayRequest.Play(
-                        url = v.videoUrl,
-                        title = episode.name,
-                        episodeNumber = episode.episode_number,
-                        anilistId = anilistId,
-                        episodeUrl = episode.url,
-                        videoHeaders = buildHeaders(v),
-                    )
+                    _playRequest.value = buildPlayRequest(v, episode, source)
                 } else {
                     val allVideos = audioSections.flatMap { it.audioSections }.flatMap { it.videos }
                     Log.d(TAG, "${allVideos.size} videos in ${audioSections.size} server section(s) — showing picker")
@@ -554,13 +547,37 @@ class DetailViewModel(
     fun playSpecificVideo(video: Video, episode: SEpisode) {
         Log.d(TAG, "User selected: ${video.videoTitle} → ${video.videoUrl}")
         _videoPicker.value = VideoPickerState.Hidden
-        _playRequest.value = PlayRequest.Play(
+        val source = matchedSource
+        if (source == null) {
+            _playRequest.value = PlayRequest.Error("No source available")
+            return
+        }
+        _playRequest.value = buildPlayRequest(video, episode, source)
+    }
+
+    /**
+     * Build a [PlayRequest.Play] from a [Video] + [SEpisode], including the
+     * source ID and parsed video metadata (server, audio, quality) so the
+     * player can re-resolve videos when switching episodes.
+     */
+    private fun buildPlayRequest(
+        video: Video,
+        episode: SEpisode,
+        source: AnimeCatalogueSource,
+    ): PlayRequest.Play {
+        val parsed = VideoTitleParser.parse(video)
+        Log.d(TAG, "Building PlayRequest: source=${source.name} (id=${source.id}) server='${parsed.server}' audio='${parsed.audio}' quality=${parsed.quality}")
+        return PlayRequest.Play(
             url = video.videoUrl,
             title = episode.name,
             episodeNumber = episode.episode_number,
             anilistId = anilistId,
             episodeUrl = episode.url,
             videoHeaders = buildHeaders(video),
+            sourceId = source.id,
+            videoServer = parsed.server,
+            videoAudio = parsed.audio.name,
+            videoQuality = parsed.quality ?: -1,
         )
     }
 
@@ -801,6 +818,12 @@ sealed class PlayRequest {
         val anilistId: Int = -1,
         val episodeUrl: String = "",
         val videoHeaders: String = "",
+        // Episode switching metadata — allows the player to re-resolve videos
+        // for a different episode using the same source + server/audio/quality.
+        val sourceId: Long = -1L,
+        val videoServer: String = "",
+        val videoAudio: String = "",
+        val videoQuality: Int = -1,
     ) : PlayRequest()
     data class Error(val message: String) : PlayRequest()
 }
