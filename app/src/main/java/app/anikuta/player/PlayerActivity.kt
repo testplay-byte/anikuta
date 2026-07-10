@@ -545,6 +545,7 @@ class PlayerActivity : ComponentActivity() {
  * bottom portion of the video is covered by an opaque Surface showing the
  * dropdowns + episodes list.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @androidx.compose.runtime.Composable
 private fun PlayerScreen(
     viewModel: PlayerViewModel,
