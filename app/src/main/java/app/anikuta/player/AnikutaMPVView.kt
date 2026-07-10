@@ -201,28 +201,39 @@ class AnikutaMPVView(
     }
 
     /**
-     * Apply subtitle preferences to MPV in real-time.
-     * Called from initOptions() and can be called again when preferences change.
+     * Apply subtitle preferences to MPV.
+     *
+     * FIX (Part 5): Uses setPropertyString() for runtime-applicable properties
+     * (sub-font-size, sub-scale, sub-border-size, sub-bold, sub-italic,
+     * sub-color, sub-border-color, sub-back-color, sub-pos, sub-shadow-offset,
+     * sub-ass-override, sub-delay) so changes apply LIVE without reinitializing
+     * MPV. Only sub-font uses setOptionString (it's init-only in some MPV builds).
+     *
+     * Called from initOptions() on initial load AND from the SubtitleSettingsPanel
+     * via onSettingsChanged callback when the user adjusts settings.
      */
     fun applySubtitlePreferences() {
         try {
+            // sub-font is init-only on some MPV builds — use setOptionString
             MPVLib.setOptionString("sub-font", playerPreferences.subtitleFont().get())
-            MPVLib.setOptionString("sub-font-size", playerPreferences.subtitleFontSize().get().toString())
-            MPVLib.setOptionString("sub-scale", playerPreferences.subtitleFontScale().get().toString())
-            MPVLib.setOptionString("sub-border-size", playerPreferences.subtitleBorderSize().get().toString())
-            MPVLib.setOptionString("sub-bold", if (playerPreferences.boldSubtitles().get()) "yes" else "no")
-            MPVLib.setOptionString("sub-italic", if (playerPreferences.italicSubtitles().get()) "yes" else "no")
-            MPVLib.setOptionString("sub-color", colorToHex(playerPreferences.textColorSubtitles().get()))
-            MPVLib.setOptionString("sub-border-color", colorToHex(playerPreferences.borderColorSubtitles().get()))
-            MPVLib.setOptionString("sub-back-color", colorToHex(playerPreferences.backgroundColorSubtitles().get()))
-            MPVLib.setOptionString("sub-pos", playerPreferences.subtitlePosition().get().toString())
-            MPVLib.setOptionString("sub-shadow-offset", playerPreferences.subtitleShadowOffset().get().toString())
+            // Runtime-applicable properties — use setPropertyString for live updates
+            MPVLib.setPropertyString("sub-font-size", playerPreferences.subtitleFontSize().get().toString())
+            MPVLib.setPropertyString("sub-scale", playerPreferences.subtitleFontScale().get().toString())
+            MPVLib.setPropertyString("sub-border-size", playerPreferences.subtitleBorderSize().get().toString())
+            MPVLib.setPropertyString("sub-bold", if (playerPreferences.boldSubtitles().get()) "yes" else "no")
+            MPVLib.setPropertyString("sub-italic", if (playerPreferences.italicSubtitles().get()) "yes" else "no")
+            MPVLib.setPropertyString("sub-color", colorToHex(playerPreferences.textColorSubtitles().get()))
+            MPVLib.setPropertyString("sub-border-color", colorToHex(playerPreferences.borderColorSubtitles().get()))
+            MPVLib.setPropertyString("sub-back-color", colorToHex(playerPreferences.backgroundColorSubtitles().get()))
+            MPVLib.setPropertyString("sub-pos", playerPreferences.subtitlePosition().get().toString())
+            MPVLib.setPropertyString("sub-shadow-offset", playerPreferences.subtitleShadowOffset().get().toString())
             if (playerPreferences.overrideSubsASS().get()) {
-                MPVLib.setOptionString("sub-ass-override", "force")
+                MPVLib.setPropertyString("sub-ass-override", "force")
             } else {
-                MPVLib.setOptionString("sub-ass-override", "no")
+                MPVLib.setPropertyString("sub-ass-override", "no")
             }
-            MPVLib.setOptionString("sub-delay", (playerPreferences.subtitlesDelay().get() / 1000.0).toString())
+            MPVLib.setPropertyString("sub-delay", (playerPreferences.subtitlesDelay().get() / 1000.0).toString())
+            Log.d("AnikutaMPVView", "Subtitle preferences applied (live update)")
         } catch (e: Exception) {
             Log.w("AnikutaMPVView", "Could not apply subtitle preferences", e)
         }

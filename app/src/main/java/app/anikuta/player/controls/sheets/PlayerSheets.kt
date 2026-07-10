@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
@@ -16,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,21 +81,83 @@ fun QualitySheet(
  * Subtitle track selection bottom sheet.
  * Lists available subtitle tracks from MPV's track-list.
  * Includes an "Off" option (id = -1).
+ *
+ * FIX (Part 5): Added a "Subtitle settings" row at the top that opens the
+ * SubtitleSettingsPanel (font size, color, position, etc.) in a separate
+ * sheet. The panel applies changes live via applySubtitlePreferences().
  */
 @Composable
 fun SubtitleTracksSheet(
     viewModel: PlayerViewModel,
     onSelect: (Int) -> Unit,
     onDismiss: () -> Unit,
+    onApplySettings: () -> Unit = {},
 ) {
     val tracks by viewModel.subtitleTracks.collectAsState()
     val currentId by viewModel.currentSubtitleId.collectAsState()
+    var showSettings by remember { mutableStateOf(false) }
+
+    if (showSettings) {
+        // Subtitle settings panel (full bottom sheet)
+        PlayerSheet(title = "Subtitle Settings", onDismiss = { showSettings = false }) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                app.anikuta.player.controls.SubtitleSettingsPanel(
+                    onSettingsChanged = {
+                        // Live update — call onApplySettings to apply to MPV
+                        onApplySettings()
+                        Log.d("PlayerSheets", "Subtitle settings changed — applying live")
+                    },
+                )
+            }
+        }
+        return
+    }
 
     PlayerSheet(title = "Subtitles", onDismiss = onDismiss) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 8.dp),
         ) {
+            // "Subtitle settings" button at top
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showSettings = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            text = "Subtitle Settings",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    androidx.compose.material3.Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                androidx.compose.material3.HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+            }
+            // Track list
             items(tracks, key = { it.id }) { track ->
                 SheetOption(
                     title = track.name,
