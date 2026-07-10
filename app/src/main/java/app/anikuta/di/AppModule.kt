@@ -123,5 +123,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { LocalCache(get<AnimeDatabase>()) }
         addSingletonFactory { SupabaseClient(get()) }
         addSingletonFactory { CacheManager(get(), get()) }
+
+        // Episode cache (persistent — survives app restart)
+        addSingletonFactory { app.anikuta.data.cache.EpisodeCacheStore(get<Context>()) }
     }
 }

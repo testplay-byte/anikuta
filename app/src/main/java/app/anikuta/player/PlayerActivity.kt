@@ -60,6 +60,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import app.anikuta.R
 import app.anikuta.ui.theme.AnikutaTheme
 import `is`.xyz.mpv.MPVLib
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import uy.kohesive.injekt.api.get
 
@@ -158,6 +159,27 @@ class PlayerActivity : ComponentActivity() {
         }
 
         viewModel = PlayerViewModel(videoUrl, title)
+
+        // Load episode list from disk cache (for the episode list in minimized mode)
+        if (anilistId > 0) {
+            lifecycleScope.launch {
+                try {
+                    val cacheStore = uy.kohesive.injekt.Injekt.get<app.anikuta.data.cache.EpisodeCacheStore>()
+                    val cached = cacheStore.load(anilistId)
+                    if (cached != null) {
+                        val (episodes, sourceName) = cached
+                        Log.d(TAG, "Loaded ${episodes.size} episodes from cache for player")
+                        // Find the current episode index based on the episode URL
+                        val currentIndex = episodes.indexOfFirst { it.url == episodeUrl }.coerceAtLeast(0)
+                        viewModel?.setEpisodeList(episodes, currentIndex)
+                        viewModel?.setAvailableServers(listOf(sourceName), sourceName)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not load episode cache for player", e)
+                }
+            }
+        }
+
         // Read video headers from intent — needed by the Composable to set
         // http-header-fields on MPV before loadfile.
         val videoHeaders = intent.getStringExtra(EXTRA_VIDEO_HEADERS) ?: ""

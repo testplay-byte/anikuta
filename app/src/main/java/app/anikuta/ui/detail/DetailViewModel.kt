@@ -133,6 +133,7 @@ class DetailViewModel(
     }
 
     private val preferenceStore: app.anikuta.core.preference.PreferenceStore? = try { Injekt.get() } catch (e: Exception) { null }
+    private val episodeCacheStore: app.anikuta.data.cache.EpisodeCacheStore? = try { Injekt.get() } catch (e: Exception) { null }
 
     init {
         loadAnimeDetails()
@@ -181,30 +182,52 @@ class DetailViewModel(
         episodeCache[anilistId]?.let { (eps, sourceName) ->
             Log.d(TAG, "Episode cache hit (in-memory): ${eps.size} episodes from $sourceName")
             _episodes.value = EpisodeState.Loaded(eps, sourceName)
-            // Phase 7: launch background soft-refresh (guarded by 5-min TTL)
             backgroundRefreshEpisodes(anime, sourceName)
+            return
+        }
+        // Check disk cache (survives app restart)
+        episodeCacheStore?.let { store ->
+            viewModelScope.launch {
+                val diskCached = store.load(anilistId)
+                if (diskCached != null) {
+                    val (eps, sourceName) = diskCached
+                    Log.d(TAG, "Episode cache hit (disk): ${eps.size} episodes from $sourceName")
+                    // Populate in-memory cache too
+                    episodeCache[anilistId] = Pair(eps, sourceName)
+                    _episodes.value = EpisodeState.Loaded(eps, sourceName)
+                    // Background refresh to check for new episodes
+                    backgroundRefreshEpisodes(anime, sourceName)
+                    // Background metadata enrichment (if needed)
+                    enrichEpisodesWithMetadata(eps, anime)
+                    return@launch
+                }
+                // No disk cache — fall through to extension search
+                searchExtensions(anime, sourceBridge ?: run {
+                    _episodes.value = EpisodeState.Error("Source bridge not available")
+                    return@launch
+                })
+            }
             return
         }
         val bridge = sourceBridge ?: run {
             _episodes.value = EpisodeState.Error("Source bridge not available")
             return
         }
-        // Check persistent cache for the source match (survives app restart).
-        // We cache the source name so we can skip the extension search (the
-        // slow part). Episodes still need to be fetched from the extension.
+        searchExtensions(anime, bridge)
+    }
+
+    private fun searchExtensions(anime: AniListAnime, bridge: AniyomiSourceBridge) {
+        // Check persistent source match cache (survives app restart).
+        // This lets us skip the slow extension search if we already know
+        // which source + SAnime URL matched.
         val cachedSourceName = preferenceStore?.getString("ext_match_$anilistId", "")?.get()
         val cachedSAnimeUrl = preferenceStore?.getString("ext_sanime_url_$anilistId", "")?.get()
         if (!cachedSourceName.isNullOrBlank() && !cachedSAnimeUrl.isNullOrBlank()) {
-            Log.d(TAG, "Persistent cache hit: source=$cachedSourceName, fetching episodes...")
+            Log.d(TAG, "Persistent source cache hit: $cachedSourceName, fetching episodes...")
             _episodes.value = EpisodeState.Searching
             viewModelScope.launch {
                 try {
                     val mgr = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>()
-                    // Wait for the source manager to finish loading extensions.
-                    // On app restart, the manager loads extensions async — if we
-                    // check getCatalogueSources() before it's done, we get an
-                    // empty list → "No streaming source" even though the
-                    // extension IS installed. Wait up to 10 seconds.
                     var retries = 0
                     var source = mgr.getCatalogueSources().find { it.name == cachedSourceName }
                     while (source == null && retries < 20) {
@@ -220,21 +243,20 @@ class DetailViewModel(
                         }
                         loadEpisodes(sAnime, anime, cachedSourceName)
                     } else {
-                        // Source not found after 10s — extension may be uninstalled
-                        Log.w(TAG, "Cached source '$cachedSourceName' not found after 10s, falling back to search")
-                        searchExtensions(anime, bridge)
+                        Log.w(TAG, "Cached source not found, falling back to full search")
+                        fullExtensionSearch(anime, bridge)
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Cached source lookup failed, falling back to search", e)
-                    searchExtensions(anime, bridge)
+                    Log.e(TAG, "Cached source lookup failed", e)
+                    fullExtensionSearch(anime, bridge)
                 }
             }
             return
         }
-        searchExtensions(anime, bridge)
+        fullExtensionSearch(anime, bridge)
     }
 
-    private fun searchExtensions(anime: AniListAnime, bridge: AniyomiSourceBridge) {
+    private fun fullExtensionSearch(anime: AniListAnime, bridge: AniyomiSourceBridge) {
         _episodes.value = EpisodeState.Searching
         viewModelScope.launch {
             try {
@@ -304,6 +326,8 @@ class DetailViewModel(
             // Cache source match persistently (survives app restart)
             preferenceStore?.getString("ext_match_$anilistId", "")?.set(sourceName)
             preferenceStore?.getString("ext_sanime_url_$anilistId", "")?.set(sAnime.url)
+            // Cache episodes to disk (survives app restart — no re-fetch needed)
+            episodeCacheStore?.save(anilistId, sourceName, eps)
             _episodes.value = EpisodeState.Loaded(eps, sourceName)
 
             // Phase 7.5: In-app metadata enrichment for episodes missing thumbnails/titles/descriptions
@@ -404,6 +428,8 @@ class DetailViewModel(
                     Log.i(TAG, "Enriched $enrichedCount/${episodes.size} episodes with in-app metadata")
                     val sourceName = (episodeCache[anilistId]?.second ?: "")
                     episodeCache[anilistId] = Pair(enrichedEpisodes, sourceName)
+                    // Update disk cache with enriched episodes
+                    episodeCacheStore?.save(anilistId, sourceName, enrichedEpisodes)
                     _episodes.value = EpisodeState.Loaded(enrichedEpisodes, sourceName)
                 }
             } catch (e: Exception) {
@@ -648,6 +674,7 @@ class DetailViewModel(
 
                 // Update cache + UI
                 episodeCache[anilistId] = Pair(freshEps, sourceName)
+                episodeCacheStore?.save(anilistId, sourceName, freshEps)
                 matchedSource = source
                 matchedSAnime = sAnime
                 _episodes.value = EpisodeState.Loaded(freshEps, sourceName)
@@ -711,6 +738,7 @@ class DetailViewModel(
         _isRefreshing.value = true
         // Clear caches to force full re-fetch
         episodeCache.remove(anilistId)
+        episodeCacheStore?.clear(anilistId)
         preferenceStore?.getString("ext_match_$anilistId", "")?.set("")
         preferenceStore?.getString("ext_sanime_url_$anilistId", "")?.set("")
         viewModelScope.launch {
