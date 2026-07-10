@@ -30,8 +30,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
@@ -654,34 +660,27 @@ private fun PlayerScreen(
                 },
         )
 
-        // Lock button overlay (when controls are locked)
+        // Lock button — shown when controls are locked AND lock button is visible.
+        // Pattern from reference: no parent consuming taps. The lock button is
+        // a standalone overlay. Tapping anywhere else on the screen is handled
+        // by the gesture handler (which checks controlsLocked).
         if (controlsLocked && lockButtonVisible) {
-            // Use clickable (not pointerInput) — clickable properly dispatches
-            // to children: if the lock button is tapped, only the button's
-            // clickable fires, not the parent's.
-            Box(
+            Surface(
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = Color.Black.copy(alpha = 0.6f),
                 modifier = Modifier
-                    .fillMaxSize()
-                    .clickable { viewModel.showLockButton() },
-                contentAlignment = Alignment.TopStart,
+                    .align(Alignment.TopStart)
+                    .padding(start = 16.dp, top = 16.dp)
+                    .size(44.dp)
+                    .clickable { viewModel.unlockControls() },
             ) {
-                // Lock/unlock button — top-left, Material 3 icon
-                Surface(
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    color = Color.Black.copy(alpha = 0.6f),
-                    modifier = Modifier
-                        .padding(start = 16.dp, top = 16.dp)
-                        .size(44.dp)
-                        .clickable { viewModel.unlockControls() },
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Lock,
-                            contentDescription = "Unlock controls",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = "Unlock controls",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
                 }
             }
         }
@@ -693,18 +692,47 @@ private fun PlayerScreen(
         ) { mode ->
             when (mode) {
                 PlayerMode.MINIMIZED -> {
-                    // Portrait: Column with top padding for status bar + rounded corners,
-                    // transparent video area at top, opaque content below.
+                    // Portrait: Top app bar + video area + content below
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 24.dp),  // Gap for status bar + rounded corners
+                            .background(MaterialTheme.colorScheme.background),
                     ) {
-                        // Video area (transparent — shows MPV video behind)
+                        // ---- Top app bar (back + AniKuta title + settings) ----
+                        androidx.compose.material3.TopAppBar(
+                            title = {
+                                Text(
+                                    "AniKuta",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            },
+                            navigationIcon = {
+                                androidx.compose.material3.IconButton(onClick = onBack) {
+                                    Icon(
+                                        androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back",
+                                    )
+                                }
+                            },
+                            actions = {
+                                androidx.compose.material3.IconButton(onClick = { /* Player settings */ }) {
+                                    Icon(
+                                        androidx.compose.material.icons.Icons.Default.Settings,
+                                        contentDescription = "Settings",
+                                    )
+                                }
+                            },
+                            colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            ),
+                        )
+                        // ---- Video area (16:9, with controls overlay) ----
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(16f / 9f),
+                                .aspectRatio(16f / 9f)
+                                .background(Color.Black),
                         ) {
                             app.anikuta.player.controls.MinimizedControls(
                                 viewModel = viewModel,
@@ -731,25 +759,20 @@ private fun PlayerScreen(
                             )
                         }
 
-                        // Below-video content (opaque, covers the rest of the video)
-                        androidx.compose.material3.Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.background,
-                        ) {
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                app.anikuta.player.controls.ServerVersionDropdowns(
-                                    viewModel = viewModel,
-                                    onServerSelected = { /* Phase 3 */ },
-                                    onAudioVersionSelected = { /* Phase 3 */ },
-                                )
-                                app.anikuta.player.controls.EpisodeListView(
-                                    viewModel = viewModel,
-                                    onEpisodeClick = { index ->
-                                        viewModel.setCurrentEpisodeIndex(index)
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
+                        // ---- Below-video content ----
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            app.anikuta.player.controls.ServerVersionDropdowns(
+                                viewModel = viewModel,
+                                onServerSelected = { /* Phase 3 */ },
+                                onAudioVersionSelected = { /* Phase 3 */ },
+                            )
+                            app.anikuta.player.controls.EpisodeListView(
+                                viewModel = viewModel,
+                                onEpisodeClick = { index ->
+                                    viewModel.setCurrentEpisodeIndex(index)
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                     }
                 }
@@ -834,13 +857,20 @@ private fun PlayerScreen(
             }
         }
 
-        // ---- Loading/error overlay (both modes) ----
+        // ---- Loading/error overlay ----
+        // In MINIMIZED mode: only covers the video area (16:9 at top)
+        // In FULLSCREEN mode: covers the entire screen
         val loadingState by viewModel.loadingState.collectAsState()
         val errorMessage by viewModel.errorMessage.collectAsState()
         if (loadingState != app.anikuta.player.PlayerLoadingState.READY) {
+            val loadingModifier = when (playerMode) {
+                PlayerMode.MINIMIZED -> Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                PlayerMode.FULLSCREEN -> Modifier.fillMaxSize()
+            }
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
+                modifier = loadingModifier
                     .background(Color.Black.copy(alpha = 0.85f)),
                 contentAlignment = Alignment.Center,
             ) {
