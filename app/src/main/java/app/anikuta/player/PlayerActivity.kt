@@ -432,7 +432,7 @@ class PlayerActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            hide(WindowInsetsControllerCompat.BITMASK_SYSTEM_BARS)
+            hide(WindowInsetsControllerCompat.BITMASK_STATUS_BAR or WindowInsetsControllerCompat.BITMASK_NAVIGATION_BAR)
         }
     }
 
