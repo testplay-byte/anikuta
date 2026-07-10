@@ -1,5 +1,6 @@
 package app.anikuta.player.controls.sheets
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -133,7 +139,7 @@ fun SubtitleTracksSheet(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         androidx.compose.material3.Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.Settings,
+                            imageVector = Icons.Default.Settings,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp),
@@ -146,13 +152,13 @@ fun SubtitleTracksSheet(
                         )
                     }
                     androidx.compose.material3.Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.ChevronRight,
+                        imageVector = Icons.Default.ChevronRight,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp),
                     )
                 }
-                androidx.compose.material3.HorizontalDivider(
+                HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     color = MaterialTheme.colorScheme.outlineVariant,
                 )

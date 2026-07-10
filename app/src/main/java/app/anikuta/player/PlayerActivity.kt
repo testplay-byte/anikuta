@@ -1143,12 +1143,9 @@ class PlayerActivity : ComponentActivity() {
      * Called from the More Options sheet.
      */
     fun openSubtitleSettings() {
-        // Trigger the subtitle sheet by setting a flag the Composable observes.
-        // Since we can't directly set Compose state from here, we use a simple
-        // approach: show a Toast directing the user to the subtitle button.
         runOnUiThread {
             android.widget.Toast.makeText(
-                this,
+                this@PlayerActivity,
                 "Open Subtitles (CC icon) to access delay settings",
                 android.widget.Toast.LENGTH_SHORT,
             ).show()
@@ -1161,7 +1158,9 @@ class PlayerActivity : ComponentActivity() {
      */
     fun cycleAudioDelay() {
         try {
-            val currentDelay = `is`.xyz.mpv.MPVLib.getPropertyDouble("audio-delay") ?: 0.0
+            // Use getPropertyString since getPropertyDouble may not exist in MPVLib
+            val currentStr = `is`.xyz.mpv.MPVLib.getPropertyString("audio-delay")
+            val currentDelay = currentStr?.toDoubleOrNull() ?: 0.0
             val newDelay = when {
                 currentDelay == 0.0 -> -0.3
                 currentDelay < 0.0 -> currentDelay + 0.2
@@ -1172,7 +1171,7 @@ class PlayerActivity : ComponentActivity() {
             Log.d(TAG, "Audio delay set to ${newDelay}s")
             runOnUiThread {
                 android.widget.Toast.makeText(
-                    this,
+                    this@PlayerActivity,
                     "Audio delay: ${newDelay}s",
                     android.widget.Toast.LENGTH_SHORT,
                 ).show()
@@ -1193,7 +1192,7 @@ class PlayerActivity : ComponentActivity() {
             Log.d(TAG, "Screenshot saved to $path")
             runOnUiThread {
                 android.widget.Toast.makeText(
-                    this,
+                    this@PlayerActivity,
                     "Screenshot saved",
                     android.widget.Toast.LENGTH_SHORT,
                 ).show()
@@ -1202,7 +1201,7 @@ class PlayerActivity : ComponentActivity() {
             Log.w(TAG, "Screenshot failed", e)
             runOnUiThread {
                 android.widget.Toast.makeText(
-                    this,
+                    this@PlayerActivity,
                     "Screenshot failed: ${e.message}",
                     android.widget.Toast.LENGTH_SHORT,
                 ).show()
@@ -1216,7 +1215,7 @@ class PlayerActivity : ComponentActivity() {
     fun startSleepTimer() {
         runOnUiThread {
             android.widget.Toast.makeText(
-                this,
+                this@PlayerActivity,
                 "Sleep timer: playback will pause in 15 minutes",
                 android.widget.Toast.LENGTH_SHORT,
             ).show()
@@ -1228,7 +1227,7 @@ class PlayerActivity : ComponentActivity() {
             Log.d(TAG, "Sleep timer fired — paused playback")
             runOnUiThread {
                 android.widget.Toast.makeText(
-                    this,
+                    this@PlayerActivity,
                     "Sleep timer: playback paused",
                     android.widget.Toast.LENGTH_SHORT,
                 ).show()
