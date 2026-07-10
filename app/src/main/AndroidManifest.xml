@@ -53,12 +53,14 @@
             </intent-filter>
         </activity>
 
-        <!-- MPV video player. Landscape + fullscreen at runtime; theme from manifest. -->
+        <!-- MPV video player. Orientation set at runtime based on mode preference
+             (portrait for minimized, landscape for fullscreen). configChanges
+             prevents Activity recreation on orientation changes. -->
         <activity
             android:name=".player.PlayerActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|fontScale"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="sensorPortrait"
             android:theme="@style/Theme.Anikuta" />
 
         <!-- Global crash screen. Shown by AnikutaCrashHandler when the app crashes. -->

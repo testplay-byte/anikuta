@@ -27,6 +27,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -428,6 +432,7 @@ class PlayerActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsControllerCompat.BITMASK_SYSTEM_BARS)
         }
     }
 
@@ -643,25 +648,41 @@ private fun PlayerScreen(
 
         // Lock button overlay (when controls are locked)
         if (controlsLocked && lockButtonVisible) {
+            // Full-screen tap area — tapping anywhere shows the lock button
+            // (the lock button itself handles the unlock tap separately)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable {
-                        // Tapping the screen shows/hides the lock button
-                        viewModel.showLockButton()
+                    .pointerInput(Unit) {
+                        detectTapGestures {
+                            // Tapping the screen just keeps the lock button visible
+                            // (resets the auto-hide timer)
+                            viewModel.showLockButton()
+                        }
                     },
-                contentAlignment = Alignment.TopCenter,
+                contentAlignment = Alignment.TopStart,
             ) {
+                // Lock/unlock button — aligned to top-left, uses proper icon
                 Surface(
                     shape = androidx.compose.foundation.shape.CircleShape,
                     color = Color.Black.copy(alpha = 0.6f),
                     modifier = Modifier
-                        .padding(top = 48.dp)
+                        .padding(start = 16.dp, top = 16.dp)
                         .size(44.dp)
-                        .clickable { viewModel.unlockControls() },
+                        .pointerInput(Unit) {
+                            // Separate pointerInput so this doesn't get consumed by the parent
+                            detectTapGestures {
+                                viewModel.unlockControls()
+                            }
+                        },
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        androidx.compose.material3.Text("🔒", color = Color.White)
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = "Unlock controls",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp),
+                        )
                     }
                 }
             }
@@ -674,9 +695,13 @@ private fun PlayerScreen(
         ) { mode ->
             when (mode) {
                 PlayerMode.MINIMIZED -> {
-                    // Portrait: Column with transparent video area at top,
+                    // Portrait: Column with status bar padding, transparent video area at top,
                     // opaque content below covering the rest of the video.
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding(),
+                    ) {
                         // Video area (transparent — shows MPV video behind)
                         Box(
                             modifier = Modifier
