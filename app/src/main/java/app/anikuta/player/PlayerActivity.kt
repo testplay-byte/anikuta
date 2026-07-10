@@ -591,7 +591,6 @@ private fun PlayerScreen(
                 if (!shouldDelayVideoLoad) {
                     Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
                     MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
-                    videoLoaded = true
                 } else {
                     Log.d("PlayerActivity", "Video load delayed (prompt showing)")
                 }
