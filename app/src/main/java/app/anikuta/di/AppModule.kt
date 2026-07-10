@@ -9,6 +9,7 @@ import app.anikuta.core.preference.PreferenceStore
 import app.anikuta.data.AnimeDatabase
 import app.anikuta.data.AnimeDatabaseFactory
 import app.anikuta.data.cache.CacheManager
+import app.anikuta.data.cache.EpisodeCacheStore
 import app.anikuta.data.cache.LocalCache
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
@@ -125,6 +126,6 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { CacheManager(get(), get()) }
 
         // Episode cache (persistent — survives app restart)
-        addSingletonFactory { app.anikuta.data.cache.EpisodeCacheStore(get<Context>()) }
+        addSingletonFactory { EpisodeCacheStore(get<Context>()) }
     }
 }
