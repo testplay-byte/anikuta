@@ -54,12 +54,12 @@ fun ServerVersionDropdowns(
     val availableServers by viewModel.availableServers.collectAsState()
     val currentServer by viewModel.currentServer.collectAsState()
 
-    // Audio versions derived from scanlator field of episodes
-    // For now, we show SUB/DUB/HSUB based on what's available
-    val audioVersions = remember {
-        listOf("SUB", "DUB", "HSUB")
-    }
-    var currentAudioVersion by remember { mutableStateOf("SUB") }
+    // FIX (Part 4): Use REAL audio versions from the ViewModel (derived from
+    // what the source actually provides for this episode). Previously this
+    // was hardcoded to listOf("SUB","DUB","HSUB") which showed all three even
+    // when some weren't available, causing failed switches.
+    val audioVersions by viewModel.availableAudioVersions.collectAsState()
+    val currentAudioVersion by viewModel.currentAudioVersion.collectAsState()
 
     var serverDropdownOpen by remember { mutableStateOf(false) }
     var audioDropdownOpen by remember { mutableStateOf(false) }
@@ -90,15 +90,14 @@ fun ServerVersionDropdowns(
         // Audio version dropdown
         DropdownSelector(
             label = "Audio",
-            value = currentAudioVersion,
-            options = audioVersions,
+            value = currentAudioVersion.ifBlank { "SUB" },
+            options = audioVersions.ifEmpty { listOf(currentAudioVersion.ifBlank { "SUB" }) },
             isOpen = audioDropdownOpen,
             onToggle = {
                 audioDropdownOpen = !audioDropdownOpen
                 serverDropdownOpen = false
             },
             onSelect = { version ->
-                currentAudioVersion = version
                 onAudioVersionSelected(version)
                 audioDropdownOpen = false
             },

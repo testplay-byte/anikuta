@@ -3,6 +3,7 @@ package app.anikuta.player
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import app.anikuta.source.api.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.Video
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -109,6 +110,27 @@ class PlayerViewModel(
     private val _currentServer = MutableStateFlow("")
     val currentServer: StateFlow<String> = _currentServer.asStateFlow()
 
+    // ---- Parts 2+3+4: Video selection state ----
+    // These hold the resolved video list for the current episode + the
+    // currently-selected server/audio/quality. They drive the Quality sheet,
+    // Server dropdown/sheet, and Audio version dropdown.
+
+    /** All resolved videos for the current episode (for the Quality sheet). */
+    private val _availableVideos = MutableStateFlow<List<Video>>(emptyList())
+    val availableVideos: StateFlow<List<Video>> = _availableVideos.asStateFlow()
+
+    /** All audio versions available for the current episode (e.g. ["SUB","DUB"]). */
+    private val _availableAudioVersions = MutableStateFlow<List<String>>(emptyList())
+    val availableAudioVersions: StateFlow<List<String>> = _availableAudioVersions.asStateFlow()
+
+    /** Currently selected audio version (e.g. "SUB", "DUB", "HSUB", "ANY"). */
+    private val _currentAudioVersion = MutableStateFlow("SUB")
+    val currentAudioVersion: StateFlow<String> = _currentAudioVersion.asStateFlow()
+
+    /** Currently selected video quality (e.g. 1080, 720, -1 = unknown). */
+    private val _currentVideoQuality = MutableStateFlow(-1)
+    val currentVideoQuality: StateFlow<Int> = _currentVideoQuality.asStateFlow()
+
     // ---- Mode switching ----
 
     fun setPlayerMode(mode: PlayerMode) {
@@ -165,6 +187,25 @@ class PlayerViewModel(
 
     fun setCurrentServer(server: String) {
         _currentServer.value = server
+    }
+
+    // ---- Parts 2+3+4: Video selection setters ----
+
+    fun setAvailableVideos(videos: List<Video>) {
+        _availableVideos.value = videos
+    }
+
+    fun setAvailableAudioVersions(versions: List<String>, current: String) {
+        _availableAudioVersions.value = versions
+        _currentAudioVersion.value = current
+    }
+
+    fun setCurrentAudioVersion(version: String) {
+        _currentAudioVersion.value = version
+    }
+
+    fun setCurrentVideoQuality(quality: Int) {
+        _currentVideoQuality.value = quality
     }
 
     // ---- Original state mutations (from Activity's MPV observer) ----

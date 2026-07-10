@@ -189,6 +189,11 @@ class PlayerActivity : ComponentActivity() {
     @Volatile private var currentVideoUrl: String = ""
     /** Current video headers — updated when switching episodes. */
     @Volatile private var currentVideoHeaders: String = ""
+    /** Resolved video list for the current episode — cached so switchServer/
+     *  switchAudioVersion / switchQuality don't need to re-resolve from source. */
+    @Volatile private var currentEpisodeVideos: List<eu.kanade.tachiyomi.animesource.model.Video> = emptyList()
+    /** Parsed videos for the current episode (cached for fast switching). */
+    @Volatile private var currentParsedVideos: List<app.anikuta.ui.detail.ParsedVideo> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -228,6 +233,11 @@ class PlayerActivity : ComponentActivity() {
                         val currentIndex = episodes.indexOfFirst { it.url == episodeUrl }.coerceAtLeast(0)
                         viewModel?.setEpisodeList(episodes, currentIndex)
                         viewModel?.setAvailableServers(listOf(sourceName), sourceName)
+                        // Parts 2+3+4: Resolve videos in the background to populate
+                        // the server/audio/quality dropdowns + sheets on initial load.
+                        // This does NOT reload the video — the one from the Intent is
+                        // already playing. It just populates the selection state.
+                        resolveVideosInBackground()
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Could not load episode cache for player", e)
@@ -543,6 +553,9 @@ class PlayerActivity : ComponentActivity() {
 
                 // Step 3: Parse + select best matching video
                 val parsedVideos = allVideos.map { app.anikuta.ui.detail.VideoTitleParser.parse(it) }
+                // Cache for switchServer/AudioVersion/Quality (no re-resolve needed)
+                currentEpisodeVideos = allVideos
+                currentParsedVideos = parsedVideos
                 val selected = selectBestVideo(parsedVideos)
                 Log.d(TAG, "Selected video: server='${selected.server}' audio='${selected.audio}' quality=${selected.quality} url=${selected.video.videoUrl.take(80)}...")
 
@@ -558,9 +571,8 @@ class PlayerActivity : ComponentActivity() {
                 episodeUrl = episode.url
                 vmEpisodeNumber = episode.episode_number.takeIf { it > 0 }
 
-                // Update available servers in VM (for the server dropdown)
-                val servers = parsedVideos.map { it.server }.distinct()
-                vm.setAvailableServers(servers, selected.server)
+                // Populate ALL video selection state (servers, videos, audio versions, quality)
+                populateVideoSelectionState(parsedVideos, selected)
 
                 // Step 6: Load new video into MPV
                 withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -732,6 +744,228 @@ class PlayerActivity : ComponentActivity() {
                 .joinToString(",")
         } else {
             "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
+        }
+    }
+
+    /**
+     * Parts 2+3+4: Populate ALL video selection state in the ViewModel from
+     * the parsed video list. Called after episode switching AND after initial
+     * background video resolution.
+     *
+     * Populates: availableServers, currentServer, availableVideos,
+     * availableAudioVersions, currentAudioVersion, currentVideoQuality.
+     */
+    private fun populateVideoSelectionState(
+        parsedVideos: List<app.anikuta.ui.detail.ParsedVideo>,
+        selected: app.anikuta.ui.detail.ParsedVideo,
+    ) {
+        val vm = viewModel ?: return
+        // Servers: distinct server names from parsed videos
+        val servers = parsedVideos.map { it.server }.distinct()
+        vm.setAvailableServers(servers, selected.server)
+        Log.d(TAG, "Populated servers: $servers (current=${selected.server})")
+
+        // Videos: raw Video objects for the Quality sheet
+        vm.setAvailableVideos(parsedVideos.map { it.video })
+
+        // Audio versions: distinct audio versions available for THIS episode
+        // (not hardcoded — derived from what the source actually provides)
+        val audioVersions = parsedVideos.map { it.audio.name }.distinct()
+        vm.setAvailableAudioVersions(audioVersions, selected.audio.name)
+        Log.d(TAG, "Populated audio versions: $audioVersions (current=${selected.audio.name})")
+
+        // Current quality
+        vm.setCurrentVideoQuality(selected.quality ?: -1)
+        Log.d(TAG, "Populated quality: ${selected.quality ?: -1}")
+    }
+
+    /**
+     * Part 3: Switch to a different server while keeping the same audio
+     * version and quality (as close as possible). Uses the cached video list
+     * — no network re-resolution needed.
+     */
+    fun switchServer(serverName: String) {
+        val vm = viewModel ?: return
+        if (serverName == currentVideoServer) {
+            Log.d(TAG, "switchServer: already on '$serverName' — skipping")
+            return
+        }
+        if (currentParsedVideos.isEmpty()) {
+            Log.w(TAG, "switchServer: no cached videos — cannot switch")
+            return
+        }
+        Log.d(TAG, "=== Server switch: '$currentVideoServer' -> '$serverName' ===")
+
+        // Select best video for the new server: prefer same audio + same quality
+        val targetAudio = app.anikuta.ui.detail.AudioVersion.fromToken(currentVideoAudio)
+        val candidates = currentParsedVideos.filter { it.server == serverName }
+        if (candidates.isEmpty()) {
+            Log.w(TAG, "switchServer: no videos for server '$serverName'")
+            return
+        }
+        // Try exact match (same audio + same quality)
+        val selected = candidates.firstOrNull { it.audio == targetAudio && it.quality == currentVideoQuality }
+            ?: candidates.filter { it.audio == targetAudio }.maxByOrNull { it.quality ?: 0 }
+            ?: candidates.maxByOrNull { it.quality ?: 0 }
+            ?: candidates.first()
+
+        loadSelectedVideo(selected)
+        Log.d(TAG, "=== Server switch SUCCESS: ${selected.server} ${selected.audio} ${selected.quality}p ===")
+    }
+
+    /**
+     * Part 4: Switch to a different audio version (SUB/DUB/HSUB) while keeping
+     * the same server and quality (as close as possible). Uses cached videos.
+     */
+    fun switchAudioVersion(audioVersion: String) {
+        val vm = viewModel ?: return
+        if (audioVersion == currentVideoAudio) {
+            Log.d(TAG, "switchAudioVersion: already on '$audioVersion' — skipping")
+            return
+        }
+        if (currentParsedVideos.isEmpty()) {
+            Log.w(TAG, "switchAudioVersion: no cached videos — cannot switch")
+            return
+        }
+        Log.d(TAG, "=== Audio version switch: '$currentVideoAudio' -> '$audioVersion' ===")
+
+        val targetAudio = app.anikuta.ui.detail.AudioVersion.fromToken(audioVersion)
+        val candidates = currentParsedVideos.filter { it.audio == targetAudio }
+        if (candidates.isEmpty()) {
+            Log.w(TAG, "switchAudioVersion: no videos for audio '$audioVersion'")
+            // Show toast — user selected an unavailable version
+            runOnUiThread {
+                android.widget.Toast.makeText(
+                    this,
+                    "Audio version '$audioVersion' is not available for this episode",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            }
+            return
+        }
+        // Prefer same server + same quality
+        val selected = candidates.firstOrNull { it.server == currentVideoServer && it.quality == currentVideoQuality }
+            ?: candidates.filter { it.server == currentVideoServer }.maxByOrNull { it.quality ?: 0 }
+            ?: candidates.maxByOrNull { it.quality ?: 0 }
+            ?: candidates.first()
+
+        loadSelectedVideo(selected)
+        Log.d(TAG, "=== Audio version switch SUCCESS: ${selected.server} ${selected.audio} ${selected.quality}p ===")
+    }
+
+    /**
+     * Part 2: Switch to a different quality while keeping the same server and
+     * audio version. Uses cached videos.
+     */
+    fun switchQuality(video: eu.kanade.tachiyomi.animesource.model.Video) {
+        val parsed = currentParsedVideos.find { it.video.videoUrl == video.videoUrl }
+        if (parsed == null) {
+            Log.w(TAG, "switchQuality: video not found in cached list")
+            return
+        }
+        Log.d(TAG, "=== Quality switch: $currentVideoQuality -> ${parsed.quality}p ===")
+        loadSelectedVideo(parsed)
+        Log.d(TAG, "=== Quality switch SUCCESS: ${parsed.server} ${parsed.audio} ${parsed.quality}p ===")
+    }
+
+    /**
+     * Shared helper: load a parsed video into MPV + update all state.
+     * Used by switchServer, switchAudioVersion, switchQuality.
+     */
+    private fun loadSelectedVideo(selected: app.anikuta.ui.detail.ParsedVideo) {
+        val vm = viewModel ?: return
+        val headers = buildHeaders(selected.video)
+
+        // Update Activity state
+        currentVideoUrl = selected.video.videoUrl
+        currentVideoHeaders = headers
+        currentVideoServer = selected.server
+        currentVideoAudio = selected.audio.name
+        currentVideoQuality = selected.quality ?: -1
+
+        // Update VM state (for UI reactivity)
+        vm.setCurrentServer(selected.server)
+        vm.setCurrentAudioVersion(selected.audio.name)
+        vm.setCurrentVideoQuality(selected.quality ?: -1)
+
+        // Show brief loading indicator
+        vm.setSwitchingEpisode(true)
+        vm.setControlsVisible(false)
+
+        // Load into MPV
+        lifecycleScope.launch {
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                try {
+                    if (headers.isNotBlank()) {
+                        MPVLib.setOptionString("http-header-fields", headers)
+                    }
+                    Log.d(TAG, "Loading video: ${currentVideoUrl.take(80)}...")
+                    MPVLib.command(arrayOf("loadfile", currentVideoUrl, "replace"))
+                    launchSwitchTimeout()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load video", e)
+                    vm.setSwitchingEpisode(false)
+                    vm.setControlsVisible(true)
+                    runOnUiThread {
+                        android.widget.Toast.makeText(
+                            this@PlayerActivity,
+                            "Failed to load video: ${e.message}",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Parts 2+3+4: Resolve videos for the current episode in the background
+     * (on initial load). Populates the server/audio/quality state so the
+     * dropdowns and sheets work immediately when the user opens them.
+     *
+     * Called from onCreate after the episode list is loaded from cache.
+     * Does NOT reload the video — the one from the Intent is already playing.
+     */
+    private fun resolveVideosInBackground() {
+        val vm = viewModel ?: return
+        if (sourceId < 0 && anilistId < 0) return  // no source to resolve from
+        val episode = vm.episodeList.value.getOrNull(vm.currentEpisodeIndex.value) ?: return
+
+        lifecycleScope.launch {
+            try {
+                Log.d(TAG, "=== Background video resolution START ===")
+                val source = resolveSource() ?: run {
+                    Log.w(TAG, "Background resolve: source not found")
+                    return@launch
+                }
+                val allVideos = resolveVideoList(source, episode)
+                if (allVideos.isEmpty()) {
+                    Log.w(TAG, "Background resolve: no videos found")
+                    return@launch
+                }
+                val parsedVideos = allVideos.map { app.anikuta.ui.detail.VideoTitleParser.parse(it) }
+                // Cache for switchServer/AudioVersion/Quality
+                currentEpisodeVideos = allVideos
+                currentParsedVideos = parsedVideos
+
+                // Find the currently-playing video in the parsed list to set "current"
+                val currentParsed = parsedVideos.find { it.video.videoUrl == currentVideoUrl }
+                if (currentParsed != null) {
+                    // Update Activity state from the parsed video (more accurate than Intent extras)
+                    currentVideoServer = currentParsed.server
+                    currentVideoAudio = currentParsed.audio.name
+                    currentVideoQuality = currentParsed.quality ?: -1
+                    populateVideoSelectionState(parsedVideos, currentParsed)
+                } else {
+                    // The playing video wasn't in the resolved list (maybe different URL).
+                    // Use the Intent extras as the "current" and populate the rest.
+                    val selected = selectBestVideo(parsedVideos)
+                    populateVideoSelectionState(parsedVideos, selected)
+                }
+                Log.d(TAG, "=== Background video resolution SUCCESS: ${parsedVideos.size} videos ===")
+            } catch (e: Exception) {
+                Log.w(TAG, "Background video resolution failed", e)
+            }
         }
     }
 
@@ -984,8 +1218,9 @@ private fun PlayerScreen(
     var showSpeedSheet by remember { mutableStateOf(false) }
     var showMoreSheet by remember { mutableStateOf(false) }
 
-    // Available videos for quality sheet (empty until wired to video resolution)
-    val availableVideos = remember { mutableStateOf<List<app.anikuta.source.api.model.Video>>(emptyList()) }
+    // Available videos for quality sheet — now backed by ViewModel (Part 2).
+    // Populated by populateVideoSelectionState() during episode switch + initial load.
+    val availableVideos by viewModel.availableVideos.collectAsState()
     val availableServers by viewModel.availableServers.collectAsState()
     val currentServer by viewModel.currentServer.collectAsState()
     val currentSpeed by remember { mutableFloatStateOf(1.0f) }
@@ -1296,8 +1531,8 @@ private fun PlayerScreen(
                     item(key = "dropdowns") {
                         app.anikuta.player.controls.ServerVersionDropdowns(
                             viewModel = viewModel,
-                            onServerSelected = { },
-                            onAudioVersionSelected = { },
+                            onServerSelected = { server -> switchServer(server) },
+                            onAudioVersionSelected = { audio -> switchAudioVersion(audio) },
                         )
                     }
 
@@ -1552,10 +1787,12 @@ private fun PlayerScreen(
     // ---- Selection sheets ----
     if (showQualitySheet) {
         app.anikuta.player.controls.sheets.QualitySheet(
-            videos = availableVideos.value,
-            currentVideoUrl = viewModel.videoUrl,
+            videos = availableVideos,
+            currentVideoUrl = currentVideoUrl,
             onSelect = { video ->
                 Log.d("PlayerActivity", "Quality selected: ${video.videoTitle}")
+                showQualitySheet = false
+                switchQuality(video)
             },
             onDismiss = { showQualitySheet = false },
         )
@@ -1597,7 +1834,10 @@ private fun PlayerScreen(
         app.anikuta.player.controls.sheets.ServerSheet(
             servers = availableServers.ifEmpty { listOf("Default") },
             currentServer = currentServer.ifBlank { "Default" },
-            onSelect = { server -> viewModel.setCurrentServer(server) },
+            onSelect = { server ->
+                showServerSheet = false
+                switchServer(server)
+            },
             onDismiss = { showServerSheet = false },
         )
     }
