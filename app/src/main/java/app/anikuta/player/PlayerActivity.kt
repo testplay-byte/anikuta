@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
@@ -706,68 +707,80 @@ private fun PlayerScreen(
         ) { mode ->
             when (mode) {
                 PlayerMode.MINIMIZED -> {
-                    // Portrait: Floating pill top bar + video area + content below
+                    // Portrait: Floating pill top bar + adaptive video area + content
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                     ) {
-                        // ---- Floating pill-shaped top bar ----
-                        Row(
+                        // ---- Floating pill-shaped top bar (matches home page design) ----
+                        Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .statusBarsPadding()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            tonalElevation = 3.dp,
+                            shadowElevation = 6.dp,
                         ) {
-                            // Back button (pill-shaped)
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.clickable { onBack() },
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                // Back button
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(percent = 50))
+                                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                                        .clickable { onBack() },
+                                    contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back",
-                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(18.dp),
                                     )
                                 }
-                            }
-                            // Title (center)
-                            Text(
-                                "AniKuta",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground,
-                            )
-                            // Settings button (pill-shaped)
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.clickable { /* Player settings */ },
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                // Title
+                                Text(
+                                    "AniKuta",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                // Settings button
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(percent = 50))
+                                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                                        .clickable { /* Player settings */ },
+                                    contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
                                         Icons.Default.Settings,
                                         contentDescription = "Settings",
-                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(18.dp),
                                     )
                                 }
                             }
                         }
-                        // ---- Video area (16:9, transparent — shows MPV video behind) ----
+                        // ---- Video area (adaptive — fills width, height follows video) ----
+                        // No fixed aspect ratio. MPV renders at the video's natural ratio.
+                        // We use a weight to give the video most of the remaining space,
+                        // and the content below gets the rest.
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(16f / 9f),
+                                .weight(1f, fill = false)
+                                .aspectRatio(16f / 9f),  // Default ratio, MPV adjusts internally
                         ) {
                             app.anikuta.player.controls.MinimizedControls(
                                 viewModel = viewModel,
@@ -889,40 +902,29 @@ private fun PlayerScreen(
             }
         }
 
-        // ---- Loading/error overlay ----
+        // ---- Error overlay only (loading is handled by MPV + MinimizedControls) ----
         val loadingState by viewModel.loadingState.collectAsState()
         val errorMessage by viewModel.errorMessage.collectAsState()
-        if (loadingState != app.anikuta.player.PlayerLoadingState.READY) {
-            val loadingModifier = when (playerMode) {
-                PlayerMode.MINIMIZED -> Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                PlayerMode.FULLSCREEN -> Modifier.fillMaxSize()
-            }
+        if (loadingState == app.anikuta.player.PlayerLoadingState.ERROR) {
             Box(
-                modifier = loadingModifier
+                modifier = Modifier
+                    .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.85f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (loadingState == app.anikuta.player.PlayerLoadingState.ERROR) {
-                        Text("⚠️", color = Color.White, style = MaterialTheme.typography.headlineLarge)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            errorMessage ?: "Video failed to load.",
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 32.dp),
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        androidx.compose.material3.Button(onClick = onBack) {
-                            Text("Go Back")
-                        }
-                    } else {
-                        androidx.compose.material3.CircularProgressIndicator(color = Color.White)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("Loading…", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    Text("⚠️", color = Color.White, style = MaterialTheme.typography.headlineLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        errorMessage ?: "Video failed to load.",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 32.dp),
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    androidx.compose.material3.Button(onClick = onBack) {
+                        Text("Go Back")
                     }
                 }
             }
