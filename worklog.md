@@ -463,3 +463,40 @@ Stage Summary:
   all selection sheets (6), full gesture support, pinch zoom with magnetic resistance,
   subtitle customization (15 prefs + live preview), MPV config files, PiP, media session
 - Ready for full on-device testing
+
+---
+
+## Session 30 (Player UI fixes — toggle reactivity, video area, episode list, highlight)
+
+Task ID: PLAYER-UI-FIXES-V2
+Agent: main (Z.ai Code)
+
+Work Log:
+- Fixed top bar toggle reactivity: showPlayerTopBar now observed via
+  stateIn(scope).collectAsState() in BOTH PlayerSettingsScreen.kt and
+  PlayerActivity.kt (was read-once via .get(), never recomposed)
+- Fixed video area: themed background (was Color.Black), statusBarsPadding()
+  when top bar hidden (YouTube-style), single clip (was double-clipped),
+  removed inner padding Box that created ugly black border, clean 14dp rounded corners
+- Fixed MinimizedControls: gradient overlay now only visible when controls
+  are shown (was always-on, creating permanent dark shadow at top/bottom
+  of video). Changed outer Box from fillMaxWidth+aspectRatio to fillMaxSize.
+- Fixed episode list spacing: added verticalArrangement = spacedBy(8.dp)
+  to match detail page (was packed with no gap)
+- Improved episode details: title upgraded to titleLarge, added prominent
+  EPISODE number badge, added HorizontalDivider separator + "Episodes"
+  section header for clear visual separation
+- Fixed currently playing highlight: replaced barely-visible alpha overlay
+  (primaryContainer.copy(alpha=0.5f)) with full primaryContainer background
+  + 2dp primary-colored border + tonal/shadow elevation for clear differentiation
+- Commit: 314577d pushed, CI build triggered
+
+Stage Summary:
+- 6 issues fixed across 4 files (PlayerActivity.kt, EpisodeListView.kt,
+  MinimizedControls.kt, PlayerSettingsScreen.kt)
+- Top bar toggle now updates UI immediately
+- Video area has themed background, respects status bar, clean rounded corners
+- No more permanent dark shadow overlay on video
+- Episode list has proper spacing matching detail page
+- Episode details are prominent (big title + episode number badge)
+- Currently playing episode has clear border + glow effect

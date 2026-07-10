@@ -893,7 +893,8 @@ private fun PlayerScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        horizontal = 12.dp,
+                        start = 12.dp,
+                        end = 12.dp,
                         bottom = 24.dp,
                     ),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
