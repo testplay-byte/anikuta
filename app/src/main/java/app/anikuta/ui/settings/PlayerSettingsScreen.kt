@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,7 +26,10 @@ import uy.kohesive.injekt.api.get
  * Original: Speed, hardware decoding, audio language.
  */
 @Composable
-fun PlayerSettingsScreen(onBack: () -> Unit) {
+fun PlayerSettingsScreen(
+    onBack: () -> Unit,
+    onOpenEpisodeDisplay: () -> Unit = {},
+) {
     val prefs: PlayerPreferences = remember { Injekt.get() }
     val scope = rememberCoroutineScope()
     val speed by prefs.playerSpeed().stateIn(scope).collectAsState()
@@ -66,6 +70,20 @@ fun PlayerSettingsScreen(onBack: () -> Unit) {
                                 shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                             ) { Text("Ask") }
                         }
+                    }
+                }
+            }
+
+            // Episode list display
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    SettingsGroupCard(title = "Episode list") {
+                        ClickableSettingsRow(
+                            icon = Icons.Default.ViewAgenda,
+                            title = "Episode display",
+                            subtitle = "Customize how episodes appear in the player",
+                            onClick = onOpenEpisodeDisplay,
+                        )
                     }
                 }
             }

@@ -67,6 +67,7 @@ class AppModule(val app: Application) : InjektModule {
 
         // Player preferences + MPV player surface
         addSingletonFactory { PlayerPreferences(get<PreferenceStore>()) }
+        addSingletonFactory { app.anikuta.player.PlayerEpisodePreferences(get<PreferenceStore>()) }
         addSingletonFactory { WatchProgressStore(get<PreferenceStore>()) }
 
         // Phase 5 task 5.6 — Library persistence (saved AniList IDs + cached JSON)
