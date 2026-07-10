@@ -182,6 +182,15 @@ class PlayerPreferences(
 
     // ---- Phase 5: Subtitle customization preferences ----
 
+    /**
+     * Show the top navigation bar in the player (minimized mode).
+     * When disabled, the video player moves up to fill the space.
+     * The status bar remains visible. User navigates back via system gestures.
+     * Default: true.
+     */
+    fun showPlayerTopBar(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_show_player_top_bar", true)
+
     /** Subtitle font family. Default: "Sans Serif". */
     fun subtitleFont(): Preference<String> =
         preferenceStore.getString("pref_subtitle_font", "Sans Serif")

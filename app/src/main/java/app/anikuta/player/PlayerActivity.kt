@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
@@ -52,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
@@ -92,6 +95,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_EPISODE_URL = "app.anikuta.player.EPISODE_URL"
         const val EXTRA_EPISODE_NUMBER = "app.anikuta.player.EPISODE_NUMBER"
         const val EXTRA_VIDEO_HEADERS = "app.anikuta.player.VIDEO_HEADERS"
+        const val EXTRA_COVER_COLOR = "app.anikuta.player.COVER_COLOR"
         const val MPV_DIR = "mpv"
 
         /**
@@ -117,11 +121,13 @@ class PlayerActivity : ComponentActivity() {
             episodeUrl: String = "",
             episodeNumber: Float = -1f,
             videoHeaders: String = "",
+            coverColor: Int = 0,
         ): Intent =
             Intent(context, PlayerActivity::class.java).apply {
                 putExtra(EXTRA_VIDEO_URL, videoUrl)
                 putExtra(EXTRA_TITLE, title)
                 if (anilistId > 0) putExtra(EXTRA_ANILIST_ID, anilistId)
+                if (coverColor != 0) putExtra(EXTRA_COVER_COLOR, coverColor)
                 if (episodeUrl.isNotBlank()) putExtra(EXTRA_EPISODE_URL, episodeUrl)
                 if (episodeNumber > 0) putExtra(EXTRA_EPISODE_NUMBER, episodeNumber)
                 if (videoHeaders.isNotBlank()) putExtra(EXTRA_VIDEO_HEADERS, videoHeaders)
@@ -151,6 +157,7 @@ class PlayerActivity : ComponentActivity() {
         anilistId = intent.getIntExtra(EXTRA_ANILIST_ID, -1)
         episodeUrl = intent.getStringExtra(EXTRA_EPISODE_URL) ?: ""
         vmEpisodeNumber = intent.getFloatExtra(EXTRA_EPISODE_NUMBER, -1f).takeIf { it > 0 }
+        val coverColor = intent.getIntExtra(EXTRA_COVER_COLOR, 0)
 
         if (videoUrl.isNullOrBlank()) {
             Log.e(TAG, "No video URL provided, finishing")
@@ -260,6 +267,7 @@ class PlayerActivity : ComponentActivity() {
                         onEpisodeSwitch = { index ->
                             activity.switchEpisode(index)
                         },
+                        coverColor = coverColor,
                     )
                 }
             }
@@ -645,6 +653,7 @@ private fun PlayerScreen(
     onPromptDismiss: () -> Unit = {},
     onModeChange: (PlayerMode) -> Unit = {},
     onEpisodeSwitch: (Int) -> Unit = {},
+    coverColor: Int = 0,  // ARGB color for dynamic theming (0 = use default theme)
 ) {
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
     val playerMode by viewModel.playerMode.collectAsState()
@@ -683,6 +692,31 @@ private fun PlayerScreen(
         }
     }
 
+    // ---- Dynamic theming (same as detail page) ----
+    // If coverColor is provided, generate a color scheme from it and wrap
+    // the entire player in MaterialTheme override.
+    val defaultScheme = MaterialTheme.colorScheme
+    val themedColorScheme = remember(coverColor) {
+        if (coverColor != 0) {
+            app.anikuta.ui.detail.generateDynamicScheme(Color(coverColor)).toM3ColorScheme()
+        } else {
+            defaultScheme
+        }
+    }
+
+    // ---- Player preferences ----
+    val playerPrefs = remember {
+        try { uy.kohesive.injekt.Injekt.get<PlayerPreferences>() }
+        catch (e: Exception) { null }
+    }
+    val showTopBar = remember { playerPrefs?.showPlayerTopBar()?.get() ?: true }
+
+    // ---- Current episode info (for episode details below video) ----
+    val episodeList by viewModel.episodeList.collectAsState()
+    val currentIndex by viewModel.currentEpisodeIndex.collectAsState()
+    val currentEpisode = episodeList.getOrNull(currentIndex)
+
+    MaterialTheme(colorScheme = themedColorScheme) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -695,141 +729,205 @@ private fun PlayerScreen(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background),
             ) {
-                // ---- Floating pill-shaped top bar ----
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 3.dp,
-                    shadowElevation = 6.dp,
-                ) {
-                    Row(
+                // ---- Floating pill-shaped top bar (conditional) ----
+                if (showTopBar) {
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .statusBarsPadding()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 3.dp,
+                        shadowElevation = 6.dp,
                     ) {
-                        Box(
+                        Row(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(percent = 50))
-                                .background(MaterialTheme.colorScheme.secondaryContainer)
-                                .clickable { onBack() },
-                            contentAlignment = Alignment.Center,
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(18.dp),
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(percent = 50))
+                                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                                    .clickable { onBack() },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                            Text(
+                                "AniKuta",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
                             )
-                        }
-                        Text(
-                            "AniKuta",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(percent = 50))
-                                .background(MaterialTheme.colorScheme.secondaryContainer)
-                                .clickable { /* Player settings */ },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(18.dp),
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(percent = 50))
+                                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                                    .clickable { /* Player settings */ },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = "Settings",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                         }
                     }
                 }
 
-                // ---- Video area ----
-                // The AndroidView is placed here (inside the Column), so it
-                // naturally sits below the top bar. MPV renders at its natural
-                // aspect ratio inside this Box. The Box has a black background
-                // so any letterboxing is black.
+                // ---- Video area (rounded corners + side padding) ----
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(
+                            horizontal = if (showTopBar) 0.dp else 0.dp,
+                        )
                         .aspectRatio(16f / 9f)
                         .background(Color.Black),
                 ) {
-                    AndroidView(
-                        factory = { ctx ->
-                            val view = android.view.LayoutInflater
-                                .from(ctx)
-                                .inflate(R.layout.mpv_view, null) as AnikutaMPVView
-                            mpvView = view
-                            onViewCreated(view)
-                            val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
-                            view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "warn")
-                            PlayerActivity.mpvInitialized = true
-                            Log.d("PlayerActivity", "MPV initialized")
-                            MPVLib.addLogObserver(observer)
-                            MPVLib.addObserver(observer)
-                            if (videoHeaders.isNotBlank()) {
-                                MPVLib.setOptionString("http-header-fields", videoHeaders)
-                            } else {
-                                MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
-                            }
-                            if (!shouldDelayVideoLoad) {
-                                Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
-                                MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
-                            } else {
-                                Log.d("PlayerActivity", "Video load delayed (prompt showing)")
-                            }
-                            view
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 8.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                    ) {
+                        AndroidView(
+                            factory = { ctx ->
+                                val view = android.view.LayoutInflater
+                                    .from(ctx)
+                                    .inflate(R.layout.mpv_view, null) as AnikutaMPVView
+                                mpvView = view
+                                onViewCreated(view)
+                                val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
+                                view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "warn")
+                                PlayerActivity.mpvInitialized = true
+                                Log.d("PlayerActivity", "MPV initialized")
+                                MPVLib.addLogObserver(observer)
+                                MPVLib.addObserver(observer)
+                                if (videoHeaders.isNotBlank()) {
+                                    MPVLib.setOptionString("http-header-fields", videoHeaders)
+                                } else {
+                                    MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+                                }
+                                if (!shouldDelayVideoLoad) {
+                                    Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
+                                    MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
+                                } else {
+                                    Log.d("PlayerActivity", "Video load delayed (prompt showing)")
+                                }
+                                view
+                            },
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
+                        )
 
-                    // Controls overlay on top of the video
-                    app.anikuta.player.controls.MinimizedControls(
-                        viewModel = viewModel,
-                        onTogglePlay = {
-                            mpvView?.let { v ->
-                                val now = v.paused ?: true
-                                v.paused = !now
-                                viewModel.onPauseChanged(!now)
-                            }
-                        },
-                        onSeekRelative = { delta ->
-                            mpvView?.let { v ->
-                                val cur = v.timePos ?: 0
-                                val target = (cur + delta).coerceAtLeast(0)
-                                v.timePos = target
-                                viewModel.onPositionUpdate(target)
-                            }
-                        },
-                        onMaximize = { onModeChange(PlayerMode.FULLSCREEN) },
-                        onQualityClick = { showQualitySheet = true },
-                        onSubtitleClick = { showSubtitleSheet = true },
-                    )
+                        // Controls overlay on top of the video
+                        app.anikuta.player.controls.MinimizedControls(
+                            viewModel = viewModel,
+                            onTogglePlay = {
+                                mpvView?.let { v ->
+                                    val now = v.paused ?: true
+                                    v.paused = !now
+                                    viewModel.onPauseChanged(!now)
+                                }
+                            },
+                            onSeekRelative = { delta ->
+                                mpvView?.let { v ->
+                                    val cur = v.timePos ?: 0
+                                    val target = (cur + delta).coerceAtLeast(0)
+                                    v.timePos = target
+                                    viewModel.onPositionUpdate(target)
+                                }
+                            },
+                            onMaximize = { onModeChange(PlayerMode.FULLSCREEN) },
+                            onQualityClick = { showQualitySheet = true },
+                            onSubtitleClick = { showSubtitleSheet = true },
+                        )
+                    }
                 }
 
-                // ---- Below-video content (starts directly below video, no overlap) ----
-                Column(modifier = Modifier.fillMaxSize()) {
-                    app.anikuta.player.controls.ServerVersionDropdowns(
-                        viewModel = viewModel,
-                        onServerSelected = { },
-                        onAudioVersionSelected = { },
-                    )
-                    app.anikuta.player.controls.EpisodeListView(
-                        viewModel = viewModel,
-                        onEpisodeClick = { index ->
-                            onEpisodeSwitch(index)
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
+                // ---- Below-video content (scrolls as one unit) ----
+                // Episode details (title, description, date) + server dropdowns + episodes list
+                // All in a single LazyColumn so they scroll together (YouTube-style).
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                ) {
+                    // Episode details (title + description + date)
+                    if (currentEpisode != null) {
+                        item(key = "episode_details") {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                            ) {
+                                // Episode title
+                                Text(
+                                    text = app.anikuta.ui.detail.EpisodeTitleParser.getDisplayTitle(
+                                        currentEpisode.name, currentEpisode.episode_number,
+                                    ),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                // Episode date
+                                if (currentEpisode.date_upload > 0) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = formatDate(currentEpisode.date_upload),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                // Episode description
+                                if (!currentEpisode.summary.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = currentEpisode.summary,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Server + version dropdowns
+                    item(key = "dropdowns") {
+                        app.anikuta.player.controls.ServerVersionDropdowns(
+                            viewModel = viewModel,
+                            onServerSelected = { },
+                            onAudioVersionSelected = { },
+                        )
+                    }
+
+                    // Episodes list (no longer a separate LazyColumn — items added directly)
+                    itemsIndexed(episodeList, key = { _, ep -> "ep_${ep.url}" }) { index, episode ->
+                        // Use the same PlayerEpisodeRow from EpisodeListView
+                        // but rendered inline (not in a separate LazyColumn)
+                        app.anikuta.player.controls.PlayerEpisodeRowInline(
+                            episode = episode,
+                            index = index,
+                            isCurrent = index == currentIndex,
+                            isSwitching = viewModel.isSwitchingEpisode.value && index == currentIndex,
+                            onClick = { onEpisodeSwitch(index) },
+                            prefs = playerPrefs,
+                        )
+                    }
                 }
             }
         }
@@ -1105,4 +1203,16 @@ private fun PlayerScreen(
         )
     }
     } // end Box
+    } // end MaterialTheme
+}
+
+/** Format epoch millis as a readable date string. */
+private fun formatDate(epochMillis: Long): String {
+    if (epochMillis <= 0) return ""
+    return try {
+        val sdf = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+        sdf.format(java.util.Date(epochMillis))
+    } catch (e: Exception) {
+        ""
+    }
 }

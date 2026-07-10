@@ -101,6 +101,55 @@ fun EpisodeListView(
     }
 }
 
+/**
+ * Inline version of PlayerEpisodeRow for use inside a LazyColumn's itemsIndexed.
+ * Same design but accepts prefs directly (for use when not inside EpisodeListView).
+ */
+@Composable
+fun PlayerEpisodeRowInline(
+    episode: SEpisode,
+    index: Int,
+    isCurrent: Boolean,
+    isSwitching: Boolean,
+    onClick: () -> Unit,
+    prefs: PlayerEpisodePreferences?,
+) {
+    val epPrefs = prefs ?: remember { Injekt.get() }
+    val scope = rememberCoroutineScope()
+    val showTitles by epPrefs.showEpisodeTitles().stateIn(scope).collectAsState()
+    val showSummaries by epPrefs.showEpisodeSummaries().stateIn(scope).collectAsState()
+    val showThumbnails by epPrefs.showEpisodeThumbnails().stateIn(scope).collectAsState()
+    val showDates by epPrefs.showEpisodeDates().stateIn(scope).collectAsState()
+    val showEpisodeNumber by epPrefs.showEpisodeNumber().stateIn(scope).collectAsState()
+    val showAudioPills by epPrefs.showAudioPills().stateIn(scope).collectAsState()
+    val thumbnailSize by epPrefs.thumbnailSize().stateIn(scope).collectAsState()
+    val titlePosition by epPrefs.titlePosition().stateIn(scope).collectAsState()
+    val episodeNumberPosition by epPrefs.episodeNumberPosition().stateIn(scope).collectAsState()
+    val thumbnailPosition by epPrefs.thumbnailPosition().stateIn(scope).collectAsState()
+    val synopsisPosition by epPrefs.synopsisPosition().stateIn(scope).collectAsState()
+    val datePosition by epPrefs.datePosition().stateIn(scope).collectAsState()
+
+    PlayerEpisodeRow(
+        episode = episode,
+        index = index,
+        isCurrent = isCurrent,
+        isSwitching = isSwitching,
+        onClick = onClick,
+        showThumbnails = showThumbnails,
+        showSummaries = showSummaries,
+        showTitles = showTitles,
+        showDates = showDates,
+        showEpisodeNumber = showEpisodeNumber,
+        showAudioPills = showAudioPills,
+        thumbnailSize = thumbnailSize,
+        titlePosition = titlePosition,
+        episodeNumberPosition = episodeNumberPosition,
+        thumbnailPosition = thumbnailPosition,
+        synopsisPosition = synopsisPosition,
+        datePosition = datePosition,
+    )
+}
+
 @Composable
 private fun PlayerEpisodeRow(
     episode: SEpisode,
@@ -410,25 +459,7 @@ private fun PlayerEpisodeRow(
             }
         }
 
-        // Current episode indicator
-        if (isCurrent) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = if (isSwitching) "Loading…" else "Playing",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                if (!isSwitching) {
-                    Text("▶", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp)
-                }
-            }
-        }
+        // Current episode is indicated by the highlight color only (no text)
     }
 }
 

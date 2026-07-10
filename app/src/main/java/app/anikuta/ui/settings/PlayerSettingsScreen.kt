@@ -141,6 +141,14 @@ fun PlayerSettingsScreen(
                     HorizontalDivider()
                     SwitchSettingsRow(
                         icon = Icons.Default.Visibility,
+                        title = "Show top bar",
+                        subtitle = "Show the floating navigation bar in minimized mode",
+                        checked = prefs.showPlayerTopBar().get(),
+                        onCheckedChange = { prefs.showPlayerTopBar().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Visibility,
                         title = "Auto-hide controls",
                         subtitle = "Hide player controls after inactivity",
                         checked = autoHide,

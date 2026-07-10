@@ -92,6 +92,7 @@ fun DetailScreen(
                     episodeUrl = req.episodeUrl,
                     episodeNumber = req.episodeNumber,
                     videoHeaders = req.videoHeaders,
+                    coverColor = coverColor.toArgb(),
                 )
                 context.startActivity(intent)
                 viewModel.consumePlayRequest()
