@@ -28,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -476,6 +477,20 @@ private fun PlayerScreen(
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
     val playerMode by viewModel.playerMode.collectAsState()
 
+    // ---- Sheet state (Phase 3.7) ----
+    var showQualitySheet by remember { mutableStateOf(false) }
+    var showSubtitleSheet by remember { mutableStateOf(false) }
+    var showAudioSheet by remember { mutableStateOf(false) }
+    var showServerSheet by remember { mutableStateOf(false) }
+    var showSpeedSheet by remember { mutableStateOf(false) }
+    var showMoreSheet by remember { mutableStateOf(false) }
+
+    // Available videos for quality sheet (empty until wired to video resolution)
+    val availableVideos = remember { mutableStateOf<List<app.anikuta.source.api.model.Video>>(emptyList()) }
+    val availableServers by viewModel.availableServers.collectAsState()
+    val currentServer by viewModel.currentServer.collectAsState()
+    val currentSpeed by remember { mutableFloatStateOf(1.0f) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -611,8 +626,8 @@ private fun PlayerScreen(
                                 onMaximize = {
                                     onModeChange(PlayerMode.FULLSCREEN)
                                 },
-                                onQualityClick = { /* Phase 3 */ },
-                                onSubtitleClick = { /* Phase 3 */ },
+                                onQualityClick = { showQualitySheet = true },
+                                onSubtitleClick = { showSubtitleSheet = true },
                             )
                         }
 
@@ -672,12 +687,12 @@ private fun PlayerScreen(
                                 },
                                 onMinimize = { onModeChange(PlayerMode.MINIMIZED) },
                                 onLockToggle = { viewModel.lockControls() },
-                                onQualityClick = { /* Phase 3 */ },
-                                onSubtitleClick = { /* Phase 3 */ },
-                                onAudioClick = { /* Phase 3 */ },
-                                onServerClick = { /* Phase 3 */ },
-                                onSpeedClick = { /* Phase 3 */ },
-                                onMoreClick = { /* Phase 3 */ },
+                                onQualityClick = { showQualitySheet = true },
+                                onSubtitleClick = { showSubtitleSheet = true },
+                                onAudioClick = { showAudioSheet = true },
+                                onServerClick = { showServerSheet = true },
+                                onSpeedClick = { showSpeedSheet = true },
+                                onMoreClick = { showMoreSheet = true },
                                 onSkipForward = {
                                     mpvView?.let { v ->
                                         val cur = v.timePos ?: 0
@@ -773,6 +788,77 @@ private fun PlayerScreen(
             app.anikuta.player.controls.FirstTimePlayerPrompt(
                 onSelect = { view, remember -> onPromptSelect(view, remember) },
                 onDismiss = onPromptDismiss,
+            )
+        }
+
+        // ---- Selection sheets (Phase 3.7) ----
+        if (showQualitySheet) {
+            app.anikuta.player.controls.sheets.QualitySheet(
+                videos = availableVideos.value,
+                currentVideoUrl = viewModel.videoUrl,
+                onSelect = { video ->
+                    // Reload video at new quality — Phase 3 wiring
+                    Log.d("PlayerActivity", "Quality selected: ${video.videoTitle}")
+                },
+                onDismiss = { showQualitySheet = false },
+            )
+        }
+        if (showSubtitleSheet) {
+            app.anikuta.player.controls.sheets.SubtitleTracksSheet(
+                viewModel = viewModel,
+                onSelect = { trackId ->
+                    mpvView?.sid = trackId
+                    viewModel.setCurrentSubtitleId(trackId)
+                    Log.d("PlayerActivity", "Subtitle track: $trackId")
+                },
+                onDismiss = { showSubtitleSheet = false },
+            )
+        }
+        if (showAudioSheet) {
+            app.anikuta.player.controls.sheets.AudioTracksSheet(
+                viewModel = viewModel,
+                onSelect = { trackId ->
+                    mpvView?.aid = trackId
+                    viewModel.setCurrentAudioId(trackId)
+                    Log.d("PlayerActivity", "Audio track: $trackId")
+                },
+                onDismiss = { showAudioSheet = false },
+            )
+        }
+        if (showServerSheet) {
+            app.anikuta.player.controls.sheets.ServerSheet(
+                servers = availableServers.ifEmpty { listOf("Default") },
+                currentServer = currentServer.ifBlank { "Default" },
+                onSelect = { server ->
+                    viewModel.setCurrentServer(server)
+                    Log.d("PlayerActivity", "Server: $server")
+                },
+                onDismiss = { showServerSheet = false },
+            )
+        }
+        if (showSpeedSheet) {
+            app.anikuta.player.controls.sheets.SpeedSheet(
+                currentSpeed = currentSpeed,
+                onSelect = { speed ->
+                    mpvView?.let { v ->
+                        try {
+                            `is`.xyz.mpv.MPVLib.setPropertyDouble("speed", speed.toDouble())
+                        } catch (e: Exception) {
+                            Log.w("PlayerActivity", "Could not set speed", e)
+                        }
+                    }
+                    Log.d("PlayerActivity", "Speed: $speed")
+                },
+                onDismiss = { showSpeedSheet = false },
+            )
+        }
+        if (showMoreSheet) {
+            app.anikuta.player.controls.sheets.MoreOptionsSheet(
+                onSubtitleDelay = { /* Phase 5 */ },
+                onAudioDelay = { /* Phase 5 */ },
+                onScreenshot = { /* Phase 5 */ },
+                onSleepTimer = { /* Phase 5 */ },
+                onDismiss = { showMoreSheet = false },
             )
         }
     }
