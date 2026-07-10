@@ -698,7 +698,7 @@ private fun PlayerScreen(
     val defaultScheme = MaterialTheme.colorScheme
     val themedColorScheme = remember(coverColor) {
         if (coverColor != 0) {
-            app.anikuta.ui.detail.generateDynamicScheme(Color(coverColor)).toM3ColorScheme()
+            app.anikuta.ui.detail.run { generateDynamicScheme(Color(coverColor)).toM3ColorScheme() }
         } else {
             defaultScheme
         }
@@ -863,7 +863,7 @@ private fun PlayerScreen(
                 // All in a single LazyColumn so they scroll together (YouTube-style).
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 24.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
                 ) {
                     // Episode details (title + description + date)
                     if (currentEpisode != null) {
@@ -892,10 +892,11 @@ private fun PlayerScreen(
                                     )
                                 }
                                 // Episode description
-                                if (!currentEpisode.summary.isNullOrBlank()) {
+                                val summaryText = currentEpisode.summary
+                                if (!summaryText.isNullOrBlank()) {
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = currentEpisode.summary,
+                                        text = summaryText,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 3,
@@ -925,7 +926,7 @@ private fun PlayerScreen(
                             isCurrent = index == currentIndex,
                             isSwitching = viewModel.isSwitchingEpisode.value && index == currentIndex,
                             onClick = { onEpisodeSwitch(index) },
-                            prefs = playerPrefs,
+                            prefs = null,  // Uses default PlayerEpisodePreferences from Injekt
                         )
                     }
                 }
