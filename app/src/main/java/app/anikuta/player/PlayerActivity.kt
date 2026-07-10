@@ -53,6 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -952,16 +953,27 @@ private fun PlayerScreen(
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
     val playerMode by viewModel.playerMode.collectAsState()
 
+    // ---- Current episode info (declared early — needed by scroll state) ----
+    val episodeList by viewModel.episodeList.collectAsState()
+    val currentIndex by viewModel.currentEpisodeIndex.collectAsState()
+    val currentEpisode = episodeList.getOrNull(currentIndex)
+
     // ---- LazyColumn scroll state ----
-    // FIX: Explicitly create a LazyListState and scroll to item 0 on first
-    // composition. Without this, the LazyColumn could restore a non-zero
-    // scroll position (e.g. if the user previously scrolled) and the user
-    // would see the current episode instead of the episode details at top.
+    // FIX: Scroll to the VERY top once the episode list is first loaded.
+    // Previously used LaunchedEffect(Unit) which ran before episodes arrived
+    // from disk cache (async), so the no-op scroll on an empty list meant
+    // the list later appeared at a non-zero position. Now we key on the
+    // episode list becoming non-empty and use a one-time guard so it only
+    // fires on initial load (NOT when the user switches episodes later).
     val episodeListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    LaunchedEffect(Unit) {
-        // Guarantee the list starts at the very top (episode details) on entry
-        episodeListState.scrollToItem(0)
-        Log.d("PlayerActivity", "Episode list scrolled to top on entry")
+    val hasScrolledToTop = remember { mutableStateOf(false) }
+    LaunchedEffect(episodeList.isNotEmpty()) {
+        if (episodeList.isNotEmpty() && !hasScrolledToTop.value) {
+            // scrollToItem(0, 0) — scrollOffset 0 ensures exact top alignment
+            episodeListState.scrollToItem(0, 0)
+            hasScrolledToTop.value = true
+            Log.d("PlayerActivity", "Episode list scrolled to very top (first load)")
+        }
     }
 
     // ---- Sheet state (Phase 3.7) ----
@@ -1025,10 +1037,7 @@ private fun PlayerScreen(
     val showTopBar by (playerPrefs?.showPlayerTopBar()?.stateIn(prefsScope)
         ?: MutableStateFlow(true)).collectAsState()
 
-    // ---- Current episode info (for episode details below video) ----
-    val episodeList by viewModel.episodeList.collectAsState()
-    val currentIndex by viewModel.currentEpisodeIndex.collectAsState()
-    val currentEpisode = episodeList.getOrNull(currentIndex)
+    // (episodeList / currentIndex / currentEpisode are declared above, near scroll state)
 
     MaterialTheme(colorScheme = themedColorScheme) {
     Box(
@@ -1192,6 +1201,10 @@ private fun PlayerScreen(
                                         viewModel.onPositionUpdate(target)
                                     }
                                 },
+                                onSeekTo = { seconds ->
+                                    mpvView?.timePos = seconds
+                                    viewModel.onPositionUpdate(seconds)
+                                },
                                 onMaximize = { onModeChange(PlayerMode.FULLSCREEN) },
                                 onQualityClick = { showQualitySheet = true },
                                 onSubtitleClick = { showSubtitleSheet = true },
@@ -1204,27 +1217,25 @@ private fun PlayerScreen(
                 // Episode details (title, description, date) + server dropdowns + episodes list
                 // All in a single LazyColumn so they scroll together (YouTube-style).
                 //
-                // FIX: Added verticalArrangement = spacedBy(8.dp) for consistent
-                // spacing between episode rows (was missing — episodes were
-                // packed together with no gap, unlike the detail page).
-                // FIX: Episode details now use titleLarge + an episode-number
-                // badge for better prominence. A separator + "Episodes" header
-                // clearly divides the details section from the episode list.
-                // FIX: Added top content padding (16dp) so there's visible
-                // breathing room between the video player and the scrollable
-                // section. Episodes also "disappear" into this padding when
-                // scrolling up, so they don't touch the video player edge.
-                LazyColumn(
-                    state = episodeListState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = 12.dp,
-                        end = 12.dp,
-                        top = 16.dp,
-                        bottom = 24.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
+                // FIX: Reduced top padding from 16dp to 13dp per user request.
+                // FIX: Added a fade-out gradient overlay at the top of the
+                // LazyColumn so episodes visually fade out BEFORE reaching the
+                // video player edge. The gradient goes from the themed
+                // background color (opaque) to transparent over ~20dp, creating
+                // a smooth "disappear" zone that prevents episodes from touching
+                // the video.
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        state = episodeListState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            start = 12.dp,
+                            end = 12.dp,
+                            top = 13.dp,
+                            bottom = 24.dp,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                     // Episode details (episode-number badge + bigger title + date + description)
                     if (currentEpisode != null) {
                         item(key = "episode_details") {
@@ -1321,7 +1332,24 @@ private fun PlayerScreen(
                             prefs = null,  // Uses default PlayerEpisodePreferences from Injekt
                         )
                     }
-                }
+                    } // end LazyColumn
+
+                    // Fade-out gradient overlay — episodes fade out before reaching the video.
+                    // Goes from themed background (opaque) at top → transparent, over ~20dp.
+                    // This creates the "disappear zone" the user requested.
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(20.dp)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    0f to MaterialTheme.colorScheme.background,
+                                    1f to MaterialTheme.colorScheme.background.copy(alpha = 0f),
+                                ),
+                            ),
+                    )
+                } // end Box (LazyColumn wrapper)
             }
         }
         PlayerMode.FULLSCREEN -> {

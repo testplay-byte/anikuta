@@ -35,7 +35,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -65,6 +67,7 @@ fun MinimizedControls(
     viewModel: PlayerViewModel,
     onTogglePlay: () -> Unit,
     onSeekRelative: (Int) -> Unit,
+    onSeekTo: (Int) -> Unit,
     onMaximize: () -> Unit,
     onQualityClick: () -> Unit,
     onSubtitleClick: () -> Unit,
@@ -191,7 +194,7 @@ fun MinimizedControls(
                     MinimizedSeekbar(
                         position = position,
                         duration = duration,
-                        onSeekTo = { /* will be wired in Phase 2 */ },
+                        onSeekTo = onSeekTo,
                     )
                     Spacer(modifier = Modifier.size(4.dp))
                     // Bottom row: left (quality + subtitle) | right (maximize)
@@ -279,28 +282,38 @@ private fun MinimizedSeekbar(
     duration: Int,
     onSeekTo: (Int) -> Unit,
 ) {
-    val progress = if (duration > 0) position.toFloat() / duration else 0f
+    // FIX: Replaced the non-interactive progress bar with a real M3 Slider
+    // that the user can drag to seek. Uses a local "scrubbing" state so the
+    // thumb follows the user's finger during drag, then commits the seek
+    // when the user releases (onValueChangeFinished).
+    var scrubPosition by remember { mutableStateOf<Float?>(null) }
+    val displayPosition = scrubPosition ?: position.toFloat().coerceAtLeast(0f)
+    val maxRange = duration.toFloat().coerceAtLeast(1f)
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(3.dp)
-                .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(2.dp)),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress)
-                    .height(3.dp)
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
-            )
-        }
-        Spacer(modifier = Modifier.size(4.dp))
+        androidx.compose.material3.Slider(
+            value = displayPosition.coerceIn(0f, maxRange),
+            onValueChange = { newValue ->
+                scrubPosition = newValue
+            },
+            onValueChangeFinished = {
+                scrubPosition?.let { onSeekTo(it.toInt()) }
+                scrubPosition = null
+            },
+            valueRange = 0f..maxRange,
+            modifier = Modifier.fillMaxWidth(),
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = Color.White.copy(alpha = 0.3f),
+            ),
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = formatTime(position),
+                text = formatTime(displayPosition.toInt()),
                 color = Color.White,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,

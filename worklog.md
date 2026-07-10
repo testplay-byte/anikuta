@@ -519,3 +519,46 @@ Stage Summary:
 - All 6 player UI fixes compiled and built into APK
 - APK available as GitHub Actions artifact: anikuta-debug-arm64-v8a
 - Ready for on-device testing
+
+---
+
+## Session 31 (Episode switching workflow + scroll fixes)
+
+Task ID: PLAYER-EPISODE-SWITCHING
+Agent: main (Z.ai Code)
+
+Work Log:
+- Scroll fix: Added LazyListState with scrollToItem(0) on entry — list
+  starts at top (episode details), not at current episode
+- Scroll fix: Added top content padding (16dp) — more breathing room between
+  video and scrollable section; episodes disappear into padding before
+  reaching the video edge
+- Episode switching: Pass source ID + current video metadata (server/audio/
+  quality) from detail page to player via 4 new Intent extras
+- DetailViewModel.buildPlayRequest() — parses video with VideoTitleParser,
+  includes sourceId + videoServer + videoAudio + videoQuality in PlayRequest
+- PlayerActivity.switchEpisode() fully implemented:
+  1. Shows EpisodeSwitchingOverlay on video area (episode thumbnail bg +
+     dark scrim + spinner + "Loading episode..." text)
+  2. Hides MinimizedControls during loading
+  3. Resolves source by sourceId (fallback: name from EpisodeCacheStore)
+  4. Resolves videos via getHosterList/getVideoList (same as detail page)
+  5. Auto-selects best matching video: same server + audio + quality, with
+     graceful fallbacks (same server+audio, same server, same audio, best)
+  6. Loads new video into MPV with correct headers
+  7. Clears loading state when MPV fires FILE_LOADED
+  8. 30s timeout for stuck loads
+  9. Error handling: restores previous episode index, shows Toast
+- EpisodeSwitchingOverlay.kt — new composable for the loading overlay
+- handleEvent updated to clear switching state on FILE_LOADED + cancel timeout
+- PlayerViewModel.onError() handles empty string to clear errors
+- All steps logged with TAG for debugging ("=== Episode switch START/FAIL/SUCCESS ===")
+- Build #220 (e7e10fb): SUCCESS
+
+Stage Summary:
+- Scroll position starts at top on entry (not at current episode)
+- 16dp gap between video and scrollable section
+- Episode switching fully functional: tap episode → loading overlay →
+  video resolves with same server/audio/quality → plays
+- Proper error handling with Toast + index restoration
+- Extensive console logging for debugging

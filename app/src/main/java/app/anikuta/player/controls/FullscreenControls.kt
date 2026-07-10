@@ -43,6 +43,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -316,21 +319,30 @@ private fun FullscreenSeekbar(
     duration: Int,
     onSeekTo: (Int) -> Unit,
 ) {
-    val progress = if (duration > 0) position.toFloat() / duration else 0f
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(4.dp)
-            .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(2.dp))
-            .clickable { },
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(progress)
-                .height(4.dp)
-                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
-        )
-    }
+    // FIX: Replaced the non-interactive progress bar (empty .clickable {}) with
+    // a real M3 Slider that the user can drag to seek. Uses local "scrubbing"
+    // state so the thumb follows the finger during drag.
+    var scrubPosition by remember { mutableStateOf<Float?>(null) }
+    val displayPosition = scrubPosition ?: position.toFloat().coerceAtLeast(0f)
+    val maxRange = duration.toFloat().coerceAtLeast(1f)
+
+    androidx.compose.material3.Slider(
+        value = displayPosition.coerceIn(0f, maxRange),
+        onValueChange = { newValue ->
+            scrubPosition = newValue
+        },
+        onValueChangeFinished = {
+            scrubPosition?.let { onSeekTo(it.toInt()) }
+            scrubPosition = null
+        },
+        valueRange = 0f..maxRange,
+        modifier = Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.SliderDefaults.colors(
+            thumbColor = MaterialTheme.colorScheme.primary,
+            activeTrackColor = MaterialTheme.colorScheme.primary,
+            inactiveTrackColor = Color.White.copy(alpha = 0.3f),
+        ),
+    )
 }
 
 private fun formatTime(seconds: Int): String {
