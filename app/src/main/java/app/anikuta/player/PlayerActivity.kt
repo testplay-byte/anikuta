@@ -61,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.anikuta.R
+import app.anikuta.ui.detail.generateDynamicScheme
+import app.anikuta.ui.detail.toM3ColorScheme
 import app.anikuta.ui.theme.AnikutaTheme
 import `is`.xyz.mpv.MPVLib
 import androidx.lifecycle.lifecycleScope
@@ -698,7 +700,7 @@ private fun PlayerScreen(
     val defaultScheme = MaterialTheme.colorScheme
     val themedColorScheme = remember(coverColor) {
         if (coverColor != 0) {
-            app.anikuta.ui.detail.run { generateDynamicScheme(Color(coverColor)).toM3ColorScheme() }
+            generateDynamicScheme(Color(coverColor)).toM3ColorScheme()
         } else {
             defaultScheme
         }
