@@ -421,3 +421,24 @@ Stage Summary:
 - Dynamic theming now applies to EVERYTHING via MaterialTheme override (cleanest approach)
 - Episode layout without thumbnail now matches live preview
 - Title no longer gets cut off when date/pills are present
+
+---
+
+## Session 28 (Phase 1 fixes + Phase 2 + Phase 3 + Phase 4)
+
+Task ID: PLAYER-PHASES-2-3-4 (Session 28)
+Agent: main (Z.ai Code)
+
+Work Log:
+- Fixed 5 Phase 1 issues (settings spacing, first-time prompt, mode switching, orientation)
+- Phase 2: FullscreenControls + lock + Crossfade transition + swipe gestures + auto-hide
+- Phase 3: 6 selection sheets (Quality, Subtitle, Audio, Server, Speed, More) + wired
+- Phase 4: PlayerGestureHandler (seek, brightness, volume, double-tap, pinch zoom)
+- Created MEMORY/PLAYER-RULES.md reference file
+- All 8 builds green (#188-#195)
+
+Stage Summary:
+- Phases 1-4 complete
+- Player has: minimized + fullscreen modes, smooth transitions, lock, auto-hide,
+  all selection sheets, full gesture support, pinch zoom with magnetic resistance
+- Ready for Phase 5 (Subtitle Customization) + Phase 6 (Polish)

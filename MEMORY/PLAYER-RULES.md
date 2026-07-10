@@ -65,24 +65,24 @@ app/anikuta/player/
 
 ---
 
-## Known Issues (to fix in Phase 2)
+## Known Issues (fixed in Phase 1 fixes + Phase 2)
 
-1. **First-time prompt not wired** — `PlayerActivity.onCreate` reads `defaultPlayerView` but doesn't show the prompt dialog when set to "ask".
-2. **Black video in minimized** — MPV view fills entire screen but only top 16:9 should show. The video may not be rendering if the surface is covered.
-3. **Server dropdown empty** — `availableServers` is not populated from actual video data.
-4. **Audio version switching no-op** — `onAudioVersionSelected` is a placeholder.
-5. **Orientation not switching** — `requestedOrientation` only set in `onCreate`, not when toggling modes.
+1. ✅ **First-time prompt wired** — shows when defaultView=ask + !promptShown
+2. ✅ **Mode switching fixed** — handleModeChange() updates BOTH viewModel AND orientation
+3. ⚠️ **Server dropdown** — needs actual video data wiring (Phase 3 sheets created, full wiring TBD)
+4. ⚠️ **Audio version switching** — track API wired (Phase 3), server-level audio version TBD
+5. ✅ **Orientation fixed** — handleModeChange() sets requestedOrientation per mode
 
 ---
 
 ## Phases
 
 - **Phase 1** ✅ (complete): Foundation — enums, prefs, VM, track API, minimized controls, dropdowns, episodes list, prompt, settings, combined activity
-- **Phase 2** (in progress): Fullscreen mode + transition + lock + auto-hide
-- **Phase 3**: Selection sheets (quality, subtitle tracks, audio tracks, server, speed, more)
-- **Phase 4**: Gestures + pinch zoom
-- **Phase 5**: Subtitle customization
-- **Phase 6**: Polish + MPV config + PiP
+- **Phase 2** ✅ (complete): Fullscreen mode + transition + lock + auto-hide
+- **Phase 3** ✅ (complete): Selection sheets (quality, subtitle tracks, audio tracks, server, speed, more)
+- **Phase 4** ✅ (complete): Gestures + pinch zoom (seek, brightness, volume, double-tap, magnetic zoom)
+- **Phase 5** (in progress): Subtitle customization
+- **Phase 6** (pending): Polish + MPV config + PiP
 
 ---
 
