@@ -195,6 +195,9 @@ class PlayerActivity : ComponentActivity() {
     /** Whether the user has manually turned off subtitles. Prevents auto-select
      *  from re-enabling subtitles after the user explicitly turned them off. */
     @Volatile private var userDisabledSubtitles: Boolean = false
+    /** Whether the user has manually changed the audio track. Prevents auto-select
+     *  from overriding the user's choice when tracks are reloaded. */
+    @Volatile private var userChangedAudioTrack: Boolean = false
     /** Resolved video list for the current episode — cached so switchServer/
      *  switchAudioVersion / switchQuality don't need to re-resolve from source. */
     @Volatile private var currentEpisodeVideos: List<eu.kanade.tachiyomi.animesource.model.Video> = emptyList()
@@ -348,6 +351,7 @@ class PlayerActivity : ComponentActivity() {
                         onScreenshot = { activity.takeScreenshot() },
                         onSleepTimer = { activity.startSleepTimer() },
                         onUserDisabledSubtitles = { disabled -> activity.userDisabledSubtitles = disabled },
+                        onUserChangedAudioTrack = { changed -> activity.userChangedAudioTrack = changed },
                         currentVideoUrl = activity.currentVideoUrl,
                         coverColor = coverColor,
                     )
@@ -543,10 +547,9 @@ class PlayerActivity : ComponentActivity() {
                     viewModel?.setSubtitleTracks(subTracks)
                     viewModel?.setAudioTracks(audioTracks)
                     // Auto-select the first subtitle track if none is selected.
-                    // This mirrors aniyomi's onFinishLoadingTracks() — without it,
-                    // sub-add with "auto" flag leaves sid=no and no subtitle renders.
                     autoSelectSubtitleTrack(view, subTracks)
-                    viewModel?.setCurrentAudioId(view.aid)
+                    // Auto-select the correct audio track based on audio version.
+                    autoSelectAudioTrack(view, audioTracks)
                     Log.d(TAG, "Tracks loaded: ${subTracks.size} sub, ${audioTracks.size} audio")
                 }
             }
@@ -563,7 +566,8 @@ class PlayerActivity : ComponentActivity() {
                     viewModel?.setAudioTracks(audioTracks)
                     // Auto-select the first subtitle track if none is selected.
                     autoSelectSubtitleTrack(view, subTracks)
-                    viewModel?.setCurrentAudioId(view.aid)
+                    // Auto-select the correct audio track based on audio version.
+                    autoSelectAudioTrack(view, audioTracks)
                     Log.d(TAG, "Tracks loaded (no-value): ${subTracks.size} sub, ${audioTracks.size} audio")
                 }
             }
@@ -613,6 +617,75 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Auto-select the correct audio track based on the current audio version.
+     *
+     * ROOT CAUSE of audio switching bug: All audio versions (SUB/DUB/HSUB) from
+     * the same extension share the SAME video URL. The audio version is determined
+     * by which audio track is selected within the stream, not by a different URL.
+     * But we never set `aid` to select the correct audio track — MPV defaults to
+     * the first audio track (Japanese/SUB) every time.
+     *
+     * This function selects the appropriate audio track:
+     * - SUB / HSUB: select the first audio track (embedded Japanese)
+     * - DUB: if there are 2+ audio tracks, select the last one (external English
+     *   audio added via audio-add). If only 1 track, keep it.
+     *
+     * Respects [userChangedAudioTrack] — if the user manually changed the audio
+     * track via the AudioTracksSheet, we don't override their choice.
+     */
+    private fun autoSelectAudioTrack(
+        view: AnikutaMPVView,
+        audioTracks: List<VideoTrack>,
+    ) {
+        if (userChangedAudioTrack) {
+            // User manually selected an audio track — respect their choice
+            viewModel?.setCurrentAudioId(view.aid)
+            return
+        }
+
+        val realAudioTracks = audioTracks.filter { it.id > 0 }
+        if (realAudioTracks.isEmpty()) return
+
+        val targetAudioVersion = currentVideoAudio
+        val currentAid = view.aid
+        Log.d(TAG, "autoSelectAudioTrack: currentAid=$currentAid, targetVersion='$targetAudioVersion', tracks=${realAudioTracks.size}")
+
+        // Determine which track ID to select based on audio version
+        val desiredAid = when (targetAudioVersion.uppercase()) {
+            "DUB" -> {
+                // For DUB: prefer the last audio track (external English audio
+                // added via audio-add). If only 1 track, use it.
+                if (realAudioTracks.size > 1) {
+                    realAudioTracks.last().id
+                } else {
+                    realAudioTracks.first().id
+                }
+            }
+            "SUB", "HSUB" -> {
+                // For SUB/HSUB: use the first audio track (embedded Japanese)
+                realAudioTracks.first().id
+            }
+            else -> {
+                // ANY or unknown — keep current or select first
+                if (currentAid > 0) currentAid else realAudioTracks.first().id
+            }
+        }
+
+        // Only set aid if it's different from current
+        if (desiredAid != currentAid) {
+            try {
+                view.aid = desiredAid
+                viewModel?.setCurrentAudioId(desiredAid)
+                Log.d(TAG, "Auto-selected audio track: id=$desiredAid (version=$targetAudioVersion)")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to auto-select audio track", e)
+            }
+        } else {
+            viewModel?.setCurrentAudioId(currentAid)
+        }
+    }
+
     private fun handlePropertyDouble(property: String, value: Double) {
         // speed / aspect — minimal player ignores for now.
     }
@@ -654,6 +727,9 @@ class PlayerActivity : ComponentActivity() {
         vm.setCurrentEpisodeIndex(index)
         // Hide controls during loading
         vm.setControlsVisible(false)
+        // Reset user flags for new episode
+        userChangedAudioTrack = false
+        userDisabledSubtitles = false
 
         // Pause current video
         try { MPVLib.setPropertyBoolean("pause", true) } catch (e: Exception) {
@@ -1043,6 +1119,9 @@ class PlayerActivity : ComponentActivity() {
         currentVideoQuality = selected.quality ?: -1
         // Store the Video object so external tracks can be loaded after FILE_LOADED
         currentVideo = selected.video
+        // Reset user flags — new video loaded, user hasn't interacted yet
+        userChangedAudioTrack = false
+        userDisabledSubtitles = false
 
         // Update VM state (for UI reactivity)
         vm.setCurrentServer(selected.server)
@@ -1507,6 +1586,8 @@ private fun PlayerScreen(
     onSleepTimer: () -> Unit = {},
     // Callback to set the userDisabledSubtitles flag on the Activity
     onUserDisabledSubtitles: (Boolean) -> Unit = {},
+    // Callback to set the userChangedAudioTrack flag on the Activity
+    onUserChangedAudioTrack: (Boolean) -> Unit = {},
     currentVideoUrl: String = "",
     coverColor: Int = 0,  // ARGB color for dynamic theming (0 = use default theme)
 ) {
@@ -2210,6 +2291,9 @@ private fun PlayerScreen(
             onSelect = { trackId ->
                 mpvView?.aid = trackId
                 viewModel.setCurrentAudioId(trackId)
+                // Mark that the user manually changed the audio track
+                onUserChangedAudioTrack(true)
+                Log.d("PlayerActivity", "Audio track manually selected: id=$trackId")
             },
             onDismiss = { showAudioSheet = false },
         )

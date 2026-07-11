@@ -134,6 +134,7 @@ class DetailViewModel(
 
     private val preferenceStore: app.anikuta.core.preference.PreferenceStore? = try { Injekt.get() } catch (e: Exception) { null }
     private val episodeCacheStore: app.anikuta.data.cache.EpisodeCacheStore? = try { Injekt.get() } catch (e: Exception) { null }
+    private val videoCacheStore: app.anikuta.data.cache.VideoCacheStore? = try { Injekt.get() } catch (e: Exception) { null }
 
     init {
         loadAnimeDetails()
@@ -537,11 +538,11 @@ class DetailViewModel(
 
         val source = matchedSource!!
 
-        // Phase 7: check video cache (10-min TTL)
+        // Phase 7: check in-memory video cache (10-min TTL)
         val cached = videoCache[episode.url]
         val now = System.currentTimeMillis()
         if (cached != null && now - cached.timestamp < VIDEO_CACHE_TTL_MS) {
-            Log.d(TAG, "Video cache hit (age=${(now - cached.timestamp) / 1000}s): ${cached.serverSections.size} server sections")
+            Log.d(TAG, "Video cache hit (in-memory, age=${(now - cached.timestamp) / 1000}s): ${cached.serverSections.size} server sections")
             // Show picker instantly with cached data + refreshing badge
             _videoPicker.value = VideoPickerState.Cached(episode, cached.serverSections, isRefreshing = true)
             // Background re-resolve for smooth update
@@ -549,7 +550,55 @@ class DetailViewModel(
             return
         }
 
-        // Cache miss — show resolving overlay
+        // FIX: check disk video cache (survives app restart, 24h TTL)
+        videoCacheStore?.let { store ->
+            viewModelScope.launch {
+                val diskCached = store.load(anilistId, episode.url)
+                if (diskCached != null && diskCached.isNotEmpty()) {
+                    val audioSections = groupVideosByServer(diskCached)
+                    Log.d(TAG, "Video cache hit (disk): ${diskCached.size} videos, ${audioSections.size} server sections")
+                    // Populate in-memory cache too
+                    videoCache[episode.url] = CachedVideoData(audioSections, System.currentTimeMillis())
+                    // Show picker with cached data + refreshing badge
+                    _videoPicker.value = VideoPickerState.Cached(episode, audioSections, isRefreshing = true)
+                    // Background re-resolve for smooth update
+                    backgroundResolveVideos(episode, source)
+                    return@launch
+                }
+
+                // No disk cache — resolve from source
+                _resolvingEpisode.value = true
+                _videoPicker.value = VideoPickerState.Resolving(episode)
+                try {
+                    val audioSections = resolveVideos(episode, source)
+                    if (audioSections.isEmpty()) {
+                        _videoPicker.value = VideoPickerState.Hidden
+                        _playRequest.value = PlayRequest.Error("No playable video found for this episode")
+                    } else if (audioSections.flatMap { it.audioSections }.flatMap { it.videos }.size == 1) {
+                        val v = audioSections.first().audioSections.first().videos.first()
+                        _videoPicker.value = VideoPickerState.Hidden
+                        _playRequest.value = buildPlayRequest(v, episode, source)
+                    } else {
+                        val allVideos = audioSections.flatMap { it.audioSections }.flatMap { it.videos }
+                        Log.d(TAG, "${allVideos.size} videos in ${audioSections.size} server section(s) — showing picker")
+                        // Cache the result (in-memory + disk)
+                        val nowMs = System.currentTimeMillis()
+                        videoCache[episode.url] = CachedVideoData(audioSections, nowMs)
+                        videoCacheStore?.save(anilistId, episode.url, allVideos)
+                        _videoPicker.value = VideoPickerState.Show(episode, audioSections)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Video resolution failed", e)
+                    _videoPicker.value = VideoPickerState.Hidden
+                    _playRequest.value = PlayRequest.Error(e.message ?: "Failed to resolve video")
+                } finally {
+                    _resolvingEpisode.value = false
+                }
+            }
+            return
+        }
+
+        // Fallback if videoCacheStore is unavailable
         _resolvingEpisode.value = true
         _videoPicker.value = VideoPickerState.Resolving(episode)
         viewModelScope.launch {
@@ -582,27 +631,79 @@ class DetailViewModel(
     /**
      * Phase 7: Background re-resolve for cached videos. Updates the picker
      * smoothly if the new result differs from cached.
+     *
+     * FIX: Previously this always set _videoPicker.value = VideoPickerState.Show(...)
+     * even when the data was identical to the cached data. This caused the bottom
+     * sheet to re-animate (close and reopen). Now compares the new results with
+     * the cached data:
+     * - If same: silently updates the cache timestamp, does NOT change picker state
+     * - If different: updates the picker state (the sheet updates without re-animating)
      */
     private fun backgroundResolveVideos(episode: SEpisode, source: AnimeCatalogueSource) {
         viewModelScope.launch {
             try {
                 val newSections = resolveVideos(episode, source)
                 val now = System.currentTimeMillis()
+                val oldCached = videoCache[episode.url]
+
+                // Compare new results with cached data
+                val isSame = oldCached != null && compareServerSections(oldCached.serverSections, newSections)
+
+                // Update cache (in-memory + disk)
                 videoCache[episode.url] = CachedVideoData(newSections, now)
-                // Smooth swap: update the picker state. If the data is the same,
-                // the UI won't visibly change. If different, new qualities/servers
-                // appear in their sorted positions.
-                _videoPicker.value = VideoPickerState.Show(episode, newSections)
-                Log.d(TAG, "Background re-resolve complete: ${newSections.size} server sections")
+                val allVideos = newSections.flatMap { it.audioSections }.flatMap { it.videos }
+                videoCacheStore?.save(anilistId, episode.url, allVideos)
+
+                if (isSame) {
+                    // Data unchanged — silently update, don't change picker state
+                    Log.d(TAG, "Background re-resolve: data unchanged, no UI update")
+                } else {
+                    // Data changed — update picker state smoothly
+                    // Only update if the picker is currently showing (don't reopen a dismissed picker)
+                    val currentPicker = _videoPicker.value
+                    if (currentPicker is VideoPickerState.Show || currentPicker is VideoPickerState.Cached) {
+                        _videoPicker.value = VideoPickerState.Show(episode, newSections)
+                        Log.d(TAG, "Background re-resolve: data changed, updating picker smoothly")
+                    } else {
+                        Log.d(TAG, "Background re-resolve: data changed but picker not visible, skipping UI update")
+                    }
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Background re-resolve failed (keeping cached data)", e)
                 // Keep showing the cached data — just remove the refreshing badge
                 val cached = videoCache[episode.url]
                 if (cached != null) {
-                    _videoPicker.value = VideoPickerState.Show(episode, cached.serverSections)
+                    val currentPicker = _videoPicker.value
+                    if (currentPicker is VideoPickerState.Cached) {
+                        _videoPicker.value = VideoPickerState.Show(episode, cached.serverSections)
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Compare two ServerSection lists for equality (same servers, audio versions,
+     * and video URLs). Used by backgroundResolveVideos to avoid unnecessary UI updates.
+     */
+    private fun compareServerSections(a: List<ServerSection>, b: List<ServerSection>): Boolean {
+        if (a.size != b.size) return false
+        for (i in a.indices) {
+            val sa = a[i]
+            val sb = b[i]
+            if (sa.serverName != sb.serverName) return false
+            if (sa.audioSections.size != sb.audioSections.size) return false
+            for (j in sa.audioSections.indices) {
+                val aa = sa.audioSections[j]
+                val ab = sb.audioSections[j]
+                if (aa.audio != ab.audio) return false
+                if (aa.videos.size != ab.videos.size) return false
+                for (k in aa.videos.indices) {
+                    if (aa.videos[k].videoUrl != ab.videos[k].videoUrl) return false
+                }
+            }
+        }
+        return true
     }
 
     /**
