@@ -640,3 +640,78 @@ Stage Summary:
 - Subtitle settings panel accessible from player, changes apply live
 - PiP, rotate, screenshot, audio delay, sleep timer all functional
 - Extensive logging throughout for debugging
+
+---
+
+## Session 33 (Scroll-to-top fix + per-server audio versions + minimized UI redesign)
+
+Task ID: PLAYER-UI-REDESIGN-V3
+Agent: main (Z.ai Code)
+
+### Fix 1 — Scroll to Very Top
+- Root cause: The 20dp fade-out gradient overlay at the top of the LazyColumn
+  was always opaque (background color at full alpha). When the list was scrolled
+  to position 0, the top ~7dp of the episode details (episode number badge)
+  was behind the opaque part of the gradient, making it look like the list
+  wasn't fully scrolled to top.
+- Fix: Gradient alpha is now animated using derivedStateOf + animateFloatAsState:
+  - 0 (invisible) when list is at top → episode details fully visible
+  - 1 (opaque) when scrolled down → episodes fade out into the gradient
+  - 200ms tween animation for smooth transition
+- This is YouTube-style behavior: the top shadow only appears when content
+  is scrolling under it.
+
+### Fix 2 — Per-Server Audio Versions
+- Root cause: populateVideoSelectionState() derived audio versions from ALL
+  parsed videos across ALL servers. If server A had SUB+DUB and server B had
+  only SUB, the dropdown showed both SUB and DUB even when on server B.
+- Fix in populateVideoSelectionState(): audio versions now filtered to the
+  CURRENT SERVER only.
+- Fix in loadSelectedVideo(): after any server/audio/quality switch, re-populates
+  available audio versions to match the new current server. This keeps the
+  dropdown accurate whenever the server changes.
+- Logging: "Populated audio versions for server 'X': [SUB, DUB]" and
+  "Updated audio versions for server 'X': [SUB] (current=SUB)"
+
+### Fix 3 — Minimized View UI Redesign
+Complete rewrite of MinimizedControls.kt with the user's specified layout:
+
+**New Layout:**
+- Top-left: current time / total duration ("1:23 / 24:15")
+- Top-right: subtitle button (left) + quality button (right)
+- Center: transparent play/pause icon (no solid background circle, 56dp, 70% alpha)
+- Bottom: minimal seekbar (left, fills width) + maximize button (right) — one row
+
+**Removed:**
+- Skip 10s buttons (Replay10, Forward10) — replaced by double-tap
+- Solid white play/pause circle — now transparent
+- M3 Slider — replaced by custom MinimalSeekbar
+- Bottom timestamps row — moved to top-left
+
+**Double-Tap Gestures (new):**
+- Single tap: toggle controls (unchanged)
+- Double-tap left third: skip -10s with FastRewind animation
+- Double-tap right third: skip +10s with FastForward animation
+- Double-tap center third: toggle play/pause with Pause/Play animation
+- Animations: semi-transparent circle (72dp) + icon (40dp), fades in (150ms) + out (500ms)
+- Double-tap does NOT show controls — just the brief animation overlay
+
+**Minimal Seekbar (new):**
+- Custom Box-based seekbar with 3dp thin track
+- 12dp thumb (only visible during drag — minimal aesthetic)
+- Drag-to-seek with live position update
+- 24dp touch target for comfortable interaction
+- Designed for future buffering indicator support
+
+**TransparentIconButton (new):**
+- No background — just the white icon at 85% alpha
+- 36dp touch target, 22dp icon
+- Used for subtitle, quality, and maximize buttons
+
+### Build
+- Build #226 (fe35dfb): SUCCESS
+
+Stage Summary:
+- Scroll-to-top now works: episode number badge + title fully visible on entry
+- Audio versions dropdown only shows what the current server provides
+- Minimized UI completely redesigned: clean, minimal, with double-tap gestures
