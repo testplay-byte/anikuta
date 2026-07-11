@@ -432,7 +432,8 @@ private fun MinimalSeekbar(
         if (isDragging && trackWidthPx > 0) {
             val thumbOffsetPx = trackWidthPx * progress
             val thumbSize = 14.dp
-            val thumbSizePx = thumbSize.toPx()
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val thumbSizePx = with(density) { thumbSize.toPx() }
             // Thumb circle
             Box(
                 modifier = Modifier
@@ -442,12 +443,14 @@ private fun MinimalSeekbar(
                     .background(MaterialTheme.colorScheme.primary),
             )
             // Floating time indicator above the thumb
+            val indicatorOffsetX = with(density) { 30.dp.toPx() }
+            val indicatorOffsetY = with(density) { (-32).dp.toPx() }
             Box(
                 modifier = Modifier
                     .offset {
                         IntOffset(
-                            (thumbOffsetPx - 30.dp.toPx()).roundToInt().coerceAtLeast(0),
-                            (-32.dp.toPx()).roundToInt(),
+                            (thumbOffsetPx - indicatorOffsetX).roundToInt().coerceAtLeast(0),
+                            indicatorOffsetY.roundToInt(),
                         )
                     }
                     .width(60.dp),
