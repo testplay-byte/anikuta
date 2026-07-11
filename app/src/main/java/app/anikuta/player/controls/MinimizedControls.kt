@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -57,22 +56,25 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * Minimized video player controls overlay — redesigned for a clean, minimal UI.
+ * Minimized video player controls overlay — clean, minimal UI.
  *
  * Layout (when controls are visible):
  *  - Top-left: current time / total duration
  *  - Top-right: subtitle button + quality button (subtitle to the LEFT of quality)
- *  - Center: transparent play/pause icon (no solid background circle)
+ *  - Center: transparent play/pause icon (single-click toggles play/pause)
  *  - Bottom: minimal seekbar (left, fills width) + maximize button (right)
  *
  * Gestures:
- *  - Single tap: toggle controls visibility
- *  - Double-tap left third: skip -10s (with animation)
- *  - Double-tap right third: skip +10s (with animation)
- *  - Double-tap center third: toggle play/pause (with animation, NO controls shown)
+ *  - Single tap (controls hidden): show controls
+ *  - Single tap (controls visible, on center icon): toggle play/pause
+ *  - Single tap (controls visible, elsewhere): hide controls
+ *  - Double-tap left third: skip -10s (animation on LEFT side)
+ *  - Double-tap right third: skip +10s (animation on RIGHT side)
+ *  - Double-tap center third: toggle play/pause (animation in CENTER, smaller)
  *
- * The double-tap animations show a brief icon overlay (pause/play/rewind/forward)
- * that fades in and out — the controls themselves are NOT shown for double-taps.
+ * Double-tap animations do NOT show the controls — just a brief icon overlay.
+ * Skip animations appear on the side that was tapped (left/right).
+ * Play/pause animation appears in the center (smaller than skip animations).
  */
 @Composable
 fun MinimizedControls(
@@ -93,7 +95,7 @@ fun MinimizedControls(
     val loadingState by viewModel.loadingState.collectAsState()
     val isSwitchingEpisode by viewModel.isSwitchingEpisode.collectAsState()
 
-    // Double-tap animation state: which animation to show + its current alpha
+    // Double-tap animation state
     var doubleTapAnim by remember { mutableStateOf<DoubleTapFeedback?>(null) }
     val animAlpha = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -193,11 +195,23 @@ fun MinimizedControls(
             }
         }
 
-        // Double-tap feedback animation overlay (always visible briefly, no controls)
+        // Double-tap feedback animation overlay
+        // Skip animations (Rewind/Forward) appear on the SIDE that was tapped.
+        // Play/Pause animation appears in the CENTER (smaller).
         doubleTapAnim?.let { feedback ->
+            val isCenterAnim = feedback == DoubleTapFeedback.Pause || feedback == DoubleTapFeedback.Play
+            val alignment = if (isCenterAnim) Alignment.Center else {
+                when (feedback) {
+                    DoubleTapFeedback.Rewind -> Alignment.CenterStart
+                    DoubleTapFeedback.Forward -> Alignment.CenterEnd
+                    else -> Alignment.Center
+                }
+            }
+            val sidePadding = if (isCenterAnim) 0.dp else 48.dp
+
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
+                contentAlignment = alignment,
             ) {
                 val icon = when (feedback) {
                     DoubleTapFeedback.Pause -> Icons.Default.Pause
@@ -210,21 +224,26 @@ fun MinimizedControls(
                     DoubleTapFeedback.Forward -> "10s"
                     else -> null
                 }
+                // Center animations are smaller (56dp), side animations are larger (72dp)
+                val circleSize = if (isCenterAnim) 56.dp else 72.dp
+                val iconSize = if (isCenterAnim) 32.dp else 40.dp
+
                 Box(
                     contentAlignment = Alignment.Center,
+                    modifier = Modifier.padding(horizontal = sidePadding),
                 ) {
                     // Semi-transparent circle background
                     Surface(
                         shape = CircleShape,
                         color = Color.Black.copy(alpha = 0.4f * animAlpha.value),
-                        modifier = Modifier.size(72.dp),
+                        modifier = Modifier.size(circleSize),
                     ) {}
                     // Icon
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = animAlpha.value),
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier.size(iconSize),
                     )
                     // Label (for skip animations)
                     if (label != null) {
@@ -279,11 +298,17 @@ fun MinimizedControls(
                     )
                 }
 
-                // ---- Center: transparent play/pause (visual only, no tap handler) ----
-                // Single-tap anywhere toggles controls. Double-tap center toggles play/pause.
-                // This icon is purely visual — it doesn't consume taps.
+                // ---- Center: transparent play/pause (single-click toggles play/pause) ----
+                // When controls are visible, a single tap on this icon toggles play/pause.
+                // The pointerInput consumes the tap so the outer Box doesn't toggle controls.
+                // Double-tap center (when controls are hidden) is handled by the outer Box.
                 Box(
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(72.dp) // larger touch target
+                        .pointerInput(Unit) {
+                            detectTapGestures { onTogglePlay() }
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -335,11 +360,12 @@ private enum class DoubleTapFeedback { Pause, Play, Rewind, Forward }
  * A minimal, custom seekbar with a thin track and small thumb.
  *
  * Features:
- *  - Thin 3dp track (much less prominent than the M3 Slider)
- *  - Small 10dp thumb that appears during drag
+ *  - 5dp track (slightly thicker for better visibility)
+ *  - 14dp thumb that appears during drag
  *  - Drag-to-seek with live position update
- *  - Touch target is 24dp for comfortable interaction
- *  - Designed to support buffering indicator in the future (placeholder)
+ *  - Floating time indicator above the thumb while dragging
+ *  - Touch target is 28dp for comfortable interaction
+ *  - Designed to support buffering indicator in the future
  */
 @Composable
 private fun MinimalSeekbar(
@@ -358,7 +384,7 @@ private fun MinimalSeekbar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(24.dp) // comfortable touch target
+            .height(28.dp) // comfortable touch target
             .onSizeChanged { trackWidthPx = it.width.toFloat() }
             .pointerInput(maxRange) {
                 detectHorizontalDragGestures(
@@ -386,32 +412,60 @@ private fun MinimalSeekbar(
             },
         contentAlignment = Alignment.CenterStart,
     ) {
-        // Inactive track (background) — thin 3dp line
+        // Inactive track (background) — 5dp line
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(3.dp)
-                .clip(RoundedCornerShape(2.dp))
+                .height(5.dp)
+                .clip(RoundedCornerShape(3.dp))
                 .background(Color.White.copy(alpha = 0.3f)),
         )
-        // Active track (progress) — thin 3dp line in primary color
+        // Active track (progress) — 5dp line in primary color
         Box(
             modifier = Modifier
                 .fillMaxWidth(progress)
-                .height(3.dp)
-                .clip(RoundedCornerShape(2.dp))
+                .height(5.dp)
+                .clip(RoundedCornerShape(3.dp))
                 .background(MaterialTheme.colorScheme.primary),
         )
-        // Thumb — only visible while dragging (minimal aesthetic)
+        // Thumb + floating time indicator — only visible while dragging
         if (isDragging && trackWidthPx > 0) {
             val thumbOffsetPx = trackWidthPx * progress
+            val thumbSize = 14.dp
+            val thumbSizePx = thumbSize.toPx()
+            // Thumb circle
             Box(
                 modifier = Modifier
-                    .offset { IntOffset((thumbOffsetPx - 6.dp.toPx()).roundToInt(), 0) }
-                    .size(12.dp)
+                    .offset { IntOffset((thumbOffsetPx - thumbSizePx / 2).roundToInt(), 0) }
+                    .size(thumbSize)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary),
             )
+            // Floating time indicator above the thumb
+            Box(
+                modifier = Modifier
+                    .offset {
+                        IntOffset(
+                            (thumbOffsetPx - 30.dp.toPx()).roundToInt().coerceAtLeast(0),
+                            (-32.dp.toPx()).roundToInt(),
+                        )
+                    }
+                    .width(60.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color.Black.copy(alpha = 0.7f),
+                ) {
+                    Text(
+                        text = formatTime(displayPosition.toInt()),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+            }
         }
     }
 }

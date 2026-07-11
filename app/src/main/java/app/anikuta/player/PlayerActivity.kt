@@ -45,7 +45,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -1358,43 +1357,26 @@ private fun PlayerScreen(
     val currentEpisode = episodeList.getOrNull(currentIndex)
 
     // ---- LazyColumn scroll state ----
-    // FIX: Scroll to the VERY top once the episode list is first loaded.
-    // Previously used LaunchedEffect(Unit) which ran before episodes arrived
-    // from disk cache (async), so the no-op scroll on an empty list meant
-    // the list later appeared at a non-zero position. Now we key on the
-    // episode list becoming non-empty and use a one-time guard so it only
-    // fires on initial load (NOT when the user switches episodes later).
+    // FIX: Force-scroll to the VERY top when the episode list first loads.
+    // The list loads asynchronously from disk cache (lifecycleScope.launch in
+    // onCreate), so the scroll must happen AFTER the items are loaded AND
+    // after the LazyColumn has laid them out. We use a small delay (100ms)
+    // to ensure layout is complete, then force scrollToItem(0, 0).
     //
-    // FIX 2: The fade-out gradient at the top of the LazyColumn was always
-    // visible (opaque), obscuring the top of the episode details even when
-    // scrolled to the very top. Now the gradient only appears when the user
-    // scrolls down past the top (YouTube-style: the shadow only appears when
-    // content is scrolling under it). This ensures the episode number badge
-    // and title are fully visible on initial load.
+    // The one-time guard (hasScrolledToTop) ensures this only fires on the
+    // INITIAL load — NOT when the user switches episodes later.
     val episodeListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val hasScrolledToTop = remember { mutableStateOf(false) }
     LaunchedEffect(episodeList.isNotEmpty()) {
         if (episodeList.isNotEmpty() && !hasScrolledToTop.value) {
-            // scrollToItem(0, 0) — scrollOffset 0 ensures exact top alignment
+            // Wait for the LazyColumn to finish laying out the items.
+            // Without this delay, scrollToItem runs before layout and is a no-op.
+            kotlinx.coroutines.delay(100)
             episodeListState.scrollToItem(0, 0)
             hasScrolledToTop.value = true
-            Log.d("PlayerActivity", "Episode list scrolled to very top (first load)")
+            Log.d("PlayerActivity", "Episode list force-scrolled to very top (first load)")
         }
     }
-    // Track whether the list is at the very top (for gradient visibility)
-    val isListAtTop by remember {
-        derivedStateOf {
-            episodeListState.firstVisibleItemIndex == 0 &&
-                episodeListState.firstVisibleItemScrollOffset == 0
-        }
-    }
-    // Animate gradient alpha: 0 when at top (episode details fully visible),
-    // 1 when scrolled (episodes fade out into the gradient)
-    val gradientAlpha by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isListAtTop) 0f else 1f,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 200),
-        label = "gradientAlpha",
-    )
 
     // ---- Sheet state (Phase 3.7) ----
     var showQualitySheet by remember { mutableStateOf(false) }
@@ -1755,23 +1737,20 @@ private fun PlayerScreen(
                     }
                     } // end LazyColumn
 
-                    // Fade-out gradient overlay — only visible when scrolled (YouTube-style).
-                    // Alpha is 0 when at top (episode details fully visible), 1 when scrolled.
-                    // Uses gradientAlpha from the animated state above.
-                    if (gradientAlpha > 0f) {
-                        androidx.compose.foundation.layout.Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(20.dp)
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                                        0f to MaterialTheme.colorScheme.background.copy(alpha = gradientAlpha),
-                                        1f to MaterialTheme.colorScheme.background.copy(alpha = 0f),
-                                    ),
+                    // Fade-out gradient overlay — episodes fade out before reaching the video.
+                    // Always visible (reverted from animated version per user feedback).
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(20.dp)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    0f to MaterialTheme.colorScheme.background,
+                                    1f to MaterialTheme.colorScheme.background.copy(alpha = 0f),
                                 ),
-                        )
-                    }
+                            ),
+                    )
                 } // end Box (LazyColumn wrapper)
             }
         }
