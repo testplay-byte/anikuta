@@ -1173,3 +1173,46 @@ New `VideoCacheStore` class (`app/files/video_cache/`) with 24h TTL:
 
 ### ntfy
 - Notification sent to TASKISDONE topic
+
+---
+
+## Session 43 (Picker re-animation + audio version overwrite + initial display)
+
+Task ID: PLAYER-PICKER-AUDIO-INIT-FIX
+Agent: main (Z.ai Code)
+
+### Log Analysis (two user-provided logs)
+
+**Log 1 (picker re-animation)**:
+- `Background re-resolve: data changed, updating picker smoothly` — picker re-appeared
+- Root cause: `compareServerSections()` compared `videoUrl`, but URLs contain
+  `localhost:PORT` which changes every resolution. Comparison always detected
+  "data changed" even when content was identical.
+
+**Log 2 (audio version overwritten)**:
+- User selected HSUB, but `Populated audio versions ... (current=SUB)` — overwritten!
+- `autoSelectAudioTrack: currentAid=1, targetVersion='HSUB', tracks=1` — only 1 audio track
+- Root cause: `resolveVideosInBackground()` matched by `videoUrl` which failed (localhost
+  ports differ). Fell back to `selectBestVideo()` which picked SUB, overwriting HSUB.
+
+### Fix 1 — Picker Re-Animation (DetailViewModel)
+`compareServerSections()` now compares by `videoTitle + resolution` (stable) instead
+of `videoUrl` (contains localhost:PORT). When data is the same, picker state is not
+updated — no re-animation.
+
+### Fix 2 — Audio Version Overwritten (PlayerActivity)
+`resolveVideosInBackground()` now matches by server + audio + quality from Intent extras:
+1. Exact match: same server + same audio + same quality
+2. Same server + same audio (any quality)
+3. Same server (prefer same audio via sortedByDescending)
+4. Last resort: URL match
+If no match found, keeps Intent extras as current (doesn't call selectBestVideo).
+
+### Fix 3 — Player Initial Display (PlayerActivity)
+Server, audio version, and quality are now set in the VM immediately from Intent extras
+when the episode list is loaded from cache. Previously the UI waited for background video
+resolution to complete before showing the correct server/audio.
+
+### Build
+- Build #238 (6dc5560): FAILED — sortedByDescending type argument error
+- Build #239 (039a75b): SUCCESS — fixed with Int comparison instead of Boolean
