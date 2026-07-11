@@ -192,6 +192,15 @@ class PlayerPreferences(
         preferenceStore.getBoolean("pref_show_player_top_bar", true)
 
     /**
+     * P2a: Whether to automatically enter PiP mode when the user presses Home
+     * while a video is playing. Default: false (off — user must enable it).
+     * When disabled, pressing Home simply pauses the video and goes to background.
+     * The manual PiP button in fullscreen always works regardless of this setting.
+     */
+    fun pipOnExit(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_pip_on_exit", false)
+
+    /**
      * Quality sheet display mode:
      * - "current" = show only qualities for the current server + audio version (default)
      * - "all" = show all qualities from all servers and audio versions, organized into sections

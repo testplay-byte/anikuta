@@ -88,6 +88,22 @@ fun SubtitleSettingsPanel(
             .fillMaxWidth()
             .verticalScroll(rememberScrollState()),
     ) {
+        // Subtitle Fix 4: Explanatory note about ASS styling
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = "Note: These settings only affect plain-text subtitles. " +
+                    "ASS/SSA subtitles use their own styling unless you enable " +
+                    "'Override ASS styling' below.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
+
         // ---- Typography ----
         SectionHeader("Typography")
         // Font family selector

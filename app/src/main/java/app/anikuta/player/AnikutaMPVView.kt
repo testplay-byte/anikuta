@@ -230,6 +230,10 @@ class AnikutaMPVView(
 
         MPVLib.setOptionString("speed", playerPreferences.playerSpeed().get().toString())
         MPVLib.setOptionString("alang", playerPreferences.preferredAudioLanguages().get())
+        // Subtitle Fix 5: Set subtitle language preference so MPV prefers English
+        // subtitles when multiple are available. Without this, MPV picks an
+        // arbitrary subtitle track as the default.
+        MPVLib.setOptionString("slang", "en,eng")
         MPVLib.setOptionString("volume-max", (playerPreferences.volumeBoostCap().get() + 100).toString())
         // Workaround for https://github.com/mpv-player/mpv/issues/14651
         MPVLib.setOptionString("vd-lavc-film-grain", "cpu")
@@ -307,6 +311,11 @@ class AnikutaMPVView(
         MPVLib.observeProperty("seeking", MPVLib.mpvFormat.MPV_FORMAT_FLAG)
         MPVLib.observeProperty("eof-reached", MPVLib.mpvFormat.MPV_FORMAT_FLAG)
         MPVLib.observeProperty("hwdec-current", MPVLib.mpvFormat.MPV_FORMAT_STRING)
+        // Subtitle Fix 3: Observe sid so the UI stays in sync when MPV changes
+        // the subtitle track internally (e.g. due to slang preferences or
+        // track-list reordering).
+        MPVLib.observeProperty("sid", MPVLib.mpvFormat.MPV_FORMAT_STRING)
+        MPVLib.observeProperty("aid", MPVLib.mpvFormat.MPV_FORMAT_STRING)
     }
 
     override fun postInitOptions() {

@@ -569,23 +569,34 @@ class PlayerActivity : ComponentActivity() {
         }
         try {
             // Add external subtitle tracks (deduplicated)
+            // Subtitle Fix 1: Use "select" for the FIRST external subtitle so MPV
+            // auto-selects it immediately. Use "auto" for subsequent tracks.
+            // Subtitle Fix 7: Pass "" as title (3rd arg) so MPV uses the filename,
+            // and sub.lang as the lang (4th arg) for proper language detection.
             if (video.subtitleTracks.isNotEmpty()) {
+                var isFirstSub = true
                 video.subtitleTracks.forEach { sub ->
                     if (addedTrackUrls.contains(sub.url)) {
                         Log.d(TAG, "Skipping duplicate subtitle track: ${sub.lang}")
                         return@forEach
                     }
                     try {
-                        MPVLib.command(arrayOf("sub-add", sub.url, "auto", sub.lang, sub.lang))
+                        val flags = if (isFirstSub) "select" else "auto"
+                        MPVLib.command(arrayOf("sub-add", sub.url, flags, "", sub.lang))
                         addedTrackUrls.add(sub.url)
-                        Log.d(TAG, "Added external subtitle: ${sub.lang} (${sub.url.take(60)}...)")
+                        isFirstSub = false
+                        Log.d(TAG, "Added external subtitle (flags=$flags): ${sub.lang} (${sub.url.take(60)}...)")
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to add subtitle track: ${sub.lang}", e)
                     }
                 }
                 Log.d(TAG, "Processed ${video.subtitleTracks.size} external subtitle track(s)")
+                // Fix 2: Mark that external tracks were just added so
+                // autoSelectSubtitleTrack knows to prefer them over embedded ones
+                externalTracksJustAdded = true
             }
             // Add external audio tracks (deduplicated)
+            // Fix 7: Pass "" as title, audio.lang as lang
             if (video.audioTracks.isNotEmpty()) {
                 video.audioTracks.forEach { audio ->
                     if (addedTrackUrls.contains(audio.url)) {
@@ -593,7 +604,7 @@ class PlayerActivity : ComponentActivity() {
                         return@forEach
                     }
                     try {
-                        MPVLib.command(arrayOf("audio-add", audio.url, "auto", audio.lang, audio.lang))
+                        MPVLib.command(arrayOf("audio-add", audio.url, "auto", "", audio.lang))
                         addedTrackUrls.add(audio.url)
                         Log.d(TAG, "Added external audio: ${audio.lang} (${audio.url.take(60)}...)")
                     } catch (e: Exception) {
@@ -694,6 +705,18 @@ class PlayerActivity : ComponentActivity() {
                     Log.d(TAG, "Tracks loaded: ${subTracks.size} sub, ${audioTracks.size} audio")
                 }
             }
+            // Subtitle Fix 3: Handle sid/aid property changes so the UI stays
+            // in sync when MPV changes the track internally.
+            "sid" -> {
+                val sid = value.toIntOrNull() ?: -1
+                viewModel?.setCurrentSubtitleId(sid)
+                Log.d(TAG, "sid property changed: $sid")
+            }
+            "aid" -> {
+                val aid = value.toIntOrNull() ?: -1
+                viewModel?.setCurrentAudioId(aid)
+                Log.d(TAG, "aid property changed: $aid")
+            }
         }
     }
 
@@ -718,24 +741,18 @@ class PlayerActivity : ComponentActivity() {
     /**
      * Auto-select the first available subtitle track if none is selected.
      *
-     * This mirrors aniyomi's onFinishLoadingTracks() behavior. When tracks are
-     * added via `sub-add ... auto`, MPV does NOT auto-select them — sid stays
-     * at "no" and no subtitle is rendered. This function checks if sid is -1
-     * (no track selected) and if there are real subtitle tracks available
-     * (id >= 1), picks the first one and sets sid.
+     * Subtitle Fix 2: Previously, if MPV auto-selected an embedded subtitle
+     * (sid > 0), external subtitles added via sub-add would never get selected
+     * because this function saw sid > 0 and just updated the VM. Now, if
+     * external tracks were just added (tracked via `externalTracksJustAdded`),
+     * we prefer the external track over the embedded one — external tracks
+     * from the extension are usually the "real" subtitles the user wants.
      *
      * Respects [userDisabledSubtitles] — if the user manually turned off
      * subtitles, we don't auto-select again.
-     *
-     * FIX (M1): The `else` branch (a subtitle is already selected) NO LONGER
-     * resets `userDisabledSubtitles`. Previously, if MPV auto-selected a
-     * subtitle after the user explicitly turned them off (e.g. a new sub-add
-     * arrived), the flag was incorrectly cleared — causing subsequent
-     * track-list changes to re-enable subtitles against the user's wishes.
-     * The flag is now ONLY set/cleared from the SubtitleTracksSheet onSelect
-     * callback (`onUserDisabledSubtitles(trackId <= 0)`), which represents an
-     * explicit user action.
      */
+    @Volatile private var externalTracksJustAdded: Boolean = false
+
     private fun autoSelectSubtitleTrack(
         view: AnikutaMPVView,
         subTracks: List<VideoTrack>,
@@ -760,11 +777,27 @@ class PlayerActivity : ComponentActivity() {
                 }
             }
         } else {
-            // A subtitle is already selected — update VM state only.
-            // FIX (M1): Do NOT reset `userDisabledSubtitles` here. MPV may
-            // auto-select a subtitle after the user disabled them; resetting
-            // the flag would let subsequent auto-selects re-enable subtitles.
-            // The flag is only set/cleared from the SubtitleTracksSheet user callback.
+            // A subtitle is already selected.
+            // Subtitle Fix 2: If external tracks were just added, prefer them
+            // over the embedded track that MPV auto-selected. The external track
+            // from the extension is usually the correct one.
+            if (externalTracksJustAdded && !userDisabledSubtitles) {
+                // Find an external track (tracks with id > current max embedded id
+                // are likely external). Simplest approach: pick the LAST real track
+                // (external tracks are added after embedded ones).
+                val externalTrack = subTracks.lastOrNull { it.id > 0 }
+                if (externalTrack != null && externalTrack.id != currentSid) {
+                    try {
+                        view.sid = externalTrack.id
+                        viewModel?.setCurrentSubtitleId(externalTrack.id)
+                        Log.d(TAG, "Switched to external subtitle track: id=${externalTrack.id} name='${externalTrack.name}'")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to switch to external subtitle track", e)
+                    }
+                }
+                externalTracksJustAdded = false
+            }
+            // Update VM state with current sid
             viewModel?.setCurrentSubtitleId(currentSid)
         }
     }
@@ -1739,20 +1772,30 @@ class PlayerActivity : ComponentActivity() {
     }
 
     /**
-     * Phase 6.2 — Enter Picture-in-Picture mode when user leaves the app.
-     * Called automatically when the user presses Home while video is playing.
+     * P2a: Enter PiP mode when the user presses Home — but only if:
+     * 1. The pipOnExit setting is enabled (default: false)
+     * 2. The video is currently playing (not paused)
+     * 3. The device supports PiP (API 26+)
+     *
+     * The manual PiP button (enterPiP) always works regardless of the setting.
      */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                val params = PictureInPictureParams.Builder()
-                    .setAspectRatio(android.util.Rational(16, 9))
-                    .build()
-                enterPictureInPictureMode(params)
-                Log.d(TAG, "Entered PiP mode")
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not enter PiP mode", e)
+            val pipEnabled = playerPrefs?.pipOnExit()?.get() ?: false
+            val isPlaying = viewModel?.isPlaying?.value ?: false
+            if (pipEnabled && isPlaying) {
+                try {
+                    val params = PictureInPictureParams.Builder()
+                        .setAspectRatio(android.util.Rational(16, 9))
+                        .build()
+                    enterPictureInPictureMode(params)
+                    Log.d(TAG, "Entered PiP mode (auto on Home, playing=$isPlaying)")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not enter PiP mode", e)
+                }
+            } else {
+                Log.d(TAG, "PiP skipped (enabled=$pipEnabled, playing=$isPlaying)")
             }
         }
     }

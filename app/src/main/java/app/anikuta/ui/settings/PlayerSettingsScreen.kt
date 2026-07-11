@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.SkipNext
@@ -45,6 +46,7 @@ fun PlayerSettingsScreen(
     // until another control triggered a recomposition.
     val showTopBar by prefs.showPlayerTopBar().stateIn(scope).collectAsState()
     val qualityDisplayMode by prefs.qualitySheetDisplayMode().stateIn(scope).collectAsState()
+    val pipOnExit by prefs.pipOnExit().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Player", onBack = onBack) {
         LazyColumn(
@@ -151,6 +153,14 @@ fun PlayerSettingsScreen(
                         subtitle = "Show the floating navigation bar in minimized mode",
                         checked = showTopBar,
                         onCheckedChange = { prefs.showPlayerTopBar().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.PictureInPicture,
+                        title = "Auto PiP on exit",
+                        subtitle = "Enter picture-in-picture when pressing Home while playing",
+                        checked = pipOnExit,
+                        onCheckedChange = { prefs.pipOnExit().set(it) },
                     )
                     HorizontalDivider()
                     SwitchSettingsRow(

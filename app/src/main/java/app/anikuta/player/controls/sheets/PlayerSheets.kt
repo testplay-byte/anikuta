@@ -262,6 +262,18 @@ fun SubtitleTracksSheet(
                     onClick = { onSelect(track.id); onDismiss() },
                 )
             }
+            // Subtitle Fix 6: Show message when no real subtitle tracks exist
+            if (tracks.size <= 1) {
+                item {
+                    Text(
+                        text = "No subtitles found in this stream.\n" +
+                            "The extension may not provide external subtitles for this episode.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
+            }
         }
     }
 }
