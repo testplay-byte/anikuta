@@ -846,6 +846,7 @@ class PlayerActivity : ComponentActivity() {
                 // Step 5: Update state
                 currentVideoUrl = selected.video.videoUrl
                 viewModel?.setCurrentVideoUrl(currentVideoUrl)  // FIX (L2): reactive highlight
+                viewModel?.setCurrentVideoTitle(selected.video.videoTitle)  // FIX: stable highlight
                 currentVideoHeaders = headers
                 currentVideoServer = selected.server
                 currentVideoAudio = selected.audio.name
@@ -1205,8 +1206,10 @@ class PlayerActivity : ComponentActivity() {
         // Reset user flags — new video loaded, user hasn't interacted yet
         userChangedAudioTrack = false
         userDisabledSubtitles = false
-        // FIX: Reset first-load flag and track dedup set for the new video
-        isFirstFileLoad = true
+        // FIX: Reset track dedup set. Do NOT reset isFirstFileLoad here —
+        // that flag controls whether seekToSavedPosition() fires on FILE_LOADED.
+        // For quality/server switches, we handle position via the MPV "start"
+        // property instead (see below).
         addedTrackUrls.clear()
 
         // Update VM state (for UI reactivity)
@@ -1242,13 +1245,20 @@ class PlayerActivity : ComponentActivity() {
                     if (headers.isNotBlank()) {
                         MPVLib.setOptionString("http-header-fields", headers)
                     }
-                    // Set start position so MPV seeks to it after loading
+                    // Set start position so MPV seeks to it after loading.
+                    // FIX: Use command("set", "start", ...) instead of setOptionString.
+                    // setOptionString is init-only and doesn't work after MPV is
+                    // initialized. The "set" command goes through the property API.
+                    // Mirrors aniyomi's PlayerActivity.setVideo() approach.
                     if (savedPosition > 5) {
-                        MPVLib.setOptionString("start", "${savedPosition}")
+                        MPVLib.command(arrayOf("set", "start", "$savedPosition"))
                         Log.d(TAG, "Preserving position: ${savedPosition}s")
                     }
                     Log.d(TAG, "Loading video: ${currentVideoUrl.take(80)}...")
                     MPVLib.command(arrayOf("loadfile", currentVideoUrl, "replace"))
+                    // Clear the start property so it doesn't affect future loads
+                    // (e.g. episode switching should start from 0 or resume position)
+                    MPVLib.command(arrayOf("set", "start", "none"))
                     launchSwitchTimeout()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load video", e)
@@ -1333,6 +1343,7 @@ class PlayerActivity : ComponentActivity() {
                     // external subtitles can be loaded. The initial currentVideo
                     // from onCreate only had videoUrl + videoTitle (no tracks).
                     currentVideo = currentParsed.video
+                    vm.setCurrentVideoTitle(currentParsed.video.videoTitle)
                     populateVideoSelectionState(parsedVideos, currentParsed)
                     // FIX: If the resolved video has external subtitle tracks,
                     // load them into MPV now. The initial loadExternalTracks()
@@ -1354,6 +1365,7 @@ class PlayerActivity : ComponentActivity() {
                     Log.w(TAG, "Background resolve: current video not found in resolved list — keeping Intent extras as current")
                     val selected = selectBestVideo(parsedVideos)
                     currentVideo = selected.video
+                    vm.setCurrentVideoTitle(selected.video.videoTitle)
                     // Populate state but use the INTENT audio version, not selected
                     populateVideoSelectionState(parsedVideos, selected)
                     // Restore the correct current values from Intent
@@ -1580,6 +1592,7 @@ class PlayerActivity : ComponentActivity() {
                 // Update all state
                 currentVideoUrl = selected.video.videoUrl
                 vm.setCurrentVideoUrl(currentVideoUrl)  // FIX (L2): reactive highlight
+                vm.setCurrentVideoTitle(selected.video.videoTitle)  // FIX: stable highlight
                 currentVideoHeaders = buildHeaders(selected.video)
                 currentVideoServer = selected.server
                 currentVideoAudio = selected.audio.name
