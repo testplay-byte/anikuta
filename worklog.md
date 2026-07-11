@@ -991,3 +991,39 @@ Stage Summary:
 - Subtitles should now render: sid getter fixed, auto-select works, "Off" works
 - User's "Off" choice is respected (auto-select won't override)
 - ntfy notifications now go to TASKISDONE topic
+
+---
+
+## Session 39 (QualitySheet crash fix — duplicate LazyColumn keys)
+
+Task ID: PLAYER-QUALITY-CRASH-FIX
+Agent: main (Z.ai Code)
+
+### Root Cause (from user-provided crash log)
+```
+FATAL EXCEPTION: IllegalArgumentException: Key "https://cdn.mewstream.buzz/.../index-f1-v1-a1.m3u8" was already used.
+```
+
+The QualitySheet used `key = { it.videoUrl }` for its LazyColumn items. When
+multiple videos share the same URL (e.g. different audio versions on the same
+server might point to the same m3u8 stream), Compose crashed because LazyColumn
+requires unique keys.
+
+### Fix
+- Changed key from `{ it.videoUrl }` to `{ index, _ -> "quality_$index" }`
+  using `itemsIndexed()` to guarantee uniqueness
+- Added `itemsIndexed` import
+- Improved `selected` check to also compare `videoTitle` (not just `videoUrl`)
+  so the correct quality is highlighted when multiple videos share a URL
+
+### Subtitle Note
+- Subtitles still not rendering on the video player. User confirmed they will
+  come back to this later. The sid getter fix was correct ( getPropertyString
+  instead of getPropertyInt) but subtitles still don't display. May be a
+  rendering issue with the specific stream/subtitle format. Parked for now.
+
+### Build
+- Build #234 (960d66b): SUCCESS
+
+### ntfy
+- Notification sent to TASKISDONE topic
