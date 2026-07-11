@@ -121,8 +121,16 @@ class AnikutaMPVView(
     /** Track type for track at index n: "audio", "sub", or "video". */
     fun getTrackType(index: Int): String? = MPVLib.getPropertyString("track-list/$index/type")
 
-    /** MPV track ID for track at index n. */
-    fun getTrackId(index: Int): Int = MPVLib.getPropertyInt("track-list/$index/id") ?: -1
+    /**
+     * MPV track ID for track at index n.
+     *
+     * FIX (L6): Returns `Int?` (null when MPV reports no/invalid value) to
+     * be consistent with [getTrackType] returning `String?`. Callers in
+     * [loadTracks] now filter nulls so malformed track entries are skipped
+     * rather than silently producing a -1 sentinel that gets added as a
+     * bogus "Track -1" entry in the sheet.
+     */
+    fun getTrackId(index: Int): Int? = MPVLib.getPropertyInt("track-list/$index/id")
 
     /** Title for track at index n (may be empty). */
     fun getTrackTitle(index: Int): String = MPVLib.getPropertyString("track-list/$index/title") ?: ""
@@ -146,7 +154,10 @@ class AnikutaMPVView(
             val count = getTrackCount()
             for (i in 0 until count) {
                 val type = getTrackType(i) ?: continue
-                val id = getTrackId(i)
+                // FIX (L6): Skip tracks with no valid ID (null) instead of
+                // silently using -1, which would create bogus "Track -1"
+                // entries in the sheet.
+                val id = getTrackId(i) ?: continue
                 val title = getTrackTitle(i)
                 val lang = getTrackLang(i)
                 val name = when {
@@ -226,18 +237,23 @@ class AnikutaMPVView(
      * Apply subtitle preferences to MPV.
      *
      * FIX (Part 5): Uses setPropertyString() for runtime-applicable properties
-     * (sub-font-size, sub-scale, sub-border-size, sub-bold, sub-italic,
+     * (sub-font, sub-font-size, sub-scale, sub-border-size, sub-bold, sub-italic,
      * sub-color, sub-border-color, sub-back-color, sub-pos, sub-shadow-offset,
      * sub-ass-override, sub-delay) so changes apply LIVE without reinitializing
-     * MPV. Only sub-font uses setOptionString (it's init-only in some MPV builds).
+     * MPV.
+     *
+     * FIX (M3): sub-font is also set via setPropertyString() so it can be
+     * changed at runtime — setOptionString is init-only and silently fails
+     * to apply after MPV is initialized.
      *
      * Called from initOptions() on initial load AND from the SubtitleSettingsPanel
      * via onSettingsChanged callback when the user adjusts settings.
      */
     fun applySubtitlePreferences() {
         try {
-            // sub-font is init-only on some MPV builds — use setOptionString
-            MPVLib.setOptionString("sub-font", playerPreferences.subtitleFont().get())
+            // FIX (M3): sub-font is a runtime property — use setPropertyString
+            // so it applies live. setOptionString is init-only.
+            MPVLib.setPropertyString("sub-font", playerPreferences.subtitleFont().get())
             // Runtime-applicable properties — use setPropertyString for live updates
             MPVLib.setPropertyString("sub-font-size", playerPreferences.subtitleFontSize().get().toString())
             MPVLib.setPropertyString("sub-scale", playerPreferences.subtitleFontScale().get().toString())

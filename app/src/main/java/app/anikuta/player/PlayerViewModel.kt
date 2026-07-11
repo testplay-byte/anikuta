@@ -131,6 +131,17 @@ class PlayerViewModel(
     private val _currentVideoQuality = MutableStateFlow(-1)
     val currentVideoQuality: StateFlow<Int> = _currentVideoQuality.asStateFlow()
 
+    /**
+     * Currently loaded video URL. FIX (L2): This was previously an Activity
+     * `@Volatile var` read by the QualitySheet, but changes to it did not
+     * trigger Compose recomposition — so the "current quality" highlight in
+     * the sheet was stale until the sheet was re-opened. Hoisting it into the
+     * ViewModel as a StateFlow makes the highlight reactive to
+     * switchServer / switchAudioVersion / switchQuality / switchEpisode calls.
+     */
+    private val _currentVideoUrl = MutableStateFlow("")
+    val currentVideoUrl: StateFlow<String> = _currentVideoUrl.asStateFlow()
+
     // ---- Mode switching ----
 
     fun setPlayerMode(mode: PlayerMode) {
@@ -206,6 +217,11 @@ class PlayerViewModel(
 
     fun setCurrentVideoQuality(quality: Int) {
         _currentVideoQuality.value = quality
+    }
+
+    /** FIX (L2): Update the current video URL StateFlow. */
+    fun setCurrentVideoUrl(url: String) {
+        _currentVideoUrl.value = url
     }
 
     // ---- Original state mutations (from Activity's MPV observer) ----

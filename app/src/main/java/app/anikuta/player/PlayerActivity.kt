@@ -112,16 +112,6 @@ class PlayerActivity : ComponentActivity() {
         const val MPV_DIR = "mpv"
 
         /**
-         * MPV can only be initialized ONCE per process. Calling
-         * BaseMPVView.initialize() a second time triggers a native assertion
-         * (SIGABRT) that kills the process — the Java crash handler can't
-         * catch native signals. This flag tracks whether MPV has been
-         * initialized so we skip initialize() on subsequent player opens.
-         */
-        @Volatile
-        var mpvInitialized = false
-
-        /**
          * Build a launch Intent for the player.
          * [anilistId] + [episodeUrl] + [episodeNumber] are optional — when
          * provided, watch progress is saved/resumed + AniList sync happens.
@@ -228,6 +218,10 @@ class PlayerActivity : ComponentActivity() {
         currentVideoAudio = intent.getStringExtra(EXTRA_VIDEO_AUDIO) ?: ""
         currentVideoQuality = intent.getIntExtra(EXTRA_VIDEO_QUALITY, -1)
         currentVideoUrl = videoUrl ?: ""
+        // FIX (L2): Mirror into the ViewModel StateFlow so the QualitySheet's
+        // "current quality" highlight is reactive (was previously stale until
+        // the sheet was reopened).
+        viewModel?.setCurrentVideoUrl(currentVideoUrl)
         currentVideoHeaders = intent.getStringExtra(EXTRA_VIDEO_HEADERS) ?: ""
         // Create a minimal Video object for the initial load so external tracks
         // (if any were passed) can be loaded. The full Video object with tracks
@@ -375,7 +369,9 @@ class PlayerActivity : ComponentActivity() {
                         onUserDisabledSubtitles = { disabled -> activity.userDisabledSubtitles = disabled },
                         onUserChangedAudioTrack = { changed -> activity.userChangedAudioTrack = changed },
                         onReResolveVideo = { activity.loadVideoIfPending() },
-                        currentVideoUrl = activity.currentVideoUrl,
+                        // FIX (L2): currentVideoUrl is now read from the ViewModel
+                        // StateFlow inside PlayerScreen (it stays reactive). We
+                        // no longer pass it as a parameter here.
                         coverColor = coverColor,
                     )
                 }
@@ -471,11 +467,24 @@ class PlayerActivity : ComponentActivity() {
      * FIX (M2): Passes lang as the 4th argument (correct MPV signature:
      * sub-add <url> [<flags> [<title> [<lang>]]]) — previously lang was passed
      * as the title (3rd arg).
+     *
+     * FIX (L10): Verified early-return logic is correct. Two guards:
+     *  1. `currentVideo == null` → return (no Video object set yet — happens on
+     *     the very first FILE_LOADED before resolveVideosInBackground / switch
+     *     finishes populating currentVideo).
+     *  2. `subtitleTracks.isEmpty() && audioTracks.isEmpty()` → return (Video
+     *     object has no external tracks to add — common case for embedded-track
+     *     streams). This avoids the try/catch + per-track loop overhead and
+     *     makes the early-out visible in logs.
      */
     private fun loadExternalTracks() {
         val video = currentVideo ?: return
-        // Early return if no tracks to add
-        if (video.subtitleTracks.isEmpty() && video.audioTracks.isEmpty()) return
+        // Early return if no tracks to add — common case (most streams have
+        // embedded tracks only, no external sub/audio URLs).
+        if (video.subtitleTracks.isEmpty() && video.audioTracks.isEmpty()) {
+            Log.d(TAG, "loadExternalTracks: no external tracks (sub=${video.subtitleTracks.size} audio=${video.audioTracks.size})")
+            return
+        }
         try {
             // Add external subtitle tracks (deduplicated)
             if (video.subtitleTracks.isNotEmpty()) {
@@ -543,6 +552,13 @@ class PlayerActivity : ComponentActivity() {
     /**
      * Sync watch progress to AniList (task 6.9). Called when an episode is
      * finished. Uses the AniListTracker (if logged in) to update progress.
+     *
+     * FIX (M8): Switched from `MainScope().launch` to `lifecycleScope.launch`.
+     * `MainScope()` creates an unscoped SupervisorJob that lives until manually
+     * cancelled — using it from an Activity leaks the coroutine (and any
+     * references it captures) across the Activity lifecycle, surviving
+     * onDestroy. `lifecycleScope` is tied to the Activity's Lifecycle and is
+     * automatically cancelled when the Activity is destroyed.
      */
     private fun syncToAniList() {
         try {
@@ -550,7 +566,9 @@ class PlayerActivity : ComponentActivity() {
             if (!tracker.isLoggedIn()) return
             // Extract episode number from the title (best-effort)
             val epNum = vmEpisodeNumber ?: return
-            kotlinx.coroutines.MainScope().launch {
+            // FIX (M8): Use lifecycleScope (Activity-scoped) instead of MainScope()
+            // so the coroutine is cancelled when the Activity is destroyed.
+            lifecycleScope.launch {
                 tracker.updateProgress(anilistId, epNum.toInt())
             }
             Log.d(TAG, "AniList sync triggered: anime=$anilistId ep=$epNum")
@@ -624,6 +642,15 @@ class PlayerActivity : ComponentActivity() {
      *
      * Respects [userDisabledSubtitles] — if the user manually turned off
      * subtitles, we don't auto-select again.
+     *
+     * FIX (M1): The `else` branch (a subtitle is already selected) NO LONGER
+     * resets `userDisabledSubtitles`. Previously, if MPV auto-selected a
+     * subtitle after the user explicitly turned them off (e.g. a new sub-add
+     * arrived), the flag was incorrectly cleared — causing subsequent
+     * track-list changes to re-enable subtitles against the user's wishes.
+     * The flag is now ONLY set/cleared from the SubtitleTracksSheet onSelect
+     * callback (`onUserDisabledSubtitles(trackId <= 0)`), which represents an
+     * explicit user action.
      */
     private fun autoSelectSubtitleTrack(
         view: AnikutaMPVView,
@@ -649,10 +676,12 @@ class PlayerActivity : ComponentActivity() {
                 }
             }
         } else {
-            // A subtitle is already selected — update VM state
+            // A subtitle is already selected — update VM state only.
+            // FIX (M1): Do NOT reset `userDisabledSubtitles` here. MPV may
+            // auto-select a subtitle after the user disabled them; resetting
+            // the flag would let subsequent auto-selects re-enable subtitles.
+            // The flag is only set/cleared from the SubtitleTracksSheet user callback.
             viewModel?.setCurrentSubtitleId(currentSid)
-            // User hasn't disabled subtitles if one is selected
-            userDisabledSubtitles = false
         }
     }
 
@@ -665,10 +694,22 @@ class PlayerActivity : ComponentActivity() {
      * But we never set `aid` to select the correct audio track — MPV defaults to
      * the first audio track (Japanese/SUB) every time.
      *
-     * This function selects the appropriate audio track:
-     * - SUB / HSUB: select the first audio track (embedded Japanese)
-     * - DUB: if there are 2+ audio tracks, select the last one (external English
-     *   audio added via audio-add). If only 1 track, keep it.
+     * FIX (H3): Selection is now based on the track's `language` field instead
+     * of position in the track list. Previously DUB picked `realAudioTracks.last()`,
+     * which is wrong for 3+ tracks (e.g. a stream with jpn+eng+commentary would
+     * pick the commentary track as "DUB"). Now:
+     *  - DUB: pick the first track whose language CONTAINS "en"/"eng".
+     *  - SUB/HSUB: pick the first track whose language CONTAINS "ja"/"jpn".
+     *  - Fallback: first real audio track (preserves previous behavior when no
+     *    language metadata is present).
+     *
+     * RECONCILIATION WITH `alang` (initOptions): `alang` is MPV's initial
+     * preference for auto-selecting an embedded audio track on load. This
+     * function runs on every `track-list` property change and explicitly sets
+     * `aid` to enforce the per-version choice, so it overrides alang's initial
+     * selection. They are complementary: alang handles the initial MPV pick
+     * before we observe track-list; autoSelectAudioTrack enforces the user's
+     * SUB/DUB/HSUB choice afterwards. No conflict.
      *
      * Respects [userChangedAudioTrack] — if the user manually changed the audio
      * track via the AudioTracksSheet, we don't override their choice.
@@ -690,21 +731,21 @@ class PlayerActivity : ComponentActivity() {
         val currentAid = view.aid
         Log.d(TAG, "autoSelectAudioTrack: currentAid=$currentAid, targetVersion='$targetAudioVersion', tracks=${realAudioTracks.size}")
 
-        // Determine which track ID to select based on audio version
+        // FIX (H3): Match by language substring instead of track-list position.
+        // DUB → track whose language CONTAINS "en" or "eng" (English dub).
+        // SUB/HSUB → track whose language CONTAINS "ja" or "jpn" (Japanese sub).
+        // Falls back to the first real track when no language matches.
+        // Uses contains() (not startsWith) so both 2-letter and 3-letter codes
+        // match regardless of where they appear in the language string.
         val desiredAid = when (targetAudioVersion.uppercase()) {
-            "DUB" -> {
-                // For DUB: prefer the last audio track (external English audio
-                // added via audio-add). If only 1 track, use it.
-                if (realAudioTracks.size > 1) {
-                    realAudioTracks.last().id
-                } else {
-                    realAudioTracks.first().id
-                }
-            }
-            "SUB", "HSUB" -> {
-                // For SUB/HSUB: use the first audio track (embedded Japanese)
-                realAudioTracks.first().id
-            }
+            "DUB" -> realAudioTracks.firstOrNull { track ->
+                // FIX (H3): contains("en") also covers "eng"; both checked explicitly per spec.
+                track.language?.lowercase()?.let { it.contains("en") || it.contains("eng") } == true
+            }?.id ?: realAudioTracks.first().id
+            "SUB", "HSUB" -> realAudioTracks.firstOrNull { track ->
+                // FIX (H3): "ja" and "jpn" don't overlap as substrings — check both.
+                track.language?.lowercase()?.let { it.contains("ja") || it.contains("jpn") } == true
+            }?.id ?: realAudioTracks.first().id
             else -> {
                 // ANY or unknown — keep current or select first
                 if (currentAid > 0) currentAid else realAudioTracks.first().id
@@ -804,6 +845,7 @@ class PlayerActivity : ComponentActivity() {
 
                 // Step 5: Update state
                 currentVideoUrl = selected.video.videoUrl
+                viewModel?.setCurrentVideoUrl(currentVideoUrl)  // FIX (L2): reactive highlight
                 currentVideoHeaders = headers
                 currentVideoServer = selected.server
                 currentVideoAudio = selected.audio.name
@@ -1152,6 +1194,7 @@ class PlayerActivity : ComponentActivity() {
 
         // Update Activity state
         currentVideoUrl = selected.video.videoUrl
+        vm.setCurrentVideoUrl(currentVideoUrl)  // FIX (L2): reactive highlight
         currentVideoHeaders = headers
         currentVideoServer = selected.server
         currentVideoAudio = selected.audio.name
@@ -1526,6 +1569,7 @@ class PlayerActivity : ComponentActivity() {
 
                 // Update all state
                 currentVideoUrl = selected.video.videoUrl
+                vm.setCurrentVideoUrl(currentVideoUrl)  // FIX (L2): reactive highlight
                 currentVideoHeaders = buildHeaders(selected.video)
                 currentVideoServer = selected.server
                 currentVideoAudio = selected.audio.name
@@ -1661,20 +1705,30 @@ class PlayerActivity : ComponentActivity() {
 
     /**
      * Part 6: Cycle audio delay via MPV's audio-delay property.
+     *
+     * FIX (M7): The previous `when` had a dead branch — `currentDelay < 0.0`
+     * was fully covered by `currentDelay < 0.3` and both branches did the same
+     * `+0.2` increment, so the negative branch was unreachable distinct code.
+     * The cycle is now expressed as a single linear progression:
+     *
+     *   0.0 → -0.3 → -0.1 → 0.1 → 0.3 → 0.0 (reset)
+     *
+     * i.e. each press advances by +0.2s, starting at -0.3s and resetting to 0
+     * once we reach (or exceed) +0.3s. Distinct values: -0.3, -0.1, 0.1, 0.3.
      */
     fun cycleAudioDelay() {
         try {
             // Use getPropertyString since getPropertyDouble may not exist in MPVLib
             val currentStr = `is`.xyz.mpv.MPVLib.getPropertyString("audio-delay")
             val currentDelay = currentStr?.toDoubleOrNull() ?: 0.0
+            // FIX (M7): Single linear cycle — see docstring above.
             val newDelay = when {
-                currentDelay == 0.0 -> -0.3
-                currentDelay < 0.0 -> currentDelay + 0.2
-                currentDelay < 0.3 -> currentDelay + 0.2
-                else -> 0.0
+                currentDelay == 0.0 -> -0.3       // start: jump to -0.3s
+                currentDelay < 0.3 -> currentDelay + 0.2  // advance by 0.2s
+                else -> 0.0                       // reset at +0.3s or beyond
             }
             `is`.xyz.mpv.MPVLib.setPropertyDouble("audio-delay", newDelay)
-            Log.d(TAG, "Audio delay set to ${newDelay}s")
+            Log.d(TAG, "Audio delay set to ${newDelay}s (was ${currentDelay}s)")
             runOnUiThread {
                 android.widget.Toast.makeText(
                     this@PlayerActivity,
@@ -1741,17 +1795,57 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * FIX (L4): Tracks whether the video was actually playing (not paused)
+     * immediately before [onPause] paused it. Used by [onResume] to decide
+     * whether to auto-resume playback when the user returns to the player.
+     *
+     * Only set when we actually paused the video in onPause (i.e. NOT entering
+     * PiP and NOT finishing). Remains false otherwise so onResume is a no-op.
+     */
+    @Volatile private var wasPlayingBeforeOnPause: Boolean = false
+
     override fun onPause() {
         super.onPause()
         // FIX (H5): Don't pause if entering PiP mode — the video should keep
         // playing in the PiP window. Only pause when the activity is actually
         // going to background (not PiP).
         if (!isFinishing && !isInPictureInPictureMode) {
+            // FIX (L4): Record the playing state BEFORE pausing so onResume
+            // can decide whether to auto-resume. We read the ViewModel's
+            // isPlaying flow (kept in sync with MPV's "pause" property by
+            // [handlePropertyBoolean]).
+            wasPlayingBeforeOnPause = viewModel?.isPlaying?.value == true
             try { MPVLib.setPropertyBoolean("pause", true) } catch (e: Exception) {
                 Log.w(TAG, "Could not pause on background", e)
             }
+        } else {
+            // PiP or finishing — don't auto-resume in onResume.
+            wasPlayingBeforeOnPause = false
         }
         saveProgress()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // FIX (L4): If the video was playing when the user backgrounded the
+        // app (and we paused it in onPause), un-pause so the video doesn't
+        // stay frozen when returning to the player. We do NOT auto-resume if:
+        //  - the user was already paused (wasPlayingBeforeOnPause == false)
+        //  - we entered PiP (no pause happened, nothing to undo)
+        //  - the activity is finishing
+        //  - MPV/the view isn't initialized yet
+        if (wasPlayingBeforeOnPause && !isFinishing && !isInPictureInPictureMode && mpvViewRef != null) {
+            try {
+                MPVLib.setPropertyBoolean("pause", false)
+                viewModel?.onPauseChanged(false)
+                Log.d(TAG, "onResume: auto-resumed playback (was playing before onPause)")
+            } catch (e: Exception) {
+                Log.w(TAG, "onResume: could not auto-resume playback", e)
+            }
+        }
+        // Always clear the flag — it represents the previous onPause cycle.
+        wasPlayingBeforeOnPause = false
     }
 
     override fun onDestroy() {
@@ -1783,7 +1877,6 @@ class PlayerActivity : ComponentActivity() {
                 Log.w(TAG, "Could not call destroy()", e2)
             }
         }
-        PlayerActivity.mpvInitialized = false
         Log.d(TAG, "Player destroyed — ready for fresh initialize on next open")
     }
 }
@@ -1833,7 +1926,9 @@ private fun PlayerScreen(
     onUserChangedAudioTrack: (Boolean) -> Unit = {},
     // Callback to trigger video re-resolution (for stale localhost URLs)
     onReResolveVideo: () -> Unit = {},
-    currentVideoUrl: String = "",
+    // FIX (L2): `currentVideoUrl` parameter removed — QualitySheet now reads
+    // the current URL from `viewModel.currentVideoUrl` StateFlow directly so
+    // the highlight recomposes when the user switches server/audio/quality.
     coverColor: Int = 0,  // ARGB color for dynamic theming (0 = use default theme)
 ) {
     var mpvView by remember { mutableStateOf<AnikutaMPVView?>(null) }
@@ -1874,12 +1969,23 @@ private fun PlayerScreen(
     var showSpeedSheet by remember { mutableStateOf(false) }
     var showMoreSheet by remember { mutableStateOf(false) }
 
+    // ---- Player preferences ----
+    // FIX (M4): Declared early so `currentSpeed` can read the persisted speed
+    // value on first composition. Was previously declared further down.
+    val playerPrefs = remember {
+        try { uy.kohesive.injekt.Injekt.get<PlayerPreferences>() }
+        catch (e: Exception) { null }
+    }
+
     // Available videos for quality sheet — now backed by ViewModel (Part 2).
     // Populated by populateVideoSelectionState() during episode switch + initial load.
     val availableVideos by viewModel.availableVideos.collectAsState()
     val availableServers by viewModel.availableServers.collectAsState()
     val currentServer by viewModel.currentServer.collectAsState()
-    val currentSpeed by remember { mutableFloatStateOf(1.0f) }
+    // FIX (M4): Read the persisted playback speed from PlayerPreferences so the
+    // SpeedSheet opens with the correct value (was previously hard-coded to
+    // 1.0f). The preference is also written back from SpeedSheet.onSelect below.
+    val currentSpeed by remember { mutableFloatStateOf(playerPrefs?.playerSpeed()?.get() ?: 1.0f) }
 
     val controlsLocked by viewModel.controlsLocked.collectAsState()
     val lockButtonVisible by viewModel.lockButtonVisible.collectAsState()
@@ -1940,15 +2046,11 @@ private fun PlayerScreen(
         }
     }
 
-    // ---- Player preferences ----
-    val playerPrefs = remember {
-        try { uy.kohesive.injekt.Injekt.get<PlayerPreferences>() }
-        catch (e: Exception) { null }
-    }
     // FIX: Observe showTopBar reactively via stateIn().collectAsState() so the
     // player UI updates immediately when the user toggles the setting in
     // PlayerSettingsScreen. Previously this used `remember { ... .get() }`
     // which only read the value once on first composition and never updated.
+    // (playerPrefs is now declared earlier — see "Player preferences" block above.)
     val prefsScope = rememberCoroutineScope()
     val showTopBar by (playerPrefs?.showPlayerTopBar()?.stateIn(prefsScope)
         ?: MutableStateFlow(true)).collectAsState()
@@ -2063,6 +2165,12 @@ private fun PlayerScreen(
                                 // once per process. When switching from FULLSCREEN →
                                 // MINIMIZED, this would crash with a native SIGABRT.
                                 // Now checks mpvView first, same as the FULLSCREEN branch.
+                                //
+                                // FIX (M6): The `mpvInitialized` flag was removed because it
+                                // is no longer needed — the `mpvView` local state above is
+                                // the only guard required within a single Composable
+                                // lifecycle. Cross-Activity re-creation is handled by the
+                                // Activity's own onDestroy cleanup (which tears MPV down).
                                 val existingView = mpvView
                                 if (existingView != null) {
                                     existingView
@@ -2074,7 +2182,6 @@ private fun PlayerScreen(
                                     onViewCreated(view)
                                     val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
                                     view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "warn")
-                                    PlayerActivity.mpvInitialized = true
                                     Log.d("PlayerActivity", "MPV initialized")
                                     MPVLib.addLogObserver(observer)
                                     MPVLib.addObserver(observer)
@@ -2296,6 +2403,11 @@ private fun PlayerScreen(
                         // we need to re-parent the view, not re-create it.
                         // AndroidView handles this: if the factory already ran,
                         // it reuses the same view instance.
+                        //
+                        // FIX (M6): The `mpvInitialized` flag was removed — the
+                        // `mpvView` local state is the only guard required.
+                        // Cross-Activity re-creation is handled by the Activity's
+                        // own onDestroy cleanup.
                         val existingView = mpvView
                         if (existingView != null) {
                             existingView
@@ -2307,7 +2419,6 @@ private fun PlayerScreen(
                             onViewCreated(view)
                             val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
                             view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "warn")
-                            PlayerActivity.mpvInitialized = true
                             Log.d("PlayerActivity", "MPV initialized (fullscreen)")
                             MPVLib.addLogObserver(observer)
                             MPVLib.addObserver(observer)
@@ -2500,9 +2611,14 @@ private fun PlayerScreen(
         }
         val currentServerForQuality by viewModel.currentServer.collectAsState()
         val currentAudioForQuality by viewModel.currentAudioVersion.collectAsState()
+        // FIX (L2): Read the current video URL from the ViewModel StateFlow so
+        // the "current quality" highlight recomposes when the user switches
+        // server/audio/quality while the sheet is open. Previously this came
+        // from a stale Activity field read once on first composition.
+        val currentVideoUrlForQuality by viewModel.currentVideoUrl.collectAsState()
         app.anikuta.player.controls.sheets.QualitySheet(
             videos = availableVideos,
-            currentVideoUrl = currentVideoUrl,
+            currentVideoUrl = currentVideoUrlForQuality,
             currentVideoServer = currentServerForQuality,
             currentAudioVersion = currentAudioForQuality,
             displayMode = qualityDisplayMode,
@@ -2587,6 +2703,9 @@ private fun PlayerScreen(
             onSelect = { speed ->
                 try {
                     `is`.xyz.mpv.MPVLib.setPropertyDouble("speed", speed.toDouble())
+                    // FIX (M4): Persist the chosen speed so the next player open
+                    // (and the SpeedSheet's next open) reflects the user's choice.
+                    playerPrefs?.playerSpeed()?.set(speed)
                 } catch (e: Exception) {
                     Log.w("PlayerActivity", "Could not set speed", e)
                 }
