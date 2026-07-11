@@ -1126,3 +1126,50 @@ Now it waits for extensions to load.
 
 ### ntfy
 - Notification sent to TASKISDONE topic
+
+---
+
+## Session 42 (Audio switching fix + video disk cache + background refresh UI)
+
+Task ID: PLAYER-AUDIO-CACHE-UI-FIX
+Agent: main (Z.ai Code)
+
+### Log Analysis (user-provided)
+The log revealed that ALL audio versions (DUB, HSUB, SUB) from the same extension
+share the EXACT SAME video URL. The audio version is determined by which audio
+track is selected within the stream — but we never set `aid` to select the correct
+track. MPV defaulted to the first audio track (Japanese/SUB) every time.
+
+### Fix 1 — Audio Track Auto-Selection
+Added `autoSelectAudioTrack()` called from both track-list handlers:
+- DUB: selects the last audio track (external English audio added via audio-add)
+- SUB/HSUB: selects the first audio track (embedded Japanese)
+- ANY: keeps current or selects first
+- Respects `userChangedAudioTrack` flag (user manual override via AudioTracksSheet)
+- Flag reset on `loadSelectedVideo` + `switchEpisode`
+- Flag set via `onUserChangedAudioTrack` callback from AudioTracksSheet
+
+### Fix 2 — Video Disk Cache
+New `VideoCacheStore` class (`app/files/video_cache/`) with 24h TTL:
+- Saves resolved videos to disk as JSON (using SerializableVideo)
+- Loads from disk when `playEpisode` is called
+- Registered in `AppModule` DI
+- `playEpisode` now checks: in-memory cache → disk cache → resolve from source
+- After resolution: saves to both in-memory + disk cache
+- Survives app restart — no re-resolving needed
+
+### Fix 3 — Background Refresh UI Smoothness
+`backgroundResolveVideos()` now compares new results with cached data:
+- If same: silently updates cache timestamp, does NOT change picker state
+  (no bottom sheet re-animation)
+- If different: updates picker state only if picker is currently visible
+  (doesn't reopen a dismissed picker)
+- Added `compareServerSections()` for deep equality check (server name,
+  audio version, video URLs)
+- On failure: only removes refreshing badge if picker is in Cached state
+
+### Build
+- Build #237 (ddc6675): SUCCESS
+
+### ntfy
+- Notification sent to TASKISDONE topic
