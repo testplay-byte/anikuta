@@ -120,7 +120,10 @@ class PlayerActivity : ComponentActivity() {
          */
         fun copyAssets(context: android.content.Context, mpvDir: java.io.File) {
             val assetManager = context.assets
-            val files = arrayOf("cacert.pem")
+            // Copy both cacert.pem (TLS) and subfont.ttf (subtitle font rendering).
+            // Without subfont.ttf, libass reports "can't find selected font provider"
+            // and subtitles are downloaded + selected but NEVER rendered on screen.
+            val files = arrayOf("cacert.pem", "subfont.ttf")
             for (filename in files) {
                 var ins: java.io.InputStream? = null
                 var out: java.io.OutputStream? = null

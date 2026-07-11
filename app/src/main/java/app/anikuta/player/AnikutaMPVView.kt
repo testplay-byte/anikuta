@@ -245,10 +245,12 @@ class AnikutaMPVView(
 
         MPVLib.setOptionString("speed", playerPreferences.playerSpeed().get().toString())
         MPVLib.setOptionString("alang", playerPreferences.preferredAudioLanguages().get())
-        // Subtitle Fix 5: Set subtitle language preference so MPV prefers English
-        // subtitles when multiple are available. Without this, MPV picks an
-        // arbitrary subtitle track as the default.
         MPVLib.setOptionString("slang", "en,eng")
+        // CRITICAL FIX: Set the font directory to the MPV config dir where
+        // subfont.ttf is copied by copyAssets(). Without this, libass reports
+        // "can't find selected font provider" and subtitles are never rendered.
+        MPVLib.setOptionString("sub-fonts-dir", "${context.filesDir.path}/${PlayerActivity.MPV_DIR}")
+        MPVLib.setOptionString("font-dir", "${context.filesDir.path}/${PlayerActivity.MPV_DIR}")
         MPVLib.setOptionString("volume-max", (playerPreferences.volumeBoostCap().get() + 100).toString())
         // Workaround for https://github.com/mpv-player/mpv/issues/14651
         MPVLib.setOptionString("vd-lavc-film-grain", "cpu")
