@@ -1861,11 +1861,10 @@ private fun PlayerScreen(
     // prompt, we need to re-resolve it. The AndroidView factory skips localhost
     // URLs, so we trigger loadVideoIfPending() here which handles re-resolution.
     LaunchedEffect(mpvView) {
-        if (mpvView != null && !showFirstTimePrompt && !videoLoaded) {
+        if (mpvView != null && !showFirstTimePrompt) {
             val url = viewModel.videoUrl
             if (url.contains("localhost:") || url.contains("127.0.0.1:")) {
                 Log.d("PlayerActivity", "LaunchedEffect: triggering re-resolution for localhost URL")
-                // Call via the activity's method — we need to use a callback
                 onReResolveVideo()
             }
         }
