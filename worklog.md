@@ -935,3 +935,59 @@ Stage Summary:
   after switching server/audio/quality)
 - "Off" button works reliably (uses "no" instead of -1)
 - Subtitle settings sheet is shorter (400dp vs 500dp)
+
+---
+
+## Session 38 (Subtitle rendering root cause fix — sid getter)
+
+Task ID: PLAYER-SUBTITLE-SID-FIX
+Agent: main (Z.ai Code)
+
+### Root Cause (found via user-provided log analysis)
+
+The log showed this critical error repeating:
+  mpv_get_property(sid) format 4 returned error unsupported format for accessing property
+
+**MPV's `sid`/`aid` properties are node/string properties, not simple integers.**
+Reading them with `getPropertyInt()` (which uses MPV_FORMAT_INT64 = format 4)
+returns "unsupported format". This meant our `sid` getter ALWAYS returned -1,
+causing:
+- `autoSelectSubtitleTrack()` kept firing (thinking no subtitle was selected)
+- The subtitle sheet couldn't read the current `sid` to show the checkmark
+- Setting `sid` via `setPropertyInt(-1)` didn't reliably turn subtitles off
+
+Aniyomi's `TrackDelegate` reads `sid` via `getPropertyString()` and converts
+to int (returns -1 for "no" or invalid). We were not doing this.
+
+### Fix 1 — sid/aid getters use getPropertyString (aniyomi pattern)
+- `AnikutaMPVView.sid` getter: now reads via `getPropertyString("sid")` and
+  converts to int with `toIntOrNull() ?: -1`
+- Same fix for `aid` getter
+- Mirrors aniyomi's `TrackDelegate` at `AniyomiMPVView.kt:95-107`
+- Setters unchanged (already correct: "no" for <=0, setPropertyInt for >0)
+
+### Fix 2 — subtitle sheet onSelect uses view.sid setter
+- Was using `MPVLib.setPropertyInt("sid", -1)` directly for "Off"
+- Now uses `mpvView?.sid = trackId` which correctly calls `setPropertyString("no")`
+- Sets `userDisabledSubtitles` flag via callback when user turns off subtitles
+
+### Fix 3 — userDisabledSubtitles flag
+- New flag prevents `autoSelectSubtitleTrack` from re-enabling subtitles
+  after the user explicitly turned them off
+- Flag is set to true when user selects "Off" (id <= 0)
+- Flag is reset to false when a real track is selected or when auto-select
+  finds a valid sid already set
+- Passed via `onUserDisabledSubtitles` callback to PlayerScreen composable
+
+### Build
+- Build #232 (19b2429): FAILED — `userDisabledSubtitles` not accessible from
+  PlayerScreen composable (Activity field)
+- Build #233 (522997c): SUCCESS — passed via callback
+
+### ntfy notification
+- Topic changed from `anikuta-builds` to `TASKISDONE` per user request
+
+Stage Summary:
+- Subtitles should now render: sid getter fixed, auto-select works, "Off" works
+- User's "Off" choice is respected (auto-select won't override)
+- ntfy notifications now go to TASKISDONE topic
