@@ -134,7 +134,6 @@ class DetailViewModel(
 
     private val preferenceStore: app.anikuta.core.preference.PreferenceStore? = try { Injekt.get() } catch (e: Exception) { null }
     private val episodeCacheStore: app.anikuta.data.cache.EpisodeCacheStore? = try { Injekt.get() } catch (e: Exception) { null }
-    private val videoCacheStore: app.anikuta.data.cache.VideoCacheStore? = try { Injekt.get() } catch (e: Exception) { null }
 
     init {
         loadAnimeDetails()
@@ -576,7 +575,6 @@ class DetailViewModel(
                     // Cache the result (in-memory + disk for metadata)
                     val nowMs = System.currentTimeMillis()
                     videoCache[episode.url] = CachedVideoData(audioSections, nowMs)
-                    videoCacheStore?.save(anilistId, episode.url, allVideos)
                     _videoPicker.value = VideoPickerState.Show(episode, audioSections)
                 }
             } catch (e: Exception) {
@@ -612,8 +610,6 @@ class DetailViewModel(
 
                 // Update cache (in-memory + disk)
                 videoCache[episode.url] = CachedVideoData(newSections, now)
-                val allVideos = newSections.flatMap { it.audioSections }.flatMap { it.videos }
-                videoCacheStore?.save(anilistId, episode.url, allVideos)
 
                 if (isSame) {
                     // Data unchanged — remove the refreshing badge by transitioning

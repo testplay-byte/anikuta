@@ -101,9 +101,10 @@ object MpvConfigManager {
 
         # Cache
         cache=yes
-        # NOTE: These values are overridden at runtime by AnikutaMPVView.initOptions()
-        # with the actual values (cache-secs=120, demuxer-max-bytes=268435456).
+        # NOTE: These values are overridden at runtime by AnikutaMPVView.initOptions().
+        # Runtime values: cache-secs=120, demuxer-max-bytes=256MB (API 27+) / 128MB (API 26).
         # Edit initOptions() to change buffering behavior, not this file.
+        # The 256MB below is the API 27+ value; API 26 devices get 128MB at runtime.
         cache-secs=120
         demuxer-max-bytes=268435456
         demuxer-max-back-bytes=268435456
