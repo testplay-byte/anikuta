@@ -391,14 +391,12 @@ internal fun PlayerScreen(
                                     modifier = Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    // Semi-transparent dark scrim
-                                    androidx.compose.foundation.Canvas(
-                                        modifier = Modifier.fillMaxSize(),
-                                    ) {
-                                        androidx.compose.ui.graphics.drawscope.drawRect(
-                                            color = Color.Black.copy(alpha = 0.5f),
-                                        )
-                                    }
+                                    // Semi-transparent dark scrim over the frozen video frame
+                                    androidx.compose.foundation.layout.Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = 0.5f)),
+                                    )
                                     // Loading spinner
                                     androidx.compose.material3.CircularProgressIndicator(
                                         color = Color.White,
