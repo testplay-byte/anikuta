@@ -550,55 +550,14 @@ class DetailViewModel(
             return
         }
 
-        // FIX: check disk video cache (survives app restart, 24h TTL)
-        videoCacheStore?.let { store ->
-            viewModelScope.launch {
-                val diskCached = store.load(anilistId, episode.url)
-                if (diskCached != null && diskCached.isNotEmpty()) {
-                    val audioSections = groupVideosByServer(diskCached)
-                    Log.d(TAG, "Video cache hit (disk): ${diskCached.size} videos, ${audioSections.size} server sections")
-                    // Populate in-memory cache too
-                    videoCache[episode.url] = CachedVideoData(audioSections, System.currentTimeMillis())
-                    // Show picker with cached data + refreshing badge
-                    _videoPicker.value = VideoPickerState.Cached(episode, audioSections, isRefreshing = true)
-                    // Background re-resolve for smooth update
-                    backgroundResolveVideos(episode, source)
-                    return@launch
-                }
-
-                // No disk cache — resolve from source
-                _resolvingEpisode.value = true
-                _videoPicker.value = VideoPickerState.Resolving(episode)
-                try {
-                    val audioSections = resolveVideos(episode, source)
-                    if (audioSections.isEmpty()) {
-                        _videoPicker.value = VideoPickerState.Hidden
-                        _playRequest.value = PlayRequest.Error("No playable video found for this episode")
-                    } else if (audioSections.flatMap { it.audioSections }.flatMap { it.videos }.size == 1) {
-                        val v = audioSections.first().audioSections.first().videos.first()
-                        _videoPicker.value = VideoPickerState.Hidden
-                        _playRequest.value = buildPlayRequest(v, episode, source)
-                    } else {
-                        val allVideos = audioSections.flatMap { it.audioSections }.flatMap { it.videos }
-                        Log.d(TAG, "${allVideos.size} videos in ${audioSections.size} server section(s) — showing picker")
-                        // Cache the result (in-memory + disk)
-                        val nowMs = System.currentTimeMillis()
-                        videoCache[episode.url] = CachedVideoData(audioSections, nowMs)
-                        videoCacheStore?.save(anilistId, episode.url, allVideos)
-                        _videoPicker.value = VideoPickerState.Show(episode, audioSections)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Video resolution failed", e)
-                    _videoPicker.value = VideoPickerState.Hidden
-                    _playRequest.value = PlayRequest.Error(e.message ?: "Failed to resolve video")
-                } finally {
-                    _resolvingEpisode.value = false
-                }
-            }
-            return
-        }
-
-        // Fallback if videoCacheStore is unavailable
+        // FIX: Disk video cache removed from playback path.
+        // The cached videoUrls contain localhost:PORT proxy URLs that are
+        // stale after app restart (the proxy server dies with the process).
+        // Showing stale URLs in the picker would let the user tap a dead URL.
+        // Instead, always re-resolve from source when the in-memory cache
+        // (10-min TTL, safe because proxy is alive) misses.
+        // The disk cache is still written (for potential future use) but
+        // not read for the picker.
         _resolvingEpisode.value = true
         _videoPicker.value = VideoPickerState.Resolving(episode)
         viewModelScope.launch {
@@ -614,8 +573,10 @@ class DetailViewModel(
                 } else {
                     val allVideos = audioSections.flatMap { it.audioSections }.flatMap { it.videos }
                     Log.d(TAG, "${allVideos.size} videos in ${audioSections.size} server section(s) — showing picker")
-                    // Cache the result
-                    videoCache[episode.url] = CachedVideoData(audioSections, now)
+                    // Cache the result (in-memory + disk for metadata)
+                    val nowMs = System.currentTimeMillis()
+                    videoCache[episode.url] = CachedVideoData(audioSections, nowMs)
+                    videoCacheStore?.save(anilistId, episode.url, allVideos)
                     _videoPicker.value = VideoPickerState.Show(episode, audioSections)
                 }
             } catch (e: Exception) {
@@ -655,8 +616,17 @@ class DetailViewModel(
                 videoCacheStore?.save(anilistId, episode.url, allVideos)
 
                 if (isSame) {
-                    // Data unchanged — silently update, don't change picker state
-                    Log.d(TAG, "Background re-resolve: data unchanged, no UI update")
+                    // Data unchanged — remove the refreshing badge by transitioning
+                    // from Cached → Show (which doesn't have the refreshing indicator).
+                    // Previously this did nothing, causing the refreshing animation to
+                    // spin forever.
+                    val currentPicker = _videoPicker.value
+                    if (currentPicker is VideoPickerState.Cached) {
+                        _videoPicker.value = VideoPickerState.Show(episode, newSections)
+                        Log.d(TAG, "Background re-resolve: data unchanged, removing refreshing badge")
+                    } else {
+                        Log.d(TAG, "Background re-resolve: data unchanged, picker not in Cached state")
+                    }
                 } else {
                     // Data changed — update picker state smoothly
                     // Only update if the picker is currently showing (don't reopen a dismissed picker)

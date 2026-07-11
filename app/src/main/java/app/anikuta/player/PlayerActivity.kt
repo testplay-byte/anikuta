@@ -365,6 +365,7 @@ class PlayerActivity : ComponentActivity() {
                         onSleepTimer = { activity.startSleepTimer() },
                         onUserDisabledSubtitles = { disabled -> activity.userDisabledSubtitles = disabled },
                         onUserChangedAudioTrack = { changed -> activity.userChangedAudioTrack = changed },
+                        onReResolveVideo = { activity.loadVideoIfPending() },
                         currentVideoUrl = activity.currentVideoUrl,
                         coverColor = coverColor,
                     )
@@ -1365,16 +1366,144 @@ class PlayerActivity : ComponentActivity() {
 
     /**
      * Load the video if it hasn't been loaded yet (delayed by the first-time prompt).
+     *
+     * FIX: If the video URL is a localhost proxy URL (http://localhost:PORT/...),
+     * it may be stale (the proxy server dies when the app is killed). In that case,
+     * we re-resolve the video from the source before loading. This mirrors aniyomi's
+     * approach of always re-resolving on player open.
      */
     fun loadVideoIfPending() {
         if (videoLoaded) return
         videoLoaded = true
-        try {
-            val url = viewModel?.videoUrl ?: return
-            Log.d(TAG, "Loading video (after prompt): $url")
-            MPVLib.command(arrayOf("loadfile", url, "replace"))
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not load video", e)
+        val url = viewModel?.videoUrl ?: return
+
+        // Check if the URL is a localhost proxy URL (may be stale after app restart)
+        if (url.contains("localhost:") || url.contains("127.0.0.1:")) {
+            Log.d(TAG, "Video URL is localhost proxy — may be stale, re-resolving: ${url.take(80)}...")
+            reResolveAndLoadVideo()
+        } else {
+            Log.d(TAG, "Loading video (direct URL): ${url.take(80)}...")
+            try {
+                MPVLib.command(arrayOf("loadfile", url, "replace"))
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not load video", e)
+            }
+        }
+    }
+
+    /**
+     * Re-resolve the video URL from the source and load it into MPV.
+     *
+     * This is called when the Intent's video URL is a localhost proxy URL that
+     * may be stale (e.g. after app restart). It:
+     * 1. Resolves the source (by sourceId or name from cache)
+     * 2. Fetches the video list from the source
+     * 3. Selects the best matching video (by server + audio + quality from Intent)
+     * 4. Loads the fresh URL into MPV
+     * 5. Shows the loading overlay during resolution
+     */
+    private fun reResolveAndLoadVideo() {
+        val vm = viewModel ?: return
+        vm.setSwitchingEpisode(true)
+        vm.setControlsVisible(false)
+
+        lifecycleScope.launch {
+            try {
+                val source = resolveSource()
+                if (source == null) {
+                    Log.e(TAG, "Re-resolve: source not found — cannot load video")
+                    vm.setSwitchingEpisode(false)
+                    vm.setControlsVisible(true)
+                    runOnUiThread {
+                        android.widget.Toast.makeText(
+                            this@PlayerActivity,
+                            "Could not load video: source not found",
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                    return@launch
+                }
+
+                val episode = vm.episodeList.value.getOrNull(vm.currentEpisodeIndex.value)
+                if (episode == null) {
+                    Log.e(TAG, "Re-resolve: episode not found")
+                    vm.setSwitchingEpisode(false)
+                    return@launch
+                }
+
+                Log.d(TAG, "Re-resolve: fetching videos from ${source.name}...")
+                val allVideos = resolveVideoList(source, episode)
+                if (allVideos.isEmpty()) {
+                    Log.e(TAG, "Re-resolve: no videos found")
+                    vm.setSwitchingEpisode(false)
+                    vm.setControlsVisible(true)
+                    return@launch
+                }
+
+                val parsedVideos = allVideos.map { app.anikuta.ui.detail.VideoTitleParser.parse(it) }
+                currentEpisodeVideos = allVideos
+                currentParsedVideos = parsedVideos
+
+                // Select best matching video by server + audio + quality from Intent
+                val intentServer = currentVideoServer
+                val intentAudio = app.anikuta.ui.detail.AudioVersion.fromToken(currentVideoAudio)
+                val intentQuality = currentVideoQuality
+
+                val selected = parsedVideos.find {
+                    it.server == intentServer && it.audio == intentAudio && it.quality == intentQuality
+                } ?: parsedVideos.find { it.server == intentServer && it.audio == intentAudio }
+                    ?: parsedVideos.filter { it.server == intentServer }
+                        .sortedByDescending { if (it.audio == intentAudio) 1 else 0 }
+                        .firstOrNull()
+                    ?: selectBestVideo(parsedVideos)
+
+                Log.d(TAG, "Re-resolve: selected ${selected.server} ${selected.audio} ${selected.quality}p")
+
+                // Update all state
+                currentVideoUrl = selected.video.videoUrl
+                currentVideoHeaders = buildHeaders(selected.video)
+                currentVideoServer = selected.server
+                currentVideoAudio = selected.audio.name
+                currentVideoQuality = selected.quality ?: -1
+                currentVideo = selected.video
+                userChangedAudioTrack = false
+                userDisabledSubtitles = false
+
+                // Populate selection state
+                populateVideoSelectionState(parsedVideos, selected)
+
+                // Load external tracks
+                loadExternalTracks()
+
+                // Load the fresh URL into MPV
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    try {
+                        if (currentVideoHeaders.isNotBlank()) {
+                            MPVLib.setOptionString("http-header-fields", currentVideoHeaders)
+                        }
+                        Log.d(TAG, "Re-resolve: loading fresh URL: ${currentVideoUrl.take(80)}...")
+                        MPVLib.command(arrayOf("loadfile", currentVideoUrl, "replace"))
+                        launchSwitchTimeout()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Re-resolve: failed to load video", e)
+                        vm.setSwitchingEpisode(false)
+                        vm.setControlsVisible(true)
+                    }
+                }
+
+                Log.d(TAG, "=== Re-resolve SUCCESS ===")
+            } catch (e: Exception) {
+                Log.e(TAG, "=== Re-resolve FAILED ===", e)
+                vm.setSwitchingEpisode(false)
+                vm.setControlsVisible(true)
+                runOnUiThread {
+                    android.widget.Toast.makeText(
+                        this@PlayerActivity,
+                        "Could not load video: ${e.message}",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
         }
     }
 
@@ -1632,6 +1761,8 @@ private fun PlayerScreen(
     onUserDisabledSubtitles: (Boolean) -> Unit = {},
     // Callback to set the userChangedAudioTrack flag on the Activity
     onUserChangedAudioTrack: (Boolean) -> Unit = {},
+    // Callback to trigger video re-resolution (for stale localhost URLs)
+    onReResolveVideo: () -> Unit = {},
     currentVideoUrl: String = "",
     coverColor: Int = 0,  // ARGB color for dynamic theming (0 = use default theme)
 ) {
@@ -1723,6 +1854,20 @@ private fun PlayerScreen(
             generateDynamicScheme(Color(coverColor)).toM3ColorScheme()
         } else {
             defaultScheme
+        }
+    }
+
+    // FIX: If the video URL is a localhost proxy URL and there's no first-time
+    // prompt, we need to re-resolve it. The AndroidView factory skips localhost
+    // URLs, so we trigger loadVideoIfPending() here which handles re-resolution.
+    LaunchedEffect(mpvView) {
+        if (mpvView != null && !showFirstTimePrompt && !videoLoaded) {
+            val url = viewModel.videoUrl
+            if (url.contains("localhost:") || url.contains("127.0.0.1:")) {
+                Log.d("PlayerActivity", "LaunchedEffect: triggering re-resolution for localhost URL")
+                // Call via the activity's method — we need to use a callback
+                onReResolveVideo()
+            }
         }
     }
 
@@ -1870,8 +2015,15 @@ private fun PlayerScreen(
                                         MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                                     }
                                     if (!shouldDelayVideoLoad) {
-                                        Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
-                                        MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
+                                        // FIX: Don't load localhost proxy URLs directly — they may be
+                                        // stale after app restart. loadVideoIfPending() handles re-resolution.
+                                        val url = viewModel.videoUrl
+                                        if (url.contains("localhost:") || url.contains("127.0.0.1:")) {
+                                            Log.d("PlayerActivity", "Video URL is localhost proxy — deferring to loadVideoIfPending for re-resolution")
+                                        } else {
+                                            Log.d("PlayerActivity", "Loading video (direct URL): ${url.take(80)}...")
+                                            MPVLib.command(arrayOf("loadfile", url, "replace"))
+                                        }
                                     } else {
                                         Log.d("PlayerActivity", "Video load delayed (prompt showing)")
                                     }
