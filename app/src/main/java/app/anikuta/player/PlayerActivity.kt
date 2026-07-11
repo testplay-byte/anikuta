@@ -189,6 +189,9 @@ class PlayerActivity : ComponentActivity() {
     @Volatile private var currentVideoUrl: String = ""
     /** Current video headers — updated when switching episodes. */
     @Volatile private var currentVideoHeaders: String = ""
+    /** Current Video object — holds external subtitle/audio tracks that need
+     *  to be loaded into MPV via sub-add/audio-add commands after loadfile. */
+    @Volatile private var currentVideo: eu.kanade.tachiyomi.animesource.model.Video? = null
     /** Resolved video list for the current episode — cached so switchServer/
      *  switchAudioVersion / switchQuality don't need to re-resolve from source. */
     @Volatile private var currentEpisodeVideos: List<eu.kanade.tachiyomi.animesource.model.Video> = emptyList()
@@ -211,6 +214,13 @@ class PlayerActivity : ComponentActivity() {
         currentVideoQuality = intent.getIntExtra(EXTRA_VIDEO_QUALITY, -1)
         currentVideoUrl = videoUrl ?: ""
         currentVideoHeaders = intent.getStringExtra(EXTRA_VIDEO_HEADERS) ?: ""
+        // Create a minimal Video object for the initial load so external tracks
+        // (if any were passed) can be loaded. The full Video object with tracks
+        // is set when the user switches episodes/servers/quality via loadSelectedVideo.
+        currentVideo = eu.kanade.tachiyomi.animesource.model.Video(
+            videoUrl = currentVideoUrl,
+            videoTitle = title,
+        )
 
         if (videoUrl.isNullOrBlank()) {
             Log.e(TAG, "No video URL provided, finishing")
@@ -353,6 +363,10 @@ class PlayerActivity : ComponentActivity() {
                     cancelSwitchTimeout()
                     Log.d(TAG, "Episode switch: FILE_LOADED — clearing switching state")
                 }
+                // Load external subtitle + audio tracks from the Video object.
+                // Extensions provide these as URLs (e.g. .vtt, .ass, .m3u8 audio)
+                // that MPV can't auto-detect — they must be added via sub-add/audio-add.
+                loadExternalTracks()
                 // Resume from saved position (task 5.5).
                 seekToSavedPosition()
                 // Auto-play: the file is loaded, start playing immediately.
@@ -406,6 +420,56 @@ class PlayerActivity : ComponentActivity() {
         val m = seconds / 60
         val s = seconds % 60
         return String.format("%d:%02d", m, s)
+    }
+
+    /**
+     * Load external subtitle and audio tracks from the current Video object into MPV.
+     *
+     * Extensions provide external tracks as URLs (e.g. .vtt, .ass subtitle files,
+     * or separate audio stream URLs). MPV can't auto-detect these — they must be
+     * explicitly added via the `sub-add` and `audio-add` commands after the main
+     * file loads.
+     *
+     * This mirrors aniyomi's PlayerActivity.setupTracks() approach:
+     *  - sub-add: adds an external subtitle track (auto-select mode)
+     *  - audio-add: adds an external audio track (auto-select mode)
+     *
+     * After adding tracks, MPV fires a "track-list" property change which
+     * triggers loadTracks() → the subtitle/audio sheets populate.
+     */
+    private fun loadExternalTracks() {
+        val video = currentVideo ?: return
+        try {
+            // Add external subtitle tracks
+            if (video.subtitleTracks.isNotEmpty()) {
+                video.subtitleTracks.forEach { sub ->
+                    try {
+                        MPVLib.command(arrayOf("sub-add", sub.url, "auto", sub.lang))
+                        Log.d(TAG, "Added external subtitle: ${sub.lang} (${sub.url.take(60)}...)")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to add subtitle track: ${sub.lang}", e)
+                    }
+                }
+                Log.d(TAG, "Loaded ${video.subtitleTracks.size} external subtitle track(s)")
+            }
+            // Add external audio tracks
+            if (video.audioTracks.isNotEmpty()) {
+                video.audioTracks.forEach { audio ->
+                    try {
+                        MPVLib.command(arrayOf("audio-add", audio.url, "auto", audio.lang))
+                        Log.d(TAG, "Added external audio: ${audio.lang} (${audio.url.take(60)}...)")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to add audio track: ${audio.lang}", e)
+                    }
+                }
+                Log.d(TAG, "Loaded ${video.audioTracks.size} external audio track(s)")
+            }
+            // If no external tracks, MPV's track-list will only contain embedded
+            // tracks (if any). The track-list observer will still fire and populate
+            // the sheets with whatever is available.
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load external tracks", e)
+        }
     }
 
     /**
@@ -578,6 +642,7 @@ class PlayerActivity : ComponentActivity() {
                 currentVideoServer = selected.server
                 currentVideoAudio = selected.audio.name
                 currentVideoQuality = selected.quality ?: -1
+                currentVideo = selected.video
                 episodeUrl = episode.url
                 vmEpisodeNumber = episode.episode_number.takeIf { it > 0 }
 
@@ -905,6 +970,8 @@ class PlayerActivity : ComponentActivity() {
         currentVideoServer = selected.server
         currentVideoAudio = selected.audio.name
         currentVideoQuality = selected.quality ?: -1
+        // Store the Video object so external tracks can be loaded after FILE_LOADED
+        currentVideo = selected.video
 
         // Update VM state (for UI reactivity)
         vm.setCurrentServer(selected.server)
@@ -1738,15 +1805,17 @@ private fun PlayerScreen(
                     } // end LazyColumn
 
                     // Fade-out gradient overlay — episodes fade out before reaching the video.
-                    // Always visible (reverted from animated version per user feedback).
+                    // Thicker (35dp) and darker (fully opaque at top) for a more prominent
+                    // "disappear zone" that clearly separates episodes from the video player.
                     androidx.compose.foundation.layout.Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(20.dp)
+                            .height(35.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 androidx.compose.ui.graphics.Brush.verticalGradient(
                                     0f to MaterialTheme.colorScheme.background,
+                                    0.5f to MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
                                     1f to MaterialTheme.colorScheme.background.copy(alpha = 0f),
                                 ),
                             ),
@@ -1967,6 +2036,7 @@ private fun PlayerScreen(
     if (showSubtitleSheet) {
         mpvView?.let { view ->
             val (subTracks, audioTracks) = view.loadTracks()
+            Log.d("PlayerActivity", "Subtitle sheet opened: ${subTracks.size} sub tracks, ${audioTracks.size} audio tracks")
             viewModel.setSubtitleTracks(subTracks)
             viewModel.setAudioTracks(audioTracks)
             viewModel.setCurrentSubtitleId(view.sid)

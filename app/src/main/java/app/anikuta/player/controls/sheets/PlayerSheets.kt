@@ -7,18 +7,23 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -88,9 +93,9 @@ fun QualitySheet(
  * Lists available subtitle tracks from MPV's track-list.
  * Includes an "Off" option (id = -1).
  *
- * FIX (Part 5): Added a "Subtitle settings" row at the top that opens the
- * SubtitleSettingsPanel (font size, color, position, etc.) in a separate
- * sheet. The panel applies changes live via applySubtitlePreferences().
+ * The "Subtitle settings" row opens a SEPARATE sheet that is height-constrained
+ * (not full screen) so the video player remains visible behind it. The settings
+ * panel scrolls internally if needed.
  */
 @Composable
 fun SubtitleTracksSheet(
@@ -104,18 +109,13 @@ fun SubtitleTracksSheet(
     var showSettings by remember { mutableStateOf(false) }
 
     if (showSettings) {
-        // Subtitle settings panel (full bottom sheet)
-        PlayerSheet(title = "Subtitle Settings", onDismiss = { showSettings = false }) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                app.anikuta.player.controls.SubtitleSettingsPanel(
-                    onSettingsChanged = {
-                        // Live update — call onApplySettings to apply to MPV
-                        onApplySettings()
-                        Log.d("PlayerSheets", "Subtitle settings changed — applying live")
-                    },
-                )
-            }
-        }
+        // Subtitle settings panel — height-constrained sheet (not full screen)
+        // Uses a custom ModalBottomSheet with a max height so the video player
+        // remains visible behind the sheet.
+        SubtitleSettingsSheet(
+            onDismiss = { showSettings = false },
+            onApplySettings = onApplySettings,
+        )
         return
     }
 
@@ -348,6 +348,56 @@ private fun MoreOptionRow(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Subtitle Settings Sheet — height-constrained (not full screen)
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Height-constrained bottom sheet for subtitle settings.
+ *
+ * Unlike the full PlayerSheet (which uses skipPartiallyExpanded = true and
+ * takes most of the screen), this sheet uses a max height of ~60% of the
+ * screen so the video player remains visible behind it. The settings panel
+ * scrolls internally if the content exceeds the sheet height.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SubtitleSettingsSheet(
+    onDismiss: () -> Unit,
+    onApplySettings: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                // Constrain height to ~60% of screen so video player stays visible
+                .heightIn(max = 420.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text = "Subtitle Settings",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
+            // The settings panel scrolls internally
+            app.anikuta.player.controls.SubtitleSettingsPanel(
+                onSettingsChanged = {
+                    onApplySettings()
+                    Log.d("PlayerSheets", "Subtitle settings changed — applying live")
+                },
             )
         }
     }

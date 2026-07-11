@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -196,8 +197,9 @@ fun MinimizedControls(
         }
 
         // Double-tap feedback animation overlay
-        // Skip animations (Rewind/Forward) appear on the SIDE that was tapped.
-        // Play/Pause animation appears in the CENTER (smaller).
+        // Skip animations (Rewind/Forward) appear on the SIDE that was tapped — smaller,
+        // cleaner design with a small icon + "+10s"/"-10s" text below. No giant logo.
+        // Play/Pause animation appears in the CENTER (smaller still, icon only).
         doubleTapAnim?.let { feedback ->
             val isCenterAnim = feedback == DoubleTapFeedback.Pause || feedback == DoubleTapFeedback.Play
             val alignment = if (isCenterAnim) Alignment.Center else {
@@ -207,7 +209,7 @@ fun MinimizedControls(
                     else -> Alignment.Center
                 }
             }
-            val sidePadding = if (isCenterAnim) 0.dp else 48.dp
+            val sidePadding = if (isCenterAnim) 0.dp else 40.dp
 
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -219,40 +221,46 @@ fun MinimizedControls(
                     DoubleTapFeedback.Rewind -> Icons.Default.FastRewind
                     DoubleTapFeedback.Forward -> Icons.Default.FastForward
                 }
+                // Text label: "+10s" for forward, "-10s" for rewind, none for play/pause
                 val label = when (feedback) {
-                    DoubleTapFeedback.Rewind -> "10s"
-                    DoubleTapFeedback.Forward -> "10s"
+                    DoubleTapFeedback.Rewind -> "-10s"
+                    DoubleTapFeedback.Forward -> "+10s"
                     else -> null
                 }
-                // Center animations are smaller (56dp), side animations are larger (72dp)
-                val circleSize = if (isCenterAnim) 56.dp else 72.dp
-                val iconSize = if (isCenterAnim) 32.dp else 40.dp
+                // Center animations: 48dp circle, 28dp icon (smaller)
+                // Side skip animations: 52dp circle, 26dp icon (compact, not too big)
+                val circleSize = if (isCenterAnim) 48.dp else 52.dp
+                val iconSize = if (isCenterAnim) 28.dp else 26.dp
 
-                Box(
-                    contentAlignment = Alignment.Center,
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(horizontal = sidePadding),
                 ) {
-                    // Semi-transparent circle background
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.4f * animAlpha.value),
-                        modifier = Modifier.size(circleSize),
-                    ) {}
-                    // Icon
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = animAlpha.value),
-                        modifier = Modifier.size(iconSize),
-                    )
-                    // Label (for skip animations)
+                    Box(
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        // Semi-transparent circle background
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.45f * animAlpha.value),
+                            modifier = Modifier.size(circleSize),
+                        ) {}
+                        // Icon
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = animAlpha.value),
+                            modifier = Modifier.size(iconSize),
+                        )
+                    }
+                    // Text label below the circle (for skip animations)
                     if (label != null) {
                         Text(
                             text = label,
                             color = Color.White.copy(alpha = animAlpha.value),
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.offset(y = 28.dp),
+                            modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                 }

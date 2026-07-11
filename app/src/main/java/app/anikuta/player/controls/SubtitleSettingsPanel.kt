@@ -1,18 +1,17 @@
 package app.anikuta.player.controls
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,8 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,14 +29,20 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Phase 5.3-5.4 — Subtitle settings panel with live preview.
+ * Subtitle settings panel — compact, scrollable, no live preview.
  *
  * Three sections:
  * 1. Typography: font size, scale, bold, italic, border size
- * 2. Colors: text, border, background
- * 3. Position & Misc: position, shadow, ASS override, delay
+ * 2. Position & Misc: position, shadow, ASS override, delay
  *
- * Live preview at top shows sample subtitle text with current settings.
+ * Design:
+ *  - No live preview (the video player itself shows the subtitles)
+ *  - Scrollable (verticalScroll) so it works in a constrained-height sheet
+ *  - Compact slider rows with value displayed on the right
+ *  - Themed with MaterialTheme.colorScheme for dynamic theming support
+ *
+ * Hosted in a PlayerSheet that doesn't take the full screen — the sheet
+ * height is constrained so the video player remains visible behind it.
  */
 @Composable
 fun SubtitleSettingsPanel(
@@ -53,105 +56,139 @@ fun SubtitleSettingsPanel(
     val borderSize by prefs.subtitleBorderSize().stateIn(scope).collectAsState()
     val bold by prefs.boldSubtitles().stateIn(scope).collectAsState()
     val italic by prefs.italicSubtitles().stateIn(scope).collectAsState()
-    val textColor by prefs.textColorSubtitles().stateIn(scope).collectAsState()
-    val borderColor by prefs.borderColorSubtitles().stateIn(scope).collectAsState()
-    val bgColor by prefs.backgroundColorSubtitles().stateIn(scope).collectAsState()
     val position by prefs.subtitlePosition().stateIn(scope).collectAsState()
     val shadowOffset by prefs.subtitleShadowOffset().stateIn(scope).collectAsState()
     val overrideASS by prefs.overrideSubsASS().stateIn(scope).collectAsState()
     val delay by prefs.subtitlesDelay().stateIn(scope).collectAsState()
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // ---- Live Preview ----
-        SubtitlePreview(
-            text = "Sample subtitle text",
-            fontSize = fontSize,
-            fontScale = fontScale,
-            bold = bold,
-            italic = italic,
-            textColor = Color(textColor),
-            borderColor = Color(borderColor),
-            bgColor = Color(bgColor),
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
+    // Scrollable column — allows the settings to scroll if they exceed the sheet height
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+    ) {
         // ---- Typography ----
-        Text("Typography", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-        SliderRow(label = "Font size", value = fontSize.toFloat(), range = 20f..100f, steps = 0, onChange = { prefs.subtitleFontSize().set(it.toInt()); onSettingsChanged() })
-        SliderRow(label = "Scale", value = fontScale, range = 0.5f..3f, steps = 9, onChange = { prefs.subtitleFontScale().set(it); onSettingsChanged() })
-        SliderRow(label = "Border size", value = borderSize.toFloat(), range = 0f..10f, steps = 0, onChange = { prefs.subtitleBorderSize().set(it.toInt()); onSettingsChanged() })
-        SwitchRow(label = "Bold", checked = bold, onChange = { prefs.boldSubtitles().set(it); onSettingsChanged() })
-        SwitchRow(label = "Italic", checked = italic, onChange = { prefs.italicSubtitles().set(it); onSettingsChanged() })
+        SectionHeader("Typography")
+        CompactSliderRow(
+            label = "Font size",
+            valueText = fontSize.toString(),
+            value = fontSize.toFloat(),
+            range = 20f..100f,
+            onChange = { prefs.subtitleFontSize().set(it.toInt()); onSettingsChanged() },
+        )
+        CompactSliderRow(
+            label = "Scale",
+            valueText = "%.1fx".format(fontScale),
+            value = fontScale,
+            range = 0.5f..3f,
+            onChange = { prefs.subtitleFontScale().set(it); onSettingsChanged() },
+        )
+        CompactSliderRow(
+            label = "Border size",
+            valueText = borderSize.toString(),
+            value = borderSize.toFloat(),
+            range = 0f..10f,
+            onChange = { prefs.subtitleBorderSize().set(it.toInt()); onSettingsChanged() },
+        )
+        CompactSwitchRow(label = "Bold", checked = bold, onChange = { prefs.boldSubtitles().set(it); onSettingsChanged() })
+        CompactSwitchRow(label = "Italic", checked = italic, onChange = { prefs.italicSubtitles().set(it); onSettingsChanged() })
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // ---- Position & Misc ----
-        Text("Position & Misc", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-        SliderRow(label = "Position (0=top, 100=bottom)", value = position.toFloat(), range = 0f..100f, steps = 0, onChange = { prefs.subtitlePosition().set(it.toInt()); onSettingsChanged() })
-        SliderRow(label = "Shadow offset", value = shadowOffset.toFloat(), range = 0f..10f, steps = 0, onChange = { prefs.subtitleShadowOffset().set(it.toInt()); onSettingsChanged() })
-        SwitchRow(label = "Override ASS styling", checked = overrideASS, onChange = { prefs.overrideSubsASS().set(it); onSettingsChanged() })
-        SliderRow(label = "Delay (ms)", value = delay.toFloat(), range = -5000f..5000f, steps = 0, onChange = { prefs.subtitlesDelay().set(it.toInt()); onSettingsChanged() })
+        SectionHeader("Position & Misc")
+        CompactSliderRow(
+            label = "Position",
+            valueText = "$position%",
+            value = position.toFloat(),
+            range = 0f..100f,
+            onChange = { prefs.subtitlePosition().set(it.toInt()); onSettingsChanged() },
+        )
+        CompactSliderRow(
+            label = "Shadow offset",
+            valueText = shadowOffset.toString(),
+            value = shadowOffset.toFloat(),
+            range = 0f..10f,
+            onChange = { prefs.subtitleShadowOffset().set(it.toInt()); onSettingsChanged() },
+        )
+        CompactSwitchRow(label = "Override ASS styling", checked = overrideASS, onChange = { prefs.overrideSubsASS().set(it); onSettingsChanged() })
+        CompactSliderRow(
+            label = "Delay",
+            valueText = "${delay}ms",
+            value = delay.toFloat(),
+            range = -5000f..5000f,
+            onChange = { prefs.subtitlesDelay().set(it.toInt()); onSettingsChanged() },
+        )
     }
 }
 
 @Composable
-private fun SubtitlePreview(
-    text: String,
-    fontSize: Int,
-    fontScale: Float,
-    bold: Boolean,
-    italic: Boolean,
-    textColor: Color,
-    borderColor: Color,
-    bgColor: Color,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = Color.Black,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(100.dp)
-                .background(bgColor.copy(alpha = 0.3f)),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            Text(
-                text = text,
-                color = textColor,
-                fontSize = (fontSize * fontScale).sp,
-                fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
-                fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
-        }
-    }
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(bottom = 4.dp, top = 4.dp),
+    )
 }
 
+/**
+ * Compact slider row: label on the left, value on the right, slider below.
+ * Uses a thinner track and smaller thumb for a cleaner look.
+ */
 @Composable
-private fun SliderRow(
+private fun CompactSliderRow(
     label: String,
+    valueText: String,
     value: Float,
     range: ClosedFloatingPointRange<Float>,
-    steps: Int,
     onChange: (Float) -> Unit,
 ) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Text("$label: ${"%.1f".format(value)}", style = MaterialTheme.typography.bodySmall)
-        Slider(value = value, onValueChange = onChange, valueRange = range, steps = steps)
+    Column(modifier = Modifier.padding(vertical = 2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = valueText,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            modifier = Modifier.fillMaxWidth(),
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            ),
+        )
     }
 }
 
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun CompactSwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         Switch(checked = checked, onCheckedChange = onChange)
     }
 }
