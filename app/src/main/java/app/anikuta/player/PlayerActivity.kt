@@ -749,6 +749,10 @@ class PlayerActivity : ComponentActivity() {
     /**
      * Resolve the source for episode switching. Tries sourceId first, then
      * falls back to looking up by name from the EpisodeCacheStore.
+     *
+     * SAFETY: Includes retry logic to wait for extensions to load (they load
+     * async on app start). Without this, the source lookup might fail if the
+     * user switches episodes before extensions are fully loaded.
      */
     private suspend fun resolveSource(): app.anikuta.source.api.AnimeCatalogueSource? {
         val mgr = try {
@@ -758,26 +762,42 @@ class PlayerActivity : ComponentActivity() {
             return null
         }
 
-        // Try by sourceId first (most reliable)
+        // Try by sourceId first (most reliable) — with retry for async loading
         if (sourceId > 0) {
-            val source = mgr.get(sourceId)
+            var retries = 0
+            var source = mgr.get(sourceId)
+            while (source == null && retries < 10) {
+                kotlinx.coroutines.delay(500)
+                retries++
+                source = mgr.get(sourceId)
+            }
             if (source is app.anikuta.source.api.AnimeCatalogueSource) {
                 return source
             }
-            Log.w(TAG, "Source id=$sourceId is not a catalogue source (got ${source?.javaClass?.simpleName})")
+            if (source != null) {
+                Log.w(TAG, "Source id=$sourceId is not a catalogue source (got ${source.javaClass.simpleName})")
+            }
         }
 
-        // Fallback: look up by name from EpisodeCacheStore
+        // Fallback: look up by name from EpisodeCacheStore — with retry
         if (anilistId > 0) {
             try {
                 val cacheStore = uy.kohesive.injekt.Injekt.get<app.anikuta.data.cache.EpisodeCacheStore>()
                 val cached = cacheStore.load(anilistId)
                 if (cached != null) {
                     val (_, sourceName) = cached
-                    val source = mgr.getCatalogueSources().find { it.name == sourceName }
+                    var retries = 0
+                    var source = mgr.getCatalogueSources().find { it.name == sourceName }
+                    while (source == null && retries < 10) {
+                        kotlinx.coroutines.delay(500)
+                        retries++
+                        source = mgr.getCatalogueSources().find { it.name == sourceName }
+                    }
                     if (source != null) {
-                        Log.d(TAG, "Source found by name '$sourceName' from cache")
+                        Log.d(TAG, "Source found by name '$sourceName' from cache (after $retries retries)")
                         return source
+                    } else {
+                        Log.w(TAG, "Source '$sourceName' not found after $retries retries")
                     }
                 }
             } catch (e: Exception) {

@@ -195,6 +195,45 @@ class DetailViewModel(
                     // Populate in-memory cache too
                     episodeCache[anilistId] = Pair(eps, sourceName)
                     _episodes.value = EpisodeState.Loaded(eps, sourceName)
+
+                    // FIX: Immediately set matchedSource so playEpisode() works
+                    // without waiting for the async backgroundRefreshEpisodes.
+                    // Previously, matchedSource was only set inside
+                    // backgroundRefreshEpisodes (which is async + has a refresh
+                    // guard that skips if recently refreshed). This caused
+                    // "No source available" errors when the user tapped an
+                    // episode before the background refresh completed — or if
+                    // the refresh was skipped entirely by the guard.
+                    viewModelScope.launch {
+                        try {
+                            val mgr = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>()
+                            // Wait for extensions to load (they load async on app start)
+                            var retries = 0
+                            var source = mgr.getCatalogueSources().find { it.name == sourceName }
+                            while (source == null && retries < 20) {
+                                kotlinx.coroutines.delay(500)
+                                retries++
+                                source = mgr.getCatalogueSources().find { it.name == sourceName }
+                            }
+                            if (source != null) {
+                                matchedSource = source
+                                // Reconstruct matchedSAnime from persistent cache
+                                val sAnimeUrl = preferenceStore?.getString("ext_sanime_url_$anilistId", "")?.get() ?: ""
+                                if (sAnimeUrl.isNotBlank()) {
+                                    matchedSAnime = app.anikuta.source.api.model.SAnime.create().apply {
+                                        url = sAnimeUrl
+                                        title = anime.title.preferred()
+                                    }
+                                }
+                                Log.d(TAG, "matchedSource set from disk cache: $sourceName (after $retries retries)")
+                            } else {
+                                Log.w(TAG, "Source '$sourceName' from disk cache not found in loaded extensions")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to set matchedSource from disk cache", e)
+                        }
+                    }
+
                     // Background refresh to check for new episodes
                     backgroundRefreshEpisodes(anime, sourceName)
                     // Background metadata enrichment (if needed)
@@ -451,10 +490,52 @@ class DetailViewModel(
      * with qualities sorted descending within each server section.
      */
     fun playEpisode(episode: SEpisode) {
-        val source = matchedSource ?: run {
+        // SAFETY NET: If matchedSource is null (e.g. disk cache was loaded but
+        // the source lookup is still in progress), try to recover it from the
+        // episode cache or persistent preference before giving up.
+        if (matchedSource == null) {
+            val sourceName = episodeCache[anilistId]?.second
+                ?: preferenceStore?.getString("ext_match_$anilistId", "")?.get()
+                ?: ""
+            if (sourceName.isNotBlank()) {
+                Log.d(TAG, "playEpisode: matchedSource null — trying to recover from cache: $sourceName")
+                viewModelScope.launch {
+                    try {
+                        val mgr = uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>()
+                        var retries = 0
+                        var source = mgr.getCatalogueSources().find { it.name == sourceName }
+                        while (source == null && retries < 20) {
+                            kotlinx.coroutines.delay(500)
+                            retries++
+                            source = mgr.getCatalogueSources().find { it.name == sourceName }
+                        }
+                        if (source != null) {
+                            matchedSource = source
+                            val sAnimeUrl = preferenceStore?.getString("ext_sanime_url_$anilistId", "")?.get() ?: ""
+                            if (sAnimeUrl.isNotBlank() && matchedSAnime == null) {
+                                matchedSAnime = app.anikuta.source.api.model.SAnime.create().apply {
+                                    url = sAnimeUrl
+                                    title = episode.name
+                                }
+                            }
+                            Log.d(TAG, "playEpisode: source recovered — retrying playEpisode")
+                            playEpisode(episode) // retry now that matchedSource is set
+                        } else {
+                            Log.e(TAG, "playEpisode: source '$sourceName' not found after $retries retries")
+                            _playRequest.value = PlayRequest.Error("Source '$sourceName' not found. Try refreshing the page.")
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "playEpisode: source recovery failed", e)
+                        _playRequest.value = PlayRequest.Error("Failed to load source: ${e.message}")
+                    }
+                }
+                return
+            }
             _playRequest.value = PlayRequest.Error("No source available")
             return
         }
+
+        val source = matchedSource!!
 
         // Phase 7: check video cache (10-min TTL)
         val cached = videoCache[episode.url]
