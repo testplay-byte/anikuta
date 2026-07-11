@@ -1216,3 +1216,57 @@ resolution to complete before showing the correct server/audio.
 ### Build
 - Build #238 (6dc5560): FAILED — sortedByDescending type argument error
 - Build #239 (039a75b): SUCCESS — fixed with Int comparison instead of Boolean
+
+---
+
+## Session 44 (Deep code review — 3 CRITICAL + 5 HIGH + 2 MEDIUM fixes)
+
+Task ID: PLAYER-CODE-REVIEW-FIXES
+Agent: main (Z.ai Code)
+
+### Code Review Methodology
+Used a specialized Explore agent to do a thorough review of:
+- PlayerActivity.kt (2554+ lines)
+- AnikutaMPVView.kt (295 lines)
+- PlayerViewModel.kt (314 lines)
+Plus supporting files (PlayerObserver, PlayerEnums, VideoTitleParser)
+
+### Issues Found and Fixed
+
+**CRITICAL:**
+- C1: Race condition — resolveVideosInBackground + reResolveAndLoadVideo both
+  add external tracks concurrently → duplicate tracks in sheets. Fixed with
+  resolveInProgress guard + addedTrackUrls deduplication set.
+- C2: reResolveAndLoadVideo fails if episode list hasn't loaded from disk yet
+  → video never loads, no retry. Fixed with 5s await loop.
+- C3: FULLSCREEN factory didn't check localhost URLs → loaded stale URL.
+  Fixed with same localhost guard as MINIMIZED factory.
+
+**HIGH:**
+- H1: videoLoaded set to true before loadfile → failures permanently lock out
+  retry. Fixed: only set after dispatch, reset to false on failure.
+- H2: MPV_EVENT_END_FILE didn't clear isSwitchingEpisode → 30s stuck overlay.
+  Fixed: clear immediately on END_FILE.
+- H4: seekToSavedPosition + start-over overlay fired on every FILE_LOADED
+  (including server switches). Fixed: isFirstFileLoad guard.
+- H5: onPause unconditionally paused → PiP showed paused video. Fixed: check
+  isInPictureInPictureMode before pausing.
+
+**MEDIUM:**
+- M2: sub-add/audio-add passed lang as title (3rd arg instead of 4th).
+  Fixed: pass lang as both title and lang (4th arg).
+- M5: onDestroy cleanup not individually try/caught → one failure skips all.
+  Fixed: each call in its own try/catch.
+
+### Not Yet Fixed (lower priority, documented for future)
+- H3: autoSelectAudioTrack DUB picks last() track — should use language matching
+- M1: autoSelectSubtitleTrack resets userDisabledSubtitles when MPV auto-selects
+- M3: setOptionString("sub-font") won't apply live
+- M4: SpeedSheet doesn't persist speed
+- M6: mpvInitialized flag never checked
+- M7: cycleAudioDelay dead branch
+- M8: syncToAniList uses MainScope() instead of lifecycleScope
+- L1-L11: Various code quality issues (see full review)
+
+### Build
+- Build #241 (8450876): SUCCESS
