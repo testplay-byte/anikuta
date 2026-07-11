@@ -1195,6 +1195,7 @@ class PlayerActivity : ComponentActivity() {
         // Update Activity state
         currentVideoUrl = selected.video.videoUrl
         vm.setCurrentVideoUrl(currentVideoUrl)  // FIX (L2): reactive highlight
+        vm.setCurrentVideoTitle(selected.video.videoTitle)  // FIX: stable highlight
         currentVideoHeaders = headers
         currentVideoServer = selected.server
         currentVideoAudio = selected.audio.name
@@ -1230,12 +1231,21 @@ class PlayerActivity : ComponentActivity() {
         vm.setSwitchingEpisode(true)
         vm.setControlsVisible(false)
 
+        // FIX: Preserve playback position across quality/server switches.
+        // Aniyomi sets "start" to current timePos before loadfile. We do the same.
+        val savedPosition = mpvView?.timePos ?: 0
+
         // Load into MPV
         lifecycleScope.launch {
             withContext(kotlinx.coroutines.Dispatchers.Main) {
                 try {
                     if (headers.isNotBlank()) {
                         MPVLib.setOptionString("http-header-fields", headers)
+                    }
+                    // Set start position so MPV seeks to it after loading
+                    if (savedPosition > 5) {
+                        MPVLib.setOptionString("start", "${savedPosition}")
+                        Log.d(TAG, "Preserving position: ${savedPosition}s")
                     }
                     Log.d(TAG, "Loading video: ${currentVideoUrl.take(80)}...")
                     MPVLib.command(arrayOf("loadfile", currentVideoUrl, "replace"))
@@ -2616,9 +2626,11 @@ private fun PlayerScreen(
         // server/audio/quality while the sheet is open. Previously this came
         // from a stale Activity field read once on first composition.
         val currentVideoUrlForQuality by viewModel.currentVideoUrl.collectAsState()
+        val currentVideoTitleForQuality by viewModel.currentVideoTitle.collectAsState()
         app.anikuta.player.controls.sheets.QualitySheet(
             videos = availableVideos,
             currentVideoUrl = currentVideoUrlForQuality,
+            currentVideoTitle = currentVideoTitleForQuality,
             currentVideoServer = currentServerForQuality,
             currentAudioVersion = currentAudioForQuality,
             displayMode = qualityDisplayMode,

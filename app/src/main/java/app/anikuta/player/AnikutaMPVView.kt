@@ -202,8 +202,11 @@ class AnikutaMPVView(
         // Enable demuxer cache so the stream can buffer ahead. Without this,
         // HLS streams from extension proxies (localhost:PORT/variant/...) can
         // stutter or fail to render the first frame.
+        // FIX: Increased from 10s to 120s (2 minutes) for better buffering.
+        // User requested 2-10 minute buffer range. cache-secs is a target —
+        // MPV will buffer up to this many seconds of the stream ahead.
         MPVLib.setOptionString("cache", "yes")
-        MPVLib.setOptionString("cache-secs", "10")
+        MPVLib.setOptionString("cache-secs", "120")
 
         // Keep the file loaded so seeking works after EOF.
         MPVLib.setPropertyBoolean("keep-open", true)
@@ -219,7 +222,9 @@ class AnikutaMPVView(
         MPVLib.setOptionString("tls-verify", "no")
 
         // Limit demuxer cache for mobile.
-        val cacheMegs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) 64 else 32
+        // FIX: Increased from 64MB to 256MB to support 2+ minutes of buffering
+        // (user requested 2-10 min buffer range). 256MB allows ~2-3 min of 1080p.
+        val cacheMegs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) 256 else 128
         MPVLib.setOptionString("demuxer-max-bytes", "${cacheMegs * 1024 * 1024}")
         MPVLib.setOptionString("demuxer-max-back-bytes", "${cacheMegs * 1024 * 1024}")
 

@@ -142,6 +142,11 @@ class PlayerViewModel(
     private val _currentVideoUrl = MutableStateFlow("")
     val currentVideoUrl: StateFlow<String> = _currentVideoUrl.asStateFlow()
 
+    /** Current video title — stable across re-resolutions (unlike URL which
+     *  contains localhost:PORT). Used for quality sheet highlight. */
+    private val _currentVideoTitle = MutableStateFlow("")
+    val currentVideoTitle: StateFlow<String> = _currentVideoTitle.asStateFlow()
+
     // ---- Mode switching ----
 
     fun setPlayerMode(mode: PlayerMode) {
@@ -222,6 +227,10 @@ class PlayerViewModel(
     /** FIX (L2): Update the current video URL StateFlow. */
     fun setCurrentVideoUrl(url: String) {
         _currentVideoUrl.value = url
+    }
+
+    fun setCurrentVideoTitle(title: String) {
+        _currentVideoTitle.value = title
     }
 
     // ---- Original state mutations (from Activity's MPV observer) ----

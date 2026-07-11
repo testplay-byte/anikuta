@@ -61,6 +61,8 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|fontScale"
             android:screenOrientation="sensorPortrait"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
             android:theme="@style/Theme.Anikuta" />
 
         <!-- Global crash screen. Shown by AnikutaCrashHandler when the app crashes. -->

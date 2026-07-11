@@ -62,6 +62,7 @@ import app.anikuta.source.api.model.Video
 fun QualitySheet(
     videos: List<Video>,
     currentVideoUrl: String,
+    currentVideoTitle: String = "",
     currentVideoServer: String = "",
     currentAudioVersion: String = "",
     displayMode: String = "current",
@@ -108,14 +109,10 @@ fun QualitySheet(
                         // Quality options (sorted by quality descending)
                         audioVideos.sortedByDescending { it.quality ?: 0 }.forEachIndexed { index, parsed ->
                             item(key = "quality_${serverName}_${audio.name}_$index") {
-                                val qualityLabel = parsed.quality?.let { "${it}p" } ?: "Unknown"
-                                val isSelected = parsed.video.videoUrl == currentVideoUrl &&
-                                    parsed.video.videoTitle == allParsed
-                                        .firstOrNull { it.video.videoUrl == currentVideoUrl }?.video?.videoTitle
-                                SheetOption(
-                                    title = qualityLabel,
-                                    selected = isSelected,
-                                    onClick = { onSelect(parsed.video); onDismiss() },
+                                QualityOption(
+                                    parsed = parsed,
+                                    currentVideoTitle = currentVideoTitle,
+                                    onSelect = { onSelect(parsed.video); onDismiss() },
                                 )
                             }
                         }
@@ -132,8 +129,7 @@ fun QualitySheet(
                     itemsIndexed(allParsed, key = { index, _ -> "quality_all_$index" }) { index, parsed ->
                         QualityOption(
                             parsed = parsed,
-                            allParsed = allParsed,
-                            currentVideoUrl = currentVideoUrl,
+                            currentVideoTitle = currentVideoTitle,
                             onSelect = { onSelect(parsed.video); onDismiss() },
                         )
                     }
@@ -141,8 +137,7 @@ fun QualitySheet(
                     itemsIndexed(filtered, key = { index, _ -> "quality_current_$index" }) { index, parsed ->
                         QualityOption(
                             parsed = parsed,
-                            allParsed = allParsed,
-                            currentVideoUrl = currentVideoUrl,
+                            currentVideoTitle = currentVideoTitle,
                             onSelect = { onSelect(parsed.video); onDismiss() },
                         )
                     }
@@ -155,8 +150,7 @@ fun QualitySheet(
 @Composable
 private fun QualityOption(
     parsed: app.anikuta.ui.detail.ParsedVideo,
-    allParsed: List<app.anikuta.ui.detail.ParsedVideo>,
-    currentVideoUrl: String,
+    currentVideoTitle: String,
     onSelect: () -> Unit,
 ) {
     val qualityLabel = parsed.quality?.let { "${it}p" } ?: "Unknown"
@@ -165,9 +159,10 @@ private fun QualityOption(
         append(" • ")
         append(parsed.audio.label)
     }
-    val isSelected = parsed.video.videoUrl == currentVideoUrl &&
-        parsed.video.videoTitle == allParsed
-            .firstOrNull { it.video.videoUrl == currentVideoUrl }?.video?.videoTitle
+    // FIX: Highlight by videoTitle (stable across re-resolutions) instead of
+    // videoUrl (localhost:PORT changes between resolutions).
+    val isSelected = currentVideoTitle.isNotBlank() &&
+        parsed.video.videoTitle == currentVideoTitle
     SheetOption(
         title = qualityLabel,
         subtitle = subtitle,
