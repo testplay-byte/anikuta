@@ -198,6 +198,15 @@ class PlayerActivity : ComponentActivity() {
     /** Whether the user has manually changed the audio track. Prevents auto-select
      *  from overriding the user's choice when tracks are reloaded. */
     @Volatile private var userChangedAudioTrack: Boolean = false
+    /** Guard to prevent concurrent video resolution (resolveVideosInBackground
+     *  vs reResolveAndLoadVideo). Only one resolve runs at a time. */
+    @Volatile private var resolveInProgress: Boolean = false
+    /** Track which external track URLs have been added to MPV to prevent duplicates. */
+    @Volatile private var addedTrackUrls: MutableSet<String> = mutableSetOf()
+    /** Whether this is the first FILE_LOADED for the current video (controls
+     *  seekToSavedPosition + start-over overlay — only fires on first load, not
+     *  on server/audio/quality switches). */
+    @Volatile private var isFirstFileLoad: Boolean = true
     /** Resolved video list for the current episode — cached so switchServer/
      *  switchAudioVersion / switchQuality don't need to re-resolve from source. */
     @Volatile private var currentEpisodeVideos: List<eu.kanade.tachiyomi.animesource.model.Video> = emptyList()
@@ -386,16 +395,17 @@ class PlayerActivity : ComponentActivity() {
                     Log.d(TAG, "Episode switch: FILE_LOADED — clearing switching state")
                 }
                 // Load external subtitle + audio tracks from the Video object.
-                // Extensions provide these as URLs (e.g. .vtt, .ass, .m3u8 audio)
-                // that MPV can't auto-detect — they must be added via sub-add/audio-add.
+                // FIX (C1): Deduplicated by loadExternalTracks() — safe to call
+                // from FILE_LOADED even if resolveVideosInBackground already added them.
                 loadExternalTracks()
-                // Resume from saved position (task 5.5).
-                seekToSavedPosition()
+                // FIX (H4): Only seek to saved position + show start-over overlay
+                // on the FIRST file load for this video, not on every server/audio/
+                // quality switch (which also fires FILE_LOADED).
+                if (isFirstFileLoad) {
+                    isFirstFileLoad = false
+                    seekToSavedPosition()
+                }
                 // Auto-play: the file is loaded, start playing immediately.
-                // MPV starts paused (we set pause=true in initOptions), so we
-                // need to explicitly unpause here. Without this, the loading
-                // overlay disappears but the video doesn't start — the user
-                // has to tap play.
                 try {
                     MPVLib.setPropertyBoolean("pause", false)
                     viewModel?.onPauseChanged(false)
@@ -408,9 +418,16 @@ class PlayerActivity : ComponentActivity() {
             MPVLib.mpvEventId.MPV_EVENT_PLAYBACK_RESTART -> viewModel?.onBufferingChanged(false)
             MPVLib.mpvEventId.MPV_EVENT_IDLE -> Log.d(TAG, "Player idle")
             MPVLib.mpvEventId.MPV_EVENT_END_FILE -> {
-                // File ended or failed to load. The PlayerObserver.onFileEnded
-                // callback handles the error message. Log it here for debugging.
+                // File ended or failed to load.
                 Log.w(TAG, "MPV_EVENT_END_FILE — file ended or failed")
+                // FIX (H2): Clear switching state immediately on load failure
+                // so the loading overlay doesn't stay for 30s waiting for timeout.
+                val vm = viewModel
+                if (vm != null && vm.isSwitchingEpisode.value) {
+                    vm.setSwitchingEpisode(false)
+                    cancelSwitchTimeout()
+                    Log.d(TAG, "END_FILE: cleared switching state (load may have failed)")
+                }
             }
         }
     }
@@ -447,38 +464,46 @@ class PlayerActivity : ComponentActivity() {
     /**
      * Load external subtitle and audio tracks from the current Video object into MPV.
      *
-     * Extensions provide external tracks as URLs (e.g. .vtt, .ass subtitle files,
-     * or separate audio stream URLs). MPV can't auto-detect these — they must be
-     * explicitly added via the `sub-add` and `audio-add` commands after the main
-     * file loads.
+     * FIX (C1): Deduplicates by URL — if a track URL was already added (e.g. by
+     * a concurrent resolveVideosInBackground + reResolveAndLoadVideo), it's skipped.
+     * Uses `addedTrackUrls` set to track what's been added.
      *
-     * This mirrors aniyomi's PlayerActivity.setupTracks() approach:
-     *  - sub-add: adds an external subtitle track (auto-select mode)
-     *  - audio-add: adds an external audio track (auto-select mode)
-     *
-     * After adding tracks, MPV fires a "track-list" property change which
-     * triggers loadTracks() → the subtitle/audio sheets populate.
+     * FIX (M2): Passes lang as the 4th argument (correct MPV signature:
+     * sub-add <url> [<flags> [<title> [<lang>]]]) — previously lang was passed
+     * as the title (3rd arg).
      */
     private fun loadExternalTracks() {
         val video = currentVideo ?: return
+        // Early return if no tracks to add
+        if (video.subtitleTracks.isEmpty() && video.audioTracks.isEmpty()) return
         try {
-            // Add external subtitle tracks
+            // Add external subtitle tracks (deduplicated)
             if (video.subtitleTracks.isNotEmpty()) {
                 video.subtitleTracks.forEach { sub ->
+                    if (addedTrackUrls.contains(sub.url)) {
+                        Log.d(TAG, "Skipping duplicate subtitle track: ${sub.lang}")
+                        return@forEach
+                    }
                     try {
-                        MPVLib.command(arrayOf("sub-add", sub.url, "auto", sub.lang))
+                        MPVLib.command(arrayOf("sub-add", sub.url, "auto", sub.lang, sub.lang))
+                        addedTrackUrls.add(sub.url)
                         Log.d(TAG, "Added external subtitle: ${sub.lang} (${sub.url.take(60)}...)")
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to add subtitle track: ${sub.lang}", e)
                     }
                 }
-                Log.d(TAG, "Loaded ${video.subtitleTracks.size} external subtitle track(s)")
+                Log.d(TAG, "Processed ${video.subtitleTracks.size} external subtitle track(s)")
             }
-            // Add external audio tracks
+            // Add external audio tracks (deduplicated)
             if (video.audioTracks.isNotEmpty()) {
                 video.audioTracks.forEach { audio ->
+                    if (addedTrackUrls.contains(audio.url)) {
+                        Log.d(TAG, "Skipping duplicate audio track: ${audio.lang}")
+                        return@forEach
+                    }
                     try {
-                        MPVLib.command(arrayOf("audio-add", audio.url, "auto", audio.lang))
+                        MPVLib.command(arrayOf("audio-add", audio.url, "auto", audio.lang, audio.lang))
+                        addedTrackUrls.add(audio.url)
                         Log.d(TAG, "Added external audio: ${audio.lang} (${audio.url.take(60)}...)")
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to add audio track: ${audio.lang}", e)
@@ -1136,6 +1161,9 @@ class PlayerActivity : ComponentActivity() {
         // Reset user flags — new video loaded, user hasn't interacted yet
         userChangedAudioTrack = false
         userDisabledSubtitles = false
+        // FIX: Reset first-load flag and track dedup set for the new video
+        isFirstFileLoad = true
+        addedTrackUrls.clear()
 
         // Update VM state (for UI reactivity)
         vm.setCurrentServer(selected.server)
@@ -1190,12 +1218,17 @@ class PlayerActivity : ComponentActivity() {
      * (on initial load). Populates the server/audio/quality state so the
      * dropdowns and sheets work immediately when the user opens them.
      *
-     * Called from onCreate after the episode list is loaded from cache.
-     * Does NOT reload the video — the one from the Intent is already playing.
+     * FIX (C1): Skips if reResolveAndLoadVideo is already in progress —
+     * avoids duplicate network calls and track additions.
      */
     private fun resolveVideosInBackground() {
         val vm = viewModel ?: return
         if (sourceId < 0 && anilistId < 0) return  // no source to resolve from
+        // Skip if re-resolve is already running (it does the same work)
+        if (resolveInProgress) {
+            Log.d(TAG, "Background resolve: skipping — reResolveAndLoadVideo already in progress")
+            return
+        }
         val episode = vm.episodeList.value.getOrNull(vm.currentEpisodeIndex.value) ?: return
 
         lifecycleScope.launch {
@@ -1367,26 +1400,29 @@ class PlayerActivity : ComponentActivity() {
     /**
      * Load the video if it hasn't been loaded yet (delayed by the first-time prompt).
      *
-     * FIX: If the video URL is a localhost proxy URL (http://localhost:PORT/...),
-     * it may be stale (the proxy server dies when the app is killed). In that case,
-     * we re-resolve the video from the source before loading. This mirrors aniyomi's
-     * approach of always re-resolving on player open.
+     * FIX (H1): videoLoaded is only set to true AFTER the loadfile is dispatched
+     * (or re-resolution starts). If re-resolution fails, videoLoaded is reset to
+     * false so the user can retry.
+     *
+     * FIX: If the video URL is a localhost proxy URL, re-resolve from source.
      */
     fun loadVideoIfPending() {
         if (videoLoaded) return
-        videoLoaded = true
         val url = viewModel?.videoUrl ?: return
 
         // Check if the URL is a localhost proxy URL (may be stale after app restart)
         if (url.contains("localhost:") || url.contains("127.0.0.1:")) {
             Log.d(TAG, "Video URL is localhost proxy — may be stale, re-resolving: ${url.take(80)}...")
+            videoLoaded = true
             reResolveAndLoadVideo()
         } else {
+            videoLoaded = true
             Log.d(TAG, "Loading video (direct URL): ${url.take(80)}...")
             try {
                 MPVLib.command(arrayOf("loadfile", url, "replace"))
             } catch (e: Exception) {
                 Log.w(TAG, "Could not load video", e)
+                videoLoaded = false // allow retry
             }
         }
     }
@@ -1394,16 +1430,27 @@ class PlayerActivity : ComponentActivity() {
     /**
      * Re-resolve the video URL from the source and load it into MPV.
      *
-     * This is called when the Intent's video URL is a localhost proxy URL that
-     * may be stale (e.g. after app restart). It:
-     * 1. Resolves the source (by sourceId or name from cache)
-     * 2. Fetches the video list from the source
-     * 3. Selects the best matching video (by server + audio + quality from Intent)
-     * 4. Loads the fresh URL into MPV
-     * 5. Shows the loading overlay during resolution
+     * FIX (C1): Uses resolveInProgress guard to prevent concurrent execution
+     * with resolveVideosInBackground(). If a resolve is already in progress,
+     * this function returns immediately.
+     *
+     * FIX (C2): Waits for the episode list to be loaded from disk before
+     * attempting to resolve. If the episode list is still empty after 5s,
+     * gives up with an error.
+     *
+     * FIX (H1): Resets videoLoaded=false on failure so the user can retry.
      */
     private fun reResolveAndLoadVideo() {
-        val vm = viewModel ?: return
+        val vm = viewModel ?: run {
+            videoLoaded = false
+            return
+        }
+        // Guard against concurrent resolution
+        if (resolveInProgress) {
+            Log.d(TAG, "Re-resolve: already in progress — skipping")
+            return
+        }
+        resolveInProgress = true
         vm.setSwitchingEpisode(true)
         vm.setControlsVisible(false)
 
@@ -1424,10 +1471,28 @@ class PlayerActivity : ComponentActivity() {
                     return@launch
                 }
 
+                // FIX (C2): Wait for episode list to be loaded from disk cache.
+                // The episode list loads async — if we don't wait, episode is null
+                // and the video never loads.
+                var retries = 0
+                while (vm.episodeList.value.isEmpty() && retries < 10) {
+                    kotlinx.coroutines.delay(500)
+                    retries++
+                }
                 val episode = vm.episodeList.value.getOrNull(vm.currentEpisodeIndex.value)
                 if (episode == null) {
-                    Log.e(TAG, "Re-resolve: episode not found")
+                    Log.e(TAG, "Re-resolve: episode not found after $retries retries (${vm.episodeList.value.size} episodes)")
                     vm.setSwitchingEpisode(false)
+                    vm.setControlsVisible(true)
+                    videoLoaded = false // allow retry
+                    resolveInProgress = false
+                    runOnUiThread {
+                        android.widget.Toast.makeText(
+                            this@PlayerActivity,
+                            "Could not load video: episode not found",
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                    }
                     return@launch
                 }
 
@@ -1492,10 +1557,13 @@ class PlayerActivity : ComponentActivity() {
                 }
 
                 Log.d(TAG, "=== Re-resolve SUCCESS ===")
+                resolveInProgress = false
             } catch (e: Exception) {
                 Log.e(TAG, "=== Re-resolve FAILED ===", e)
                 vm.setSwitchingEpisode(false)
                 vm.setControlsVisible(true)
+                videoLoaded = false // allow retry
+                resolveInProgress = false
                 runOnUiThread {
                     android.widget.Toast.makeText(
                         this@PlayerActivity,
@@ -1675,8 +1743,13 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        try { MPVLib.setPropertyBoolean("pause", true) } catch (e: Exception) {
-            Log.w(TAG, "Could not pause on background", e)
+        // FIX (H5): Don't pause if entering PiP mode — the video should keep
+        // playing in the PiP window. Only pause when the activity is actually
+        // going to background (not PiP).
+        if (!isFinishing && !isInPictureInPictureMode) {
+            try { MPVLib.setPropertyBoolean("pause", true) } catch (e: Exception) {
+                Log.w(TAG, "Could not pause on background", e)
+            }
         }
         saveProgress()
     }
@@ -1684,37 +1757,34 @@ class PlayerActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         saveProgress()
-        try {
-            // Follow aniyomi's lifecycle: destroy() the player in onDestroy.
-            // BaseMPVView.destroy() calls MPVLib.destroy() which fully cleans
-            // up the MPV core (native context, observers, surface, etc.).
-            // This allows a fresh initialize() on the next player open —
-            // no need for the mpvInitialized flag or surface callback hacks.
-            MPVLib.removeLogObserver(observer)
-            MPVLib.removeObserver(observer)
-            MPVLib.command(arrayOf("stop"))
-            // Call destroy via reflection — BaseMPVView.destroy() exists but
-            // may not be in the public API. MPVLib.destroy() is the native
-            // cleanup.
-            try {
-                val destroyMethod = mpvViewRef?.javaClass?.getMethod("destroy")
-                destroyMethod?.invoke(mpvViewRef)
-                Log.d(TAG, "BaseMPVView.destroy() called")
-            } catch (e: Exception) {
-                // Fallback: call MPVLib.destroy() directly
-                try {
-                    val destroyMethod = MPVLib::class.java.getMethod("destroy")
-                    destroyMethod.invoke(null)
-                    Log.d(TAG, "MPVLib.destroy() called")
-                } catch (e2: Exception) {
-                    Log.w(TAG, "Could not call destroy()", e2)
-                }
-            }
-            PlayerActivity.mpvInitialized = false
-            Log.d(TAG, "Player destroyed — ready for fresh initialize on next open")
-        } catch (e: Exception) {
-            Log.w(TAG, "Error during player cleanup", e)
+        // FIX (M5): Each cleanup call wrapped in its own try/catch so one
+        // failure doesn't skip the rest. If removeLogObserver throws, we
+        // still need to call removeObserver, stop, and destroy.
+        try { MPVLib.removeLogObserver(observer) } catch (e: Exception) {
+            Log.w(TAG, "removeLogObserver failed", e)
         }
+        try { MPVLib.removeObserver(observer) } catch (e: Exception) {
+            Log.w(TAG, "removeObserver failed", e)
+        }
+        try { MPVLib.command(arrayOf("stop")) } catch (e: Exception) {
+            Log.w(TAG, "stop command failed", e)
+        }
+        // Call destroy via reflection
+        try {
+            val destroyMethod = mpvViewRef?.javaClass?.getMethod("destroy")
+            destroyMethod?.invoke(mpvViewRef)
+            Log.d(TAG, "BaseMPVView.destroy() called")
+        } catch (e: Exception) {
+            try {
+                val destroyMethod = MPVLib::class.java.getMethod("destroy")
+                destroyMethod.invoke(null)
+                Log.d(TAG, "MPVLib.destroy() called")
+            } catch (e2: Exception) {
+                Log.w(TAG, "Could not call destroy()", e2)
+            }
+        }
+        PlayerActivity.mpvInitialized = false
+        Log.d(TAG, "Player destroyed — ready for fresh initialize on next open")
     }
 }
 
@@ -2247,8 +2317,15 @@ private fun PlayerScreen(
                                 MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                             }
                             if (!shouldDelayVideoLoad) {
-                                Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
-                                MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
+                                // FIX (C3): Don't load localhost proxy URLs directly —
+                                // they may be stale after app restart.
+                                val url = viewModel.videoUrl
+                                if (url.contains("localhost:") || url.contains("127.0.0.1:")) {
+                                    Log.d("PlayerActivity", "Video URL is localhost proxy — deferring to loadVideoIfPending for re-resolution")
+                                } else {
+                                    Log.d("PlayerActivity", "Loading video (direct URL): ${url.take(80)}...")
+                                    MPVLib.command(arrayOf("loadfile", url, "replace"))
+                                }
                             }
                             view
                         }
