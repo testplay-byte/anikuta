@@ -120,29 +120,37 @@ class PlayerActivity : ComponentActivity() {
          */
         fun copyAssets(context: android.content.Context, mpvDir: java.io.File) {
             val assetManager = context.assets
-            // Copy both cacert.pem (TLS) and subfont.ttf (subtitle font rendering).
-            // Without subfont.ttf, libass reports "can't find selected font provider"
-            // and subtitles are downloaded + selected but NEVER rendered on screen.
-            val files = arrayOf("cacert.pem", "subfont.ttf")
-            for (filename in files) {
-                var ins: java.io.InputStream? = null
-                var out: java.io.OutputStream? = null
-                try {
-                    ins = assetManager.open(filename, android.content.res.AssetManager.ACCESS_STREAMING)
-                    val outFile = java.io.File(mpvDir, filename)
-                    // Skip if already exists with same size
-                    if (outFile.exists() && outFile.length() == ins.available().toLong()) {
-                        continue
-                    }
-                    out = java.io.FileOutputStream(outFile)
-                    ins.copyTo(out)
-                    Log.d("PlayerActivity", "Copied asset: $filename (${outFile.length()} bytes)")
-                } catch (e: java.io.IOException) {
-                    Log.w("PlayerActivity", "Failed to copy asset: $filename", e)
-                } finally {
-                    ins?.close()
-                    out?.close()
+            // Copy cacert.pem to the MPV config directory (for TLS).
+            // Copy subfont.ttf to a SEPARATE fonts subdirectory (for libass).
+            // They must NOT be in the same directory — if cacert.pem is in the
+            // font directory, MPV tries to load it as a font and corrupts the
+            // font provider.
+            val fontsDir = java.io.File(mpvDir, "fonts").apply { mkdirs() }
+
+            // Copy cacert.pem to mpvDir
+            try {
+                val ins = assetManager.open("cacert.pem", android.content.res.AssetManager.ACCESS_STREAMING)
+                val outFile = java.io.File(mpvDir, "cacert.pem")
+                if (!outFile.exists() || outFile.length() != ins.available().toLong()) {
+                    java.io.FileOutputStream(outFile).use { out -> ins.copyTo(out) }
+                    Log.d("PlayerActivity", "Copied asset: cacert.pem (${outFile.length()} bytes)")
                 }
+                ins.close()
+            } catch (e: java.io.IOException) {
+                Log.w("PlayerActivity", "Failed to copy cacert.pem", e)
+            }
+
+            // Copy subfont.ttf to mpvDir/fonts/ (separate directory!)
+            try {
+                val ins = assetManager.open("subfont.ttf", android.content.res.AssetManager.ACCESS_STREAMING)
+                val outFile = java.io.File(fontsDir, "subfont.ttf")
+                if (!outFile.exists() || outFile.length() != ins.available().toLong()) {
+                    java.io.FileOutputStream(outFile).use { out -> ins.copyTo(out) }
+                    Log.d("PlayerActivity", "Copied asset: subfont.ttf (${outFile.length()} bytes) to fonts/")
+                }
+                ins.close()
+            } catch (e: java.io.IOException) {
+                Log.w("PlayerActivity", "Failed to copy subfont.ttf", e)
             }
         }
 
