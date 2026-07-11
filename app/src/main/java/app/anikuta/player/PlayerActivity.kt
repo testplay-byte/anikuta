@@ -45,6 +45,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -763,7 +764,11 @@ class PlayerActivity : ComponentActivity() {
      * background video resolution.
      *
      * Populates: availableServers, currentServer, availableVideos,
-     * availableAudioVersions, currentAudioVersion, currentVideoQuality.
+     * availableAudioVersions (PER-SERVER), currentAudioVersion, currentVideoQuality.
+     *
+     * FIX: Audio versions are now filtered to the CURRENT SERVER only. Previously
+     * they were derived from ALL servers, so the dropdown showed audio versions
+     * that weren't available on the current server — causing failed switches.
      */
     private fun populateVideoSelectionState(
         parsedVideos: List<app.anikuta.ui.detail.ParsedVideo>,
@@ -778,11 +783,16 @@ class PlayerActivity : ComponentActivity() {
         // Videos: raw Video objects for the Quality sheet
         vm.setAvailableVideos(parsedVideos.map { it.video })
 
-        // Audio versions: distinct audio versions available for THIS episode
-        // (not hardcoded — derived from what the source actually provides)
-        val audioVersions = parsedVideos.map { it.audio.name }.distinct()
-        vm.setAvailableAudioVersions(audioVersions, selected.audio.name)
-        Log.d(TAG, "Populated audio versions: $audioVersions (current=${selected.audio.name})")
+        // Audio versions: ONLY from the current server (per-server accuracy)
+        // This ensures the dropdown only shows audio versions that the current
+        // server actually provides. When the user switches servers, this is
+        // re-populated by loadSelectedVideo() to match the new server.
+        val currentServerAudios = parsedVideos
+            .filter { it.server == selected.server }
+            .map { it.audio.name }
+            .distinct()
+        vm.setAvailableAudioVersions(currentServerAudios, selected.audio.name)
+        Log.d(TAG, "Populated audio versions for server '${selected.server}': $currentServerAudios (current=${selected.audio.name})")
 
         // Current quality
         vm.setCurrentVideoQuality(selected.quality ?: -1)
@@ -881,6 +891,10 @@ class PlayerActivity : ComponentActivity() {
     /**
      * Shared helper: load a parsed video into MPV + update all state.
      * Used by switchServer, switchAudioVersion, switchQuality.
+     *
+     * FIX: After switching, re-populates the available audio versions to
+     * match the NEW server's available audio versions. This ensures the
+     * audio dropdown always reflects what the current server provides.
      */
     private fun loadSelectedVideo(selected: app.anikuta.ui.detail.ParsedVideo) {
         val vm = viewModel ?: return
@@ -897,6 +911,19 @@ class PlayerActivity : ComponentActivity() {
         vm.setCurrentServer(selected.server)
         vm.setCurrentAudioVersion(selected.audio.name)
         vm.setCurrentVideoQuality(selected.quality ?: -1)
+
+        // FIX: Re-populate available audio versions for the NEW server.
+        // When the user switches to a different server, the audio versions
+        // available may change (some servers have SUB+DUB, others only SUB).
+        // This keeps the dropdown accurate per-server.
+        if (currentParsedVideos.isNotEmpty()) {
+            val newServerAudios = currentParsedVideos
+                .filter { it.server == selected.server }
+                .map { it.audio.name }
+                .distinct()
+            vm.setAvailableAudioVersions(newServerAudios, selected.audio.name)
+            Log.d(TAG, "Updated audio versions for server '${selected.server}': $newServerAudios (current=${selected.audio.name})")
+        }
 
         // Show brief loading indicator
         vm.setSwitchingEpisode(true)
@@ -1337,6 +1364,13 @@ private fun PlayerScreen(
     // the list later appeared at a non-zero position. Now we key on the
     // episode list becoming non-empty and use a one-time guard so it only
     // fires on initial load (NOT when the user switches episodes later).
+    //
+    // FIX 2: The fade-out gradient at the top of the LazyColumn was always
+    // visible (opaque), obscuring the top of the episode details even when
+    // scrolled to the very top. Now the gradient only appears when the user
+    // scrolls down past the top (YouTube-style: the shadow only appears when
+    // content is scrolling under it). This ensures the episode number badge
+    // and title are fully visible on initial load.
     val episodeListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val hasScrolledToTop = remember { mutableStateOf(false) }
     LaunchedEffect(episodeList.isNotEmpty()) {
@@ -1347,6 +1381,20 @@ private fun PlayerScreen(
             Log.d("PlayerActivity", "Episode list scrolled to very top (first load)")
         }
     }
+    // Track whether the list is at the very top (for gradient visibility)
+    val isListAtTop by remember {
+        derivedStateOf {
+            episodeListState.firstVisibleItemIndex == 0 &&
+                episodeListState.firstVisibleItemScrollOffset == 0
+        }
+    }
+    // Animate gradient alpha: 0 when at top (episode details fully visible),
+    // 1 when scrolled (episodes fade out into the gradient)
+    val gradientAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isListAtTop) 0f else 1f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 200),
+        label = "gradientAlpha",
+    )
 
     // ---- Sheet state (Phase 3.7) ----
     var showQualitySheet by remember { mutableStateOf(false) }
@@ -1707,21 +1755,23 @@ private fun PlayerScreen(
                     }
                     } // end LazyColumn
 
-                    // Fade-out gradient overlay — episodes fade out before reaching the video.
-                    // Goes from themed background (opaque) at top → transparent, over ~20dp.
-                    // This creates the "disappear zone" the user requested.
-                    androidx.compose.foundation.layout.Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(20.dp)
-                            .align(Alignment.TopCenter)
-                            .background(
-                                androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    0f to MaterialTheme.colorScheme.background,
-                                    1f to MaterialTheme.colorScheme.background.copy(alpha = 0f),
+                    // Fade-out gradient overlay — only visible when scrolled (YouTube-style).
+                    // Alpha is 0 when at top (episode details fully visible), 1 when scrolled.
+                    // Uses gradientAlpha from the animated state above.
+                    if (gradientAlpha > 0f) {
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(20.dp)
+                                .align(Alignment.TopCenter)
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        0f to MaterialTheme.colorScheme.background.copy(alpha = gradientAlpha),
+                                        1f to MaterialTheme.colorScheme.background.copy(alpha = 0f),
+                                    ),
                                 ),
-                            ),
-                    )
+                        )
+                    }
                 } // end Box (LazyColumn wrapper)
             }
         }

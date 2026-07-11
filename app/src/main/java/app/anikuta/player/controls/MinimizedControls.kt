@@ -1,19 +1,21 @@
 package app.anikuta.player.controls
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,12 +25,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,30 +38,41 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anikuta.player.PlayerLoadingState
 import app.anikuta.player.PlayerViewModel
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
- * Phase 1.4 — Minimized video player area with controls overlay.
+ * Minimized video player controls overlay — redesigned for a clean, minimal UI.
  *
- * Layout:
- *  - Video surface (aspect-ratio adaptive, fills width)
- *  - Controls overlay (tap to show/hide, auto-hide):
- *    - Center: rewind 10s / play-pause / forward 10s
- *    - Bottom: seekbar + timestamps
- *    - Bottom-left: quality button + subtitle button
- *    - Bottom-right: maximize (fullscreen) button
+ * Layout (when controls are visible):
+ *  - Top-left: current time / total duration
+ *  - Top-right: subtitle button + quality button (subtitle to the LEFT of quality)
+ *  - Center: transparent play/pause icon (no solid background circle)
+ *  - Bottom: minimal seekbar (left, fills width) + maximize button (right)
  *
- * The video surface itself is rendered by PlayerActivity via AndroidView.
- * This composable just draws the controls ON TOP of the video.
+ * Gestures:
+ *  - Single tap: toggle controls visibility
+ *  - Double-tap left third: skip -10s (with animation)
+ *  - Double-tap right third: skip +10s (with animation)
+ *  - Double-tap center third: toggle play/pause (with animation, NO controls shown)
+ *
+ * The double-tap animations show a brief icon overlay (pause/play/rewind/forward)
+ * that fades in and out — the controls themselves are NOT shown for double-taps.
  */
 @Composable
 fun MinimizedControls(
@@ -81,18 +93,65 @@ fun MinimizedControls(
     val loadingState by viewModel.loadingState.collectAsState()
     val isSwitchingEpisode by viewModel.isSwitchingEpisode.collectAsState()
 
+    // Double-tap animation state: which animation to show + its current alpha
+    var doubleTapAnim by remember { mutableStateOf<DoubleTapFeedback?>(null) }
+    val animAlpha = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) { viewModel.toggleControls() },
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        // Single tap: toggle controls
+                        viewModel.toggleControls()
+                    },
+                    onDoubleTap = { offset ->
+                        // Double tap: determine zone (left/center/right thirds)
+                        val w = size.width.toFloat()
+                        val zone = when {
+                            offset.x < w / 3 -> DoubleTapZone.LEFT
+                            offset.x > w * 2f / 3f -> DoubleTapZone.RIGHT
+                            else -> DoubleTapZone.CENTER
+                        }
+                        when (zone) {
+                            DoubleTapZone.LEFT -> {
+                                onSeekRelative(-10)
+                                scope.launch {
+                                    doubleTapAnim = DoubleTapFeedback.Rewind
+                                    animAlpha.snapTo(0f)
+                                    animAlpha.animateTo(1f, tween(150))
+                                    animAlpha.animateTo(0f, tween(500))
+                                    doubleTapAnim = null
+                                }
+                            }
+                            DoubleTapZone.RIGHT -> {
+                                onSeekRelative(10)
+                                scope.launch {
+                                    doubleTapAnim = DoubleTapFeedback.Forward
+                                    animAlpha.snapTo(0f)
+                                    animAlpha.animateTo(1f, tween(150))
+                                    animAlpha.animateTo(0f, tween(500))
+                                    doubleTapAnim = null
+                                }
+                            }
+                            DoubleTapZone.CENTER -> {
+                                onTogglePlay()
+                                scope.launch {
+                                    doubleTapAnim = if (isPlaying) DoubleTapFeedback.Pause else DoubleTapFeedback.Play
+                                    animAlpha.snapTo(0f)
+                                    animAlpha.animateTo(1f, tween(150))
+                                    animAlpha.animateTo(0f, tween(500))
+                                    doubleTapAnim = null
+                                }
+                            }
+                        }
+                    },
+                )
+            },
     ) {
-        // Gradient overlay for control readability — ONLY visible when controls
-        // are shown. Previously this was always-on, creating an ugly permanent
-        // dark shadow at the top (0.3 alpha) and bottom (0.5 alpha) of the video
-        // even when no controls were displayed.
+        // Gradient overlay for control readability — only when controls are visible
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),
@@ -134,7 +193,54 @@ fun MinimizedControls(
             }
         }
 
-        // Controls (show/hide on tap)
+        // Double-tap feedback animation overlay (always visible briefly, no controls)
+        doubleTapAnim?.let { feedback ->
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                val icon = when (feedback) {
+                    DoubleTapFeedback.Pause -> Icons.Default.Pause
+                    DoubleTapFeedback.Play -> Icons.Default.PlayArrow
+                    DoubleTapFeedback.Rewind -> Icons.Default.FastRewind
+                    DoubleTapFeedback.Forward -> Icons.Default.FastForward
+                }
+                val label = when (feedback) {
+                    DoubleTapFeedback.Rewind -> "10s"
+                    DoubleTapFeedback.Forward -> "10s"
+                    else -> null
+                }
+                Box(
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // Semi-transparent circle background
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.4f * animAlpha.value),
+                        modifier = Modifier.size(72.dp),
+                    ) {}
+                    // Icon
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = animAlpha.value),
+                        modifier = Modifier.size(40.dp),
+                    )
+                    // Label (for skip animations)
+                    if (label != null) {
+                        Text(
+                            text = label,
+                            color = Color.White.copy(alpha = animAlpha.value),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.offset(y = 28.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        // Controls (show/hide on single tap)
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),
@@ -142,189 +248,200 @@ fun MinimizedControls(
             modifier = Modifier.fillMaxSize(),
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Center controls: rewind / play-pause / forward
+                // ---- Top-left: current time / total duration ----
+                Text(
+                    text = "${formatTime(position)} / ${formatTime(duration)}",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 12.dp, top = 8.dp),
+                )
+
+                // ---- Top-right: subtitle (left) + quality (right) ----
                 Row(
                     modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                        .align(Alignment.TopEnd)
+                        .padding(end = 8.dp, top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    CenterIconButton(
-                        icon = Icons.Default.Replay10,
-                        contentDescription = "Rewind 10 seconds",
-                        onClick = { onSeekRelative(-10) },
+                    TransparentIconButton(
+                        icon = Icons.Default.Subtitles,
+                        contentDescription = "Subtitles",
+                        onClick = onSubtitleClick,
                     )
-                    Box(contentAlignment = Alignment.Center) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.White,
-                            modifier = Modifier.size(48.dp),
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                IconButton(onClick = onTogglePlay) {
-                                    Icon(
-                                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = if (isPlaying) "Pause" else "Play",
-                                        tint = Color.Black,
-                                        modifier = Modifier.size(28.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    CenterIconButton(
-                        icon = Icons.Default.Forward10,
-                        contentDescription = "Forward 10 seconds",
-                        onClick = { onSeekRelative(10) },
+                    TransparentIconButton(
+                        icon = Icons.Default.HighQuality,
+                        contentDescription = "Quality",
+                        onClick = onQualityClick,
                     )
                 }
 
-                // Bottom controls: seekbar + timestamps + quality/sub/maximize
-                Column(
+                // ---- Center: transparent play/pause (visual only, no tap handler) ----
+                // Single-tap anywhere toggles controls. Double-tap center toggles play/pause.
+                // This icon is purely visual — it doesn't consume taps.
+                Box(
+                    modifier = Modifier.align(Alignment.Center),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.size(56.dp),
+                    )
+                }
+
+                // ---- Bottom: seekbar (left, fills width) + maximize (right) ----
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .padding(start = 8.dp, end = 8.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Seekbar
-                    MinimizedSeekbar(
+                    // Minimal seekbar — takes all available space
+                    MinimalSeekbar(
                         position = position,
                         duration = duration,
                         onSeekTo = onSeekTo,
+                        modifier = Modifier.weight(1f),
                     )
-                    Spacer(modifier = Modifier.size(4.dp))
-                    // Bottom row: left (quality + subtitle) | right (maximize)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            SmallIconButton(
-                                icon = Icons.Default.HighQuality,
-                                contentDescription = "Quality",
-                                onClick = onQualityClick,
-                            )
-                            SmallIconButton(
-                                icon = Icons.Default.Subtitles,
-                                contentDescription = "Subtitles",
-                                onClick = onSubtitleClick,
-                            )
-                        }
-                        SmallIconButton(
-                            icon = Icons.Default.Fullscreen,
-                            contentDescription = "Fullscreen",
-                            onClick = onMaximize,
-                        )
-                    }
+                    // Spacing between seekbar and maximize
+                    Box(modifier = Modifier.width(8.dp))
+                    // Maximize button
+                    TransparentIconButton(
+                        icon = Icons.Default.Fullscreen,
+                        contentDescription = "Fullscreen",
+                        onClick = onMaximize,
+                    )
                 }
             }
         }
     }
 }
 
-@Composable
-private fun CenterIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = CircleShape,
-        color = Color.Black.copy(alpha = 0.4f),
-        modifier = Modifier.size(36.dp),
-        onClick = onClick,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                icon,
-                contentDescription = contentDescription,
-                tint = Color.White,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
+// ---- Double-tap feedback types ----
 
-@Composable
-private fun SmallIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color.White.copy(alpha = 0.15f),
-        modifier = Modifier.size(32.dp),
-        onClick = onClick,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                icon,
-                contentDescription = contentDescription,
-                tint = Color.White,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
+private enum class DoubleTapZone { LEFT, CENTER, RIGHT }
 
+private enum class DoubleTapFeedback { Pause, Play, Rewind, Forward }
+
+// ---- Minimal seekbar ----
+
+/**
+ * A minimal, custom seekbar with a thin track and small thumb.
+ *
+ * Features:
+ *  - Thin 3dp track (much less prominent than the M3 Slider)
+ *  - Small 10dp thumb that appears during drag
+ *  - Drag-to-seek with live position update
+ *  - Touch target is 24dp for comfortable interaction
+ *  - Designed to support buffering indicator in the future (placeholder)
+ */
 @Composable
-private fun MinimizedSeekbar(
+private fun MinimalSeekbar(
     position: Int,
     duration: Int,
     onSeekTo: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    // FIX: Replaced the non-interactive progress bar with a real M3 Slider
-    // that the user can drag to seek. Uses a local "scrubbing" state so the
-    // thumb follows the user's finger during drag, then commits the seek
-    // when the user releases (onValueChangeFinished).
     var scrubPosition by remember { mutableStateOf<Float?>(null) }
+    var trackWidthPx by remember { mutableStateOf(0f) }
     val displayPosition = scrubPosition ?: position.toFloat().coerceAtLeast(0f)
     val maxRange = duration.toFloat().coerceAtLeast(1f)
+    val progress = (displayPosition / maxRange).coerceIn(0f, 1f)
+    val isDragging = scrubPosition != null
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        androidx.compose.material3.Slider(
-            value = displayPosition.coerceIn(0f, maxRange),
-            onValueChange = { newValue ->
-                scrubPosition = newValue
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(24.dp) // comfortable touch target
+            .onSizeChanged { trackWidthPx = it.width.toFloat() }
+            .pointerInput(maxRange) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        if (trackWidthPx > 0) {
+                            val ratio = (offset.x / trackWidthPx).coerceIn(0f, 1f)
+                            scrubPosition = ratio * maxRange
+                        }
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        if (trackWidthPx > 0) {
+                            val ratio = (change.position.x / trackWidthPx).coerceIn(0f, 1f)
+                            scrubPosition = ratio * maxRange
+                            change.consume()
+                        }
+                    },
+                    onDragEnd = {
+                        scrubPosition?.let { onSeekTo(it.roundToInt()) }
+                        scrubPosition = null
+                    },
+                    onDragCancel = {
+                        scrubPosition = null
+                    },
+                )
             },
-            onValueChangeFinished = {
-                scrubPosition?.let { onSeekTo(it.toInt()) }
-                scrubPosition = null
-            },
-            valueRange = 0f..maxRange,
-            modifier = Modifier.fillMaxWidth(),
-            colors = androidx.compose.material3.SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = Color.White.copy(alpha = 0.3f),
-            ),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        // Inactive track (background) — thin 3dp line
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(Color.White.copy(alpha = 0.3f)),
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = formatTime(displayPosition.toInt()),
-                color = Color.White,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                text = formatTime(duration),
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
+        // Active track (progress) — thin 3dp line in primary color
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(progress)
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        // Thumb — only visible while dragging (minimal aesthetic)
+        if (isDragging && trackWidthPx > 0) {
+            val thumbOffsetPx = trackWidthPx * progress
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset((thumbOffsetPx - 6.dp.toPx()).roundToInt(), 0) }
+                    .size(12.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
             )
         }
+    }
+}
+
+// ---- Transparent icon button ----
+
+/**
+ * A minimal icon button with no background — just the icon.
+ * Slightly larger touch target than the icon itself for accessibility.
+ */
+@Composable
+private fun TransparentIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .pointerInput(Unit) {
+                detectTapGestures { onClick() }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 
