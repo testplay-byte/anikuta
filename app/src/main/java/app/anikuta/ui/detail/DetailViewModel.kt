@@ -684,7 +684,12 @@ class DetailViewModel(
 
     /**
      * Compare two ServerSection lists for equality (same servers, audio versions,
-     * and video URLs). Used by backgroundResolveVideos to avoid unnecessary UI updates.
+     * and video titles + qualities). Used by backgroundResolveVideos to avoid
+     * unnecessary UI updates.
+     *
+     * FIX: Previously compared videoUrl which contains localhost:PORT that changes
+     * every resolution. Now compares by videoTitle + resolution (which are stable)
+     * so the picker doesn't re-animate when the data is effectively the same.
      */
     private fun compareServerSections(a: List<ServerSection>, b: List<ServerSection>): Boolean {
         if (a.size != b.size) return false
@@ -699,7 +704,10 @@ class DetailViewModel(
                 if (aa.audio != ab.audio) return false
                 if (aa.videos.size != ab.videos.size) return false
                 for (k in aa.videos.indices) {
-                    if (aa.videos[k].videoUrl != ab.videos[k].videoUrl) return false
+                    // Compare by videoTitle + resolution (stable) instead of
+                    // videoUrl (contains localhost:PORT which changes each time)
+                    if (aa.videos[k].videoTitle != ab.videos[k].videoTitle) return false
+                    if (aa.videos[k].resolution != ab.videos[k].resolution) return false
                 }
             }
         }

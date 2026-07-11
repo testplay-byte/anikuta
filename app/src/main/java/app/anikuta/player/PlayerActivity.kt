@@ -249,6 +249,19 @@ class PlayerActivity : ComponentActivity() {
                         val currentIndex = episodes.indexOfFirst { it.url == episodeUrl }.coerceAtLeast(0)
                         viewModel?.setEpisodeList(episodes, currentIndex)
                         viewModel?.setAvailableServers(listOf(sourceName), sourceName)
+                        // FIX: Immediately set the current server + audio version from
+                        // Intent extras so the UI shows them without waiting for the
+                        // background video resolution to complete.
+                        if (currentVideoServer.isNotBlank()) {
+                            viewModel?.setCurrentServer(currentVideoServer)
+                        }
+                        if (currentVideoAudio.isNotBlank()) {
+                            viewModel?.setCurrentAudioVersion(currentVideoAudio)
+                        }
+                        if (currentVideoQuality > 0) {
+                            viewModel?.setCurrentVideoQuality(currentVideoQuality)
+                        }
+                        Log.d(TAG, "Initial state from Intent: server='$currentVideoServer' audio='$currentVideoAudio' quality=$currentVideoQuality")
                         // Parts 2+3+4: Resolve videos in the background to populate
                         // the server/audio/quality dropdowns + sheets on initial load.
                         // This does NOT reload the video — the one from the Intent is
@@ -1201,8 +1214,29 @@ class PlayerActivity : ComponentActivity() {
                 currentEpisodeVideos = allVideos
                 currentParsedVideos = parsedVideos
 
-                // Find the currently-playing video in the parsed list to set "current"
-                val currentParsed = parsedVideos.find { it.video.videoUrl == currentVideoUrl }
+                // Find the currently-playing video in the parsed list.
+                // FIX: Previously matched by videoUrl, but URLs contain localhost:PORT
+                // which changes every resolution. Now matches by server + audio + quality
+                // (from Intent extras) to find the correct video without overwriting
+                // the user's audio version selection.
+                val intentServer = currentVideoServer
+                val intentAudio = app.anikuta.ui.detail.AudioVersion.fromToken(currentVideoAudio)
+                val intentQuality = currentVideoQuality
+
+                // Try exact match first: same server + same audio + same quality
+                var currentParsed = parsedVideos.find {
+                    it.server == intentServer && it.audio == intentAudio && it.quality == intentQuality
+                }
+                // Fallback: same server + same audio (any quality)
+                    ?: parsedVideos.find { it.server == intentServer && it.audio == intentAudio }
+                // Fallback: same server (prefer same audio, then first)
+                    ?: parsedVideos.filter { it.server == intentServer }
+                        .sortedByDescending<app.anikuta.ui.detail.ParsedVideo> { it.audio == intentAudio }
+                        .firstOrNull()
+                // Last resort: match by videoTitle (the original URL might have the
+                // same underlying stream even if the proxy URL differs)
+                    ?: parsedVideos.find { it.video.videoUrl == currentVideoUrl }
+
                 if (currentParsed != null) {
                     // Update Activity state from the parsed video (more accurate than Intent extras)
                     currentVideoServer = currentParsed.server
@@ -1223,12 +1257,22 @@ class PlayerActivity : ComponentActivity() {
                         Log.d(TAG, "Background resolve: loading $subCount sub + $audioCount audio tracks")
                         loadExternalTracks()
                     }
+                    Log.d(TAG, "Background resolve: matched current video by server+audio+quality: ${currentParsed.server} ${currentParsed.audio} ${currentParsed.quality}p")
                 } else {
-                    // The playing video wasn't in the resolved list (maybe different URL).
+                    // The playing video wasn't in the resolved list at all.
                     // Use the Intent extras as the "current" and populate the rest.
+                    // FIX: Don't call selectBestVideo (which would overwrite the user's
+                    // audio selection). Instead, create a synthetic ParsedVideo from
+                    // the Intent extras and use it as the "current".
+                    Log.w(TAG, "Background resolve: current video not found in resolved list — keeping Intent extras as current")
                     val selected = selectBestVideo(parsedVideos)
                     currentVideo = selected.video
+                    // Populate state but use the INTENT audio version, not selected
                     populateVideoSelectionState(parsedVideos, selected)
+                    // Restore the correct current values from Intent
+                    vm.setCurrentServer(intentServer)
+                    vm.setCurrentAudioVersion(intentAudio.name)
+                    vm.setCurrentVideoQuality(intentQuality)
                     // Load tracks for the selected video too
                     val subCount = selected.video.subtitleTracks.size
                     val audioCount = selected.video.audioTracks.size
