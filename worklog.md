@@ -872,3 +872,66 @@ Stage Summary:
 - Subtitle settings have font family + color pickers, taller sheet
 - Closing subtitle settings also closes the subtitle track sheet
 - Controls auto-hide after 5 seconds in minimized view (smooth fade)
+
+---
+
+## Session 37 (Subtitle rendering fix — root cause analysis + 3 fixes)
+
+Task ID: PLAYER-SUBTITLE-RENDER-FIX
+Agent: main (Z.ai Code)
+
+### Root Cause Analysis (via aniyomi reference comparison)
+
+**PRIMARY BLOCKER**: After `sub-add ... auto`, we never explicitly set `sid` to
+select a subtitle track. aniyomi has `onFinishLoadingTracks()` that auto-selects
+the first/preferred subtitle. Without it, `sid` stays "no" and no subtitle renders
+even though the track appears in the subtitle sheet list.
+
+**SECONDARY BLOCKER**: On initial load, `currentVideo` was created with only
+`videoUrl` + `videoTitle` (no `subtitleTracks`). The real Video with tracks is
+resolved later in `resolveVideosInBackground()` but never replaced `currentVideo` —
+so `loadExternalTracks()` found no tracks to add on the first play. Subtitles could
+only appear after manually switching server/audio/quality.
+
+**MINOR**: `sid` setter used `setPropertyInt(-1)` which some MPV builds don't
+accept as "off". aniyomi uses `setPropertyString("sid", "no")`.
+
+### Fix 1 — Auto-Select Subtitle Track
+- Added `autoSelectSubtitleTrack()` helper called from both
+  `handlePropertyString("track-list")` overloads
+- When `sid <= 0` and real subtitle tracks exist (id > 0), picks the first one
+  and sets `view.sid = track.id`
+- Mirrors aniyomi's `onFinishLoadingTracks()` at `PlayerViewModel.kt:434-439`
+- User can still turn off via SubtitleTracksSheet ("Off" sets sid=-1)
+- Logging: "Auto-selected subtitle track: id=X name='Y'"
+
+### Fix 2 — Populate currentVideo with subtitleTracks
+- `resolveVideosInBackground()` now sets `currentVideo = currentParsed.video`
+  (which carries `subtitleTracks` from the extension)
+- After setting `currentVideo`, calls `loadExternalTracks()` if the video has
+  subtitle or audio tracks — issues `sub-add`/`audio-add` commands to MPV
+- The initial `loadExternalTracks()` call (on FILE_LOADED) found no tracks
+  because `currentVideo` was empty; now it runs again after background
+  resolution completes with the real Video object
+- Works for both the "found" and "fallback" code paths
+
+### Fix 3 — sid setter (aniyomi pattern)
+- `AnikutaMPVView.sid` setter: when value <= 0, uses
+  `setPropertyString("sid", "no")` instead of `setPropertyInt("sid", -1)`
+- Same fix applied to `aid` setter
+- Mirrors aniyomi's `TrackDelegate` at `AniyomiMPVView.kt:101-107`
+- Ensures "Off" button in SubtitleTracksSheet works reliably
+
+### Fix 4 — Subtitle Settings Sheet Height
+- Reduced from 500dp to 400dp (500dp was too tall per user feedback)
+- Panel still scrolls internally if content exceeds 400dp
+
+### Build
+- Build #231 (618437d): SUCCESS
+
+Stage Summary:
+- Subtitles should now render on the video player (auto-selected after loading)
+- External subtitle tracks from extensions are loaded on initial play (not just
+  after switching server/audio/quality)
+- "Off" button works reliably (uses "no" instead of -1)
+- Subtitle settings sheet is shorter (400dp vs 500dp)
