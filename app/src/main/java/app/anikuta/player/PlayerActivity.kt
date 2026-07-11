@@ -1698,29 +1698,40 @@ private fun PlayerScreen(
                     ) {
                         AndroidView(
                             factory = { ctx ->
-                                val view = android.view.LayoutInflater
-                                    .from(ctx)
-                                    .inflate(R.layout.mpv_view, null) as AnikutaMPVView
-                                mpvView = view
-                                onViewCreated(view)
-                                val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
-                                view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "warn")
-                                PlayerActivity.mpvInitialized = true
-                                Log.d("PlayerActivity", "MPV initialized")
-                                MPVLib.addLogObserver(observer)
-                                MPVLib.addObserver(observer)
-                                if (videoHeaders.isNotBlank()) {
-                                    MPVLib.setOptionString("http-header-fields", videoHeaders)
+                                // FIX: Reuse existing MPV view if already created.
+                                // Previously this ALWAYS created a new view and called
+                                // view.initialize() — but MPV can only be initialized
+                                // once per process. When switching from FULLSCREEN →
+                                // MINIMIZED, this would crash with a native SIGABRT.
+                                // Now checks mpvView first, same as the FULLSCREEN branch.
+                                val existingView = mpvView
+                                if (existingView != null) {
+                                    existingView
                                 } else {
-                                    MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+                                    val view = android.view.LayoutInflater
+                                        .from(ctx)
+                                        .inflate(R.layout.mpv_view, null) as AnikutaMPVView
+                                    mpvView = view
+                                    onViewCreated(view)
+                                    val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
+                                    view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "warn")
+                                    PlayerActivity.mpvInitialized = true
+                                    Log.d("PlayerActivity", "MPV initialized")
+                                    MPVLib.addLogObserver(observer)
+                                    MPVLib.addObserver(observer)
+                                    if (videoHeaders.isNotBlank()) {
+                                        MPVLib.setOptionString("http-header-fields", videoHeaders)
+                                    } else {
+                                        MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+                                    }
+                                    if (!shouldDelayVideoLoad) {
+                                        Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
+                                        MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
+                                    } else {
+                                        Log.d("PlayerActivity", "Video load delayed (prompt showing)")
+                                    }
+                                    view
                                 }
-                                if (!shouldDelayVideoLoad) {
-                                    Log.d("PlayerActivity", "Loading video: ${viewModel.videoUrl}")
-                                    MPVLib.command(arrayOf("loadfile", viewModel.videoUrl, "replace"))
-                                } else {
-                                    Log.d("PlayerActivity", "Video load delayed (prompt showing)")
-                                }
-                                view
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -2109,9 +2120,19 @@ private fun PlayerScreen(
 
     // ---- Selection sheets ----
     if (showQualitySheet) {
+        // Read display mode preference + current server/audio from ViewModel
+        val qualityDisplayMode = remember {
+            try { uy.kohesive.injekt.Injekt.get<PlayerPreferences>().qualitySheetDisplayMode().get() }
+            catch (e: Exception) { "current" }
+        }
+        val currentServerForQuality by viewModel.currentServer.collectAsState()
+        val currentAudioForQuality by viewModel.currentAudioVersion.collectAsState()
         app.anikuta.player.controls.sheets.QualitySheet(
             videos = availableVideos,
             currentVideoUrl = currentVideoUrl,
+            currentVideoServer = currentServerForQuality,
+            currentAudioVersion = currentAudioForQuality,
+            displayMode = qualityDisplayMode,
             onSelect = { video ->
                 Log.d("PlayerActivity", "Quality selected: ${video.videoTitle}")
                 showQualitySheet = false

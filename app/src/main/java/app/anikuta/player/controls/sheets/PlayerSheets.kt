@@ -48,44 +48,132 @@ import app.anikuta.source.api.model.Video
  * Quality selection bottom sheet.
  * Lists available video qualities for the current episode.
  * Tap to switch — the Activity reloads the video at the new quality.
+ *
+ * Two display modes (controlled by qualitySheetDisplayMode preference):
+ * - "current": shows only qualities for the current server + audio version
+ * - "all": shows all qualities from all servers/audio versions, organized
+ *   into sections by server → audio version
+ *
+ * The current video is highlighted with a checkmark. Selection is based on
+ * matching both videoUrl AND videoTitle to handle cases where multiple videos
+ * share the same URL.
  */
 @Composable
 fun QualitySheet(
     videos: List<Video>,
     currentVideoUrl: String,
+    currentVideoServer: String = "",
+    currentAudioVersion: String = "",
+    displayMode: String = "current",
     onSelect: (Video) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // FIX: Parse each video with VideoTitleParser to show clean quality labels
-    // (e.g. "1080p") instead of raw titles like "VidPlay-1 - SUB - 1080p".
-    //
-    // FIX (crash): Previously used key = { it.videoUrl } which crashed with
-    // "Key was already used" when multiple videos share the same URL (e.g.
-    // different audio versions on the same server might point to the same m3u8).
-    // Now uses the index as the key to guarantee uniqueness.
+    // Parse all videos for filtering and display
+    val allParsed = remember(videos) {
+        videos.map { app.anikuta.ui.detail.VideoTitleParser.parse(it) }
+    }
+
     PlayerSheet(title = "Quality", onDismiss = onDismiss) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 8.dp),
         ) {
-            itemsIndexed(videos, key = { index, _ -> "quality_$index" }) { index, video ->
-                val parsed = app.anikuta.ui.detail.VideoTitleParser.parse(video)
-                val qualityLabel = parsed.quality?.let { "${it}p" } ?: "Unknown"
-                val subtitle = buildString {
-                    append(parsed.server)
-                    append(" • ")
-                    append(parsed.audio.label)
+            if (displayMode == "all") {
+                // ---- "All" mode: organize by server → audio version sections ----
+                val byServer = allParsed.groupBy { it.server }
+                byServer.entries.sortedBy { it.key }.forEach { (serverName, serverVideos) ->
+                    // Server section header
+                    item(key = "server_header_$serverName") {
+                        Text(
+                            text = serverName,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                        )
+                    }
+                    // Group by audio version within this server
+                    val byAudio = serverVideos.groupBy { it.audio }
+                    byAudio.entries.sortedBy { it.key.ordinal }.forEach { (audio, audioVideos) ->
+                        // Audio version subheader
+                        item(key = "audio_header_${serverName}_${audio.name}") {
+                            Text(
+                                text = audio.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+                        // Quality options (sorted by quality descending)
+                        audioVideos.sortedByDescending { it.quality ?: 0 }.forEachIndexed { index, parsed ->
+                            item(key = "quality_${serverName}_${audio.name}_$index") {
+                                val qualityLabel = parsed.quality?.let { "${it}p" } ?: "Unknown"
+                                val isSelected = parsed.video.videoUrl == currentVideoUrl &&
+                                    parsed.video.videoTitle == allParsed
+                                        .firstOrNull { it.video.videoUrl == currentVideoUrl }?.video?.videoTitle
+                                SheetOption(
+                                    title = qualityLabel,
+                                    selected = isSelected,
+                                    onClick = { onSelect(parsed.video); onDismiss() },
+                                )
+                            }
+                        }
+                    }
                 }
-                SheetOption(
-                    title = qualityLabel,
-                    subtitle = subtitle,
-                    selected = video.videoUrl == currentVideoUrl &&
-                        video.videoTitle == videos.firstOrNull { it.videoUrl == currentVideoUrl }?.videoTitle,
-                    onClick = { onSelect(video); onDismiss() },
-                )
+            } else {
+                // ---- "Current" mode: only show qualities for current server + audio ----
+                val filtered = allParsed.filter {
+                    (currentVideoServer.isBlank() || it.server == currentVideoServer) &&
+                    (currentAudioVersion.isBlank() || it.audio.name == currentAudioVersion)
+                }
+                if (filtered.isEmpty()) {
+                    // Fallback: show all if no matches (shouldn't happen normally)
+                    itemsIndexed(allParsed, key = { index, _ -> "quality_all_$index" }) { index, parsed ->
+                        QualityOption(
+                            parsed = parsed,
+                            allParsed = allParsed,
+                            currentVideoUrl = currentVideoUrl,
+                            onSelect = { onSelect(parsed.video); onDismiss() },
+                        )
+                    }
+                } else {
+                    itemsIndexed(filtered, key = { index, _ -> "quality_current_$index" }) { index, parsed ->
+                        QualityOption(
+                            parsed = parsed,
+                            allParsed = allParsed,
+                            currentVideoUrl = currentVideoUrl,
+                            onSelect = { onSelect(parsed.video); onDismiss() },
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun QualityOption(
+    parsed: app.anikuta.ui.detail.ParsedVideo,
+    allParsed: List<app.anikuta.ui.detail.ParsedVideo>,
+    currentVideoUrl: String,
+    onSelect: () -> Unit,
+) {
+    val qualityLabel = parsed.quality?.let { "${it}p" } ?: "Unknown"
+    val subtitle = buildString {
+        append(parsed.server)
+        append(" • ")
+        append(parsed.audio.label)
+    }
+    val isSelected = parsed.video.videoUrl == currentVideoUrl &&
+        parsed.video.videoTitle == allParsed
+            .firstOrNull { it.video.videoUrl == currentVideoUrl }?.video?.videoTitle
+    SheetOption(
+        title = qualityLabel,
+        subtitle = subtitle,
+        selected = isSelected,
+        onClick = onSelect,
+    )
 }
 
 // ═══════════════════════════════════════════════════════════════════

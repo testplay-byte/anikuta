@@ -191,6 +191,14 @@ class PlayerPreferences(
     fun showPlayerTopBar(): Preference<Boolean> =
         preferenceStore.getBoolean("pref_show_player_top_bar", true)
 
+    /**
+     * Quality sheet display mode:
+     * - "current" = show only qualities for the current server + audio version (default)
+     * - "all" = show all qualities from all servers and audio versions, organized into sections
+     */
+    fun qualitySheetDisplayMode(): Preference<String> =
+        preferenceStore.getString("pref_quality_sheet_display_mode", "current")
+
     /** Subtitle font family. Default: "Sans Serif". */
     fun subtitleFont(): Preference<String> =
         preferenceStore.getString("pref_subtitle_font", "Sans Serif")

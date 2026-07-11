@@ -44,6 +44,7 @@ fun PlayerSettingsScreen(
     // which is read once and never updates — causing the toggle to appear "stuck"
     // until another control triggered a recomposition.
     val showTopBar by prefs.showPlayerTopBar().stateIn(scope).collectAsState()
+    val qualityDisplayMode by prefs.qualitySheetDisplayMode().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Player", onBack = onBack) {
         LazyColumn(
@@ -169,6 +170,33 @@ fun PlayerSettingsScreen(
                             prefs.skipButtonDuration().set(if (it) 85 else 0)
                         },
                     )
+                    HorizontalDivider()
+                    // Quality sheet display mode
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(
+                            "Quality sheet display",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            "Choose what qualities to show in the quality picker",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(
+                                selected = qualityDisplayMode == "current",
+                                onClick = { prefs.qualitySheetDisplayMode().set("current") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            ) { Text("Current only") }
+                            SegmentedButton(
+                                selected = qualityDisplayMode == "all",
+                                onClick = { prefs.qualitySheetDisplayMode().set("all") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            ) { Text("Show all") }
+                        }
+                    }
                 }
             }
         }
