@@ -353,8 +353,13 @@ internal fun PlayerScreen(
                                     onViewCreated(view)
                                     val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
                                     // Copy cacert.pem from assets to mpv dir for TLS verification
+                                    // DIAGNOSTIC: Use "v" (verbose) log level so MPV forwards ALL log
+                                    // messages to the LogObserver — including demuxer, stream, and sub
+                                    // module messages needed for subtitle debugging.
+                                    // Normally this would be "warn", but we need verbose to diagnose
+                                    // why subtitles aren't downloading/rendering.
                                     PlayerActivity.copyAssets(ctx, mpvDir)
-                                    view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "warn")
+                                    view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "v")
                                     Log.d("PlayerActivity", "MPV initialized")
                                     MPVLib.addLogObserver(observer)
                                     MPVLib.addObserver(observer)
