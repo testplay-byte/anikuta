@@ -538,7 +538,10 @@ class PlayerActivity : ComponentActivity() {
                     val (subTracks, audioTracks) = view.loadTracks()
                     viewModel?.setSubtitleTracks(subTracks)
                     viewModel?.setAudioTracks(audioTracks)
-                    viewModel?.setCurrentSubtitleId(view.sid)
+                    // Auto-select the first subtitle track if none is selected.
+                    // This mirrors aniyomi's onFinishLoadingTracks() — without it,
+                    // sub-add with "auto" flag leaves sid=no and no subtitle renders.
+                    autoSelectSubtitleTrack(view, subTracks)
                     viewModel?.setCurrentAudioId(view.aid)
                     Log.d(TAG, "Tracks loaded: ${subTracks.size} sub, ${audioTracks.size} audio")
                 }
@@ -554,11 +557,46 @@ class PlayerActivity : ComponentActivity() {
                     val (subTracks, audioTracks) = view.loadTracks()
                     viewModel?.setSubtitleTracks(subTracks)
                     viewModel?.setAudioTracks(audioTracks)
-                    viewModel?.setCurrentSubtitleId(view.sid)
+                    // Auto-select the first subtitle track if none is selected.
+                    autoSelectSubtitleTrack(view, subTracks)
                     viewModel?.setCurrentAudioId(view.aid)
                     Log.d(TAG, "Tracks loaded (no-value): ${subTracks.size} sub, ${audioTracks.size} audio")
                 }
             }
+        }
+    }
+
+    /**
+     * Auto-select the first available subtitle track if none is currently selected.
+     *
+     * This mirrors aniyomi's onFinishLoadingTracks() behavior. When tracks are
+     * added via `sub-add ... auto`, MPV does NOT auto-select them — sid stays
+     * at "no" and no subtitle is rendered. This function checks if sid is -1
+     * (no track selected) and if there are real subtitle tracks available
+     * (id >= 1), picks the first one and sets sid.
+     *
+     * The user can still turn subtitles off via the SubtitleTracksSheet ("Off"
+     * option sets sid to -1).
+     */
+    private fun autoSelectSubtitleTrack(
+        view: AnikutaMPVView,
+        subTracks: List<VideoTrack>,
+    ) {
+        val currentSid = view.sid
+        if (currentSid <= 0) {
+            // No subtitle selected — pick the first real track (skip "Off" at id=-1)
+            val firstTrack = subTracks.firstOrNull { it.id > 0 }
+            if (firstTrack != null) {
+                try {
+                    view.sid = firstTrack.id
+                    viewModel?.setCurrentSubtitleId(firstTrack.id)
+                    Log.d(TAG, "Auto-selected subtitle track: id=${firstTrack.id} name='${firstTrack.name}'")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to auto-select subtitle track", e)
+                }
+            }
+        } else {
+            viewModel?.setCurrentSubtitleId(currentSid)
         }
     }
 
@@ -1058,12 +1096,34 @@ class PlayerActivity : ComponentActivity() {
                     currentVideoServer = currentParsed.server
                     currentVideoAudio = currentParsed.audio.name
                     currentVideoQuality = currentParsed.quality ?: -1
+                    // FIX: Store the full Video object (with subtitleTracks) so
+                    // external subtitles can be loaded. The initial currentVideo
+                    // from onCreate only had videoUrl + videoTitle (no tracks).
+                    currentVideo = currentParsed.video
                     populateVideoSelectionState(parsedVideos, currentParsed)
+                    // FIX: If the resolved video has external subtitle tracks,
+                    // load them into MPV now. The initial loadExternalTracks()
+                    // call (on FILE_LOADED) found no tracks because currentVideo
+                    // was empty. Now that we have the real Video, add the tracks.
+                    val subCount = currentParsed.video.subtitleTracks.size
+                    val audioCount = currentParsed.video.audioTracks.size
+                    if (subCount > 0 || audioCount > 0) {
+                        Log.d(TAG, "Background resolve: loading $subCount sub + $audioCount audio tracks")
+                        loadExternalTracks()
+                    }
                 } else {
                     // The playing video wasn't in the resolved list (maybe different URL).
                     // Use the Intent extras as the "current" and populate the rest.
                     val selected = selectBestVideo(parsedVideos)
+                    currentVideo = selected.video
                     populateVideoSelectionState(parsedVideos, selected)
+                    // Load tracks for the selected video too
+                    val subCount = selected.video.subtitleTracks.size
+                    val audioCount = selected.video.audioTracks.size
+                    if (subCount > 0 || audioCount > 0) {
+                        Log.d(TAG, "Background resolve (fallback): loading $subCount sub + $audioCount audio tracks")
+                        loadExternalTracks()
+                    }
                 }
                 Log.d(TAG, "=== Background video resolution SUCCESS: ${parsedVideos.size} videos ===")
             } catch (e: Exception) {

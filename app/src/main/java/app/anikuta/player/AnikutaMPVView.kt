@@ -86,12 +86,27 @@ class AnikutaMPVView(
     /** Currently selected subtitle track ID (-1 = off). */
     var sid: Int
         get() = getPropertyInt("sid") ?: -1
-        set(value) { MPVLib.setPropertyInt("sid", value) }
+        set(value) {
+            // FIX: When turning off subtitles (value = -1), use setPropertyString("sid", "no")
+            // instead of setPropertyInt("sid", -1). Some MPV builds don't accept the int
+            // -1 to mean "off" — "no" is the reliable way. Mirrors aniyomi's TrackDelegate.
+            if (value <= 0) {
+                MPVLib.setPropertyString("sid", "no")
+            } else {
+                MPVLib.setPropertyInt("sid", value)
+            }
+        }
 
     /** Currently selected audio track ID (-1 = off). */
     var aid: Int
         get() = getPropertyInt("aid") ?: -1
-        set(value) { MPVLib.setPropertyInt("aid", value) }
+        set(value) {
+            if (value <= 0) {
+                MPVLib.setPropertyString("aid", "no")
+            } else {
+                MPVLib.setPropertyInt("aid", value)
+            }
+        }
 
     /** Number of tracks in MPV's track-list. */
     fun getTrackCount(): Int = MPVLib.getPropertyInt("track-list/count") ?: 0

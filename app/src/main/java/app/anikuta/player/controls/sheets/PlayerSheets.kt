@@ -385,8 +385,9 @@ fun SubtitleSettingsSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 // Constrain height so video player stays visible but give enough
-                // room for all settings. Increased from 420dp to 500dp per feedback.
-                .heightIn(max = 500.dp)
+                // room for all settings. Reduced from 500dp to 400dp per feedback
+                // (500dp was too tall). The panel scrolls internally if needed.
+                .heightIn(max = 400.dp)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
             Text(
