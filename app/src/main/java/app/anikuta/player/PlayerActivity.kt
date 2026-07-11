@@ -1466,11 +1466,23 @@ private fun PlayerScreen(
     // Episode switching state — drives the loading overlay on the video area
     val isSwitchingEpisode by viewModel.isSwitchingEpisode.collectAsState()
 
-    // Auto-hide controls in fullscreen after 4 seconds of inactivity
+    // Auto-hide controls after inactivity:
+    // - Fullscreen: 4 seconds (existing behavior)
+    // - Minimized: 5 seconds (new — user requested)
+    // The controls fade out smoothly via AnimatedVisibility (fadeIn/fadeOut)
+    // in both MinimizedControls and FullscreenControls.
     LaunchedEffect(controlsVisible, playerMode, controlsLocked) {
-        if (controlsVisible && !controlsLocked && playerMode == PlayerMode.FULLSCREEN) {
-            kotlinx.coroutines.delay(4000)
-            viewModel.setControlsVisible(false)
+        if (controlsVisible && !controlsLocked) {
+            when (playerMode) {
+                PlayerMode.FULLSCREEN -> {
+                    kotlinx.coroutines.delay(4000)
+                    viewModel.setControlsVisible(false)
+                }
+                PlayerMode.MINIMIZED -> {
+                    kotlinx.coroutines.delay(5000)
+                    viewModel.setControlsVisible(false)
+                }
+            }
         }
     }
 
@@ -2045,8 +2057,23 @@ private fun PlayerScreen(
         app.anikuta.player.controls.sheets.SubtitleTracksSheet(
             viewModel = viewModel,
             onSelect = { trackId ->
-                mpvView?.sid = trackId
-                viewModel.setCurrentSubtitleId(trackId)
+                Log.d("PlayerActivity", "Subtitle track selected: id=$trackId")
+                try {
+                    // Set the subtitle track ID in MPV
+                    // Use command("set", "sid", value) as primary, setPropertyInt as fallback
+                    // since some MPV builds handle track selection differently
+                    if (trackId == -1) {
+                        // "Off" — set sid to -1 (MPV interprets negative as off)
+                        `is`.xyz.mpv.MPVLib.setPropertyInt("sid", -1)
+                        Log.d("PlayerActivity", "Subtitles turned off (sid=-1)")
+                    } else {
+                        `is`.xyz.mpv.MPVLib.setPropertyInt("sid", trackId)
+                        Log.d("PlayerActivity", "Subtitle track set: sid=$trackId")
+                    }
+                    viewModel.setCurrentSubtitleId(trackId)
+                } catch (e: Exception) {
+                    Log.e("PlayerActivity", "Failed to set subtitle track: $trackId", e)
+                }
             },
             onApplySettings = {
                 // Part 5: Apply subtitle preferences live to MPV

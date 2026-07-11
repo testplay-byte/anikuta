@@ -109,11 +109,14 @@ fun SubtitleTracksSheet(
     var showSettings by remember { mutableStateOf(false) }
 
     if (showSettings) {
-        // Subtitle settings panel — height-constrained sheet (not full screen)
-        // Uses a custom ModalBottomSheet with a max height so the video player
-        // remains visible behind the sheet.
+        // Subtitle settings panel — height-constrained sheet (not full screen).
+        // When the settings sheet is dismissed (tap outside or swipe down), it
+        // also dismisses the parent subtitle track sheet — both close together.
         SubtitleSettingsSheet(
-            onDismiss = { showSettings = false },
+            onDismiss = {
+                showSettings = false
+                onDismiss() // also close the subtitle track sheet
+            },
             onApplySettings = onApplySettings,
         )
         return
@@ -381,8 +384,9 @@ fun SubtitleSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // Constrain height to ~60% of screen so video player stays visible
-                .heightIn(max = 420.dp)
+                // Constrain height so video player stays visible but give enough
+                // room for all settings. Increased from 420dp to 500dp per feedback.
+                .heightIn(max = 500.dp)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
             Text(

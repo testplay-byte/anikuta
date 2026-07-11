@@ -197,9 +197,9 @@ fun MinimizedControls(
         }
 
         // Double-tap feedback animation overlay
-        // Skip animations (Rewind/Forward) appear on the SIDE that was tapped — smaller,
-        // cleaner design with a small icon + "+10s"/"-10s" text below. No giant logo.
-        // Play/Pause animation appears in the CENTER (smaller still, icon only).
+        // Skip animations (Rewind/Forward): just "+10s"/"-10s" text in a dark pill,
+        // no icon. Appears on the SIDE that was tapped.
+        // Play/Pause animation: icon only in a dark circle, appears in CENTER.
         doubleTapAnim?.let { feedback ->
             val isCenterAnim = feedback == DoubleTapFeedback.Pause || feedback == DoubleTapFeedback.Play
             val alignment = if (isCenterAnim) Alignment.Center else {
@@ -215,52 +215,39 @@ fun MinimizedControls(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = alignment,
             ) {
-                val icon = when (feedback) {
-                    DoubleTapFeedback.Pause -> Icons.Default.Pause
-                    DoubleTapFeedback.Play -> Icons.Default.PlayArrow
-                    DoubleTapFeedback.Rewind -> Icons.Default.FastRewind
-                    DoubleTapFeedback.Forward -> Icons.Default.FastForward
-                }
-                // Text label: "+10s" for forward, "-10s" for rewind, none for play/pause
-                val label = when (feedback) {
-                    DoubleTapFeedback.Rewind -> "-10s"
-                    DoubleTapFeedback.Forward -> "+10s"
-                    else -> null
-                }
-                // Center animations: 48dp circle, 28dp icon (smaller)
-                // Side skip animations: 52dp circle, 26dp icon (compact, not too big)
-                val circleSize = if (isCenterAnim) 48.dp else 52.dp
-                val iconSize = if (isCenterAnim) 28.dp else 26.dp
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = sidePadding),
-                ) {
+                if (isCenterAnim) {
+                    // Center: play/pause icon in a dark circle (no text)
+                    val icon = if (feedback == DoubleTapFeedback.Pause) Icons.Default.Pause else Icons.Default.PlayArrow
                     Box(
                         contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(horizontal = sidePadding),
                     ) {
-                        // Semi-transparent circle background
                         Surface(
                             shape = CircleShape,
                             color = Color.Black.copy(alpha = 0.45f * animAlpha.value),
-                            modifier = Modifier.size(circleSize),
+                            modifier = Modifier.size(48.dp),
                         ) {}
-                        // Icon
                         Icon(
                             imageVector = icon,
                             contentDescription = null,
                             tint = Color.White.copy(alpha = animAlpha.value),
-                            modifier = Modifier.size(iconSize),
+                            modifier = Modifier.size(28.dp),
                         )
                     }
-                    // Text label below the circle (for skip animations)
-                    if (label != null) {
+                } else {
+                    // Side: just text in a dark pill (no icon)
+                    val label = if (feedback == DoubleTapFeedback.Rewind) "-10s" else "+10s"
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.Black.copy(alpha = 0.6f * animAlpha.value),
+                        modifier = Modifier.padding(horizontal = sidePadding),
+                    ) {
                         Text(
                             text = label,
                             color = Color.White.copy(alpha = animAlpha.value),
-                            fontSize = 13.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(top = 4.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         )
                     }
                 }
