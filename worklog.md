@@ -772,3 +772,55 @@ Stage Summary:
 - Double-tap skip animations appear on the tapped side (left/right)
 - Play/pause double-tap animation is smaller in minimized view
 - Center play/pause icon is now single-clickable when controls are visible
+
+---
+
+## Session 35 (Gradient thicker + double-tap animations + subtitle tracks + subtitle settings redesign)
+
+Task ID: PLAYER-SUBTITLE-UI-V5
+Agent: main (Z.ai Code)
+
+### Fix 1 — Gradient Thicker + Darker
+- Height: 20dp → 35dp
+- 3-stop gradient: 0% (opaque) → 50% (85% alpha) → 100% (transparent)
+- More prominent "disappear zone" between episodes and video player
+
+### Fix 2 — Double-Tap Skip Animations Improved
+- Smaller: skip animations 52dp circle + 26dp icon (was 72dp/40dp)
+- Center play/pause: 48dp circle + 28dp icon (was 56dp/32dp)
+- Better layout: Column with circle on top, text label below (was overlay)
+- Text labels: "+10s" for forward, "-10s" for rewind (was "10s" for both)
+- Darker background: 0.45 alpha (was 0.4)
+- Side padding: 40dp (was 48dp) — closer to the edge
+
+### Fix 3 — Subtitle Track Detection
+- Root cause: Extensions provide external subtitle/audio tracks as URLs in
+  the Video object (subtitleTracks/audioTracks). MPV can't auto-detect these
+  — they must be added via sub-add/audio-add commands. Our player only
+  relied on MPV's track-list which only contains embedded tracks.
+- Fix: Added loadExternalTracks() called on FILE_LOADED — iterates
+  video.subtitleTracks and video.audioTracks, sends sub-add/audio-add
+  commands to MPV for each. Mirrors aniyomi's PlayerActivity.setupTracks().
+- Added currentVideo field to store the full Video object (set in
+  loadSelectedVideo, switchEpisode, and onCreate for initial load).
+- Logging: "Added external subtitle: eng (...)" + track counts
+- Log when subtitle sheet opens: track counts for debugging
+
+### Fix 4 — Subtitle Settings Panel Redesign
+- Removed live preview (the video player itself shows subtitles)
+- Added verticalScroll — settings now scroll if they exceed sheet height
+- Compact slider rows: label on left, value on right, slider below
+- Better value display: "24px", "1.0x", "100%", "-500ms" (was "24.0")
+- Themed section headers in primary color
+- Themed slider colors (primary thumb/track, surfaceContainerHighest inactive)
+- NEW SubtitleSettingsSheet: height-constrained to 420dp max (not full screen)
+  so the video player remains visible behind the settings sheet
+
+### Build
+- Build #229 (c918764): SUCCESS
+
+Stage Summary:
+- Gradient is now 35dp thick with a 3-stop fade for a more prominent look
+- Double-tap skip animations are smaller and show "+10s"/"-10s" text labels
+- Subtitle tracks from extensions now load via sub-add/audio-add commands
+- Subtitle settings panel is compact, scrollable, and doesn't take full screen
