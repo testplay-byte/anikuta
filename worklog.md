@@ -715,3 +715,60 @@ Stage Summary:
 - Scroll-to-top now works: episode number badge + title fully visible on entry
 - Audio versions dropdown only shows what the current server provides
 - Minimized UI completely redesigned: clean, minimal, with double-tap gestures
+
+---
+
+## Session 34 (Scroll force-fix + seekbar feedback + double-tap positioning + play/pause click)
+
+Task ID: PLAYER-UI-REFINEMENT-V4
+Agent: main (Z.ai Code)
+
+### Fix 1 — Scroll to Very Top (Force Fix)
+- Reverted the gradient animation change (gradient is always visible again)
+- Root cause: scrollToItem(0, 0) ran before the LazyColumn finished laying
+  out items that were loaded async from disk cache. The scroll was a no-op
+  because the items weren't laid out yet.
+- Fix: Added 100ms delay before scrollToItem to ensure layout is complete.
+  Now force-scrolls to position 0 on first load. One-time guard ensures it
+  only fires on initial load (not on episode switches).
+
+### Fix 2 — Seekbar Thicker + Seek Time Feedback
+- Track thickness: 3dp → 5dp (better visibility)
+- Thumb size: 12dp → 14dp
+- Touch target: 24dp → 28dp
+- Corner radius: 2dp → 3dp
+- NEW: Floating time indicator above the thumb while dragging — shows the
+  current scrub position (e.g. "12:34") in a dark pill (Black 70% alpha
+  background, 6dp rounded corners). Only visible during drag, disappears
+  on release. Positioned 32dp above the seekbar center, clamped to left edge.
+
+### Fix 3 — Double-Tap Animation Positioning
+- Skip animations (Rewind/Forward) now appear on the SIDE that was tapped:
+  - Rewind: aligned to CenterStart (left side, 48dp padding from edge)
+  - Forward: aligned to CenterEnd (right side, 48dp padding from edge)
+  - Previously both appeared in center — now they match the tap location
+- Play/Pause animation is SMALLER: 56dp circle + 32dp icon (was 72dp/40dp)
+  vs skip animations which stay at 72dp/40dp.
+
+### Fix 4 — Center Play/Pause Single-Click
+- Root cause: The center play/pause icon had NO tap handler. Single-taps
+  fell through to the outer Box which toggled controls (hide) instead of
+  toggling play/pause. The user had to double-tap to play/pause when
+  controls were visible.
+- Fix: Added a pointerInput to the center icon Box (72dp touch target) that
+  consumes single taps and calls onTogglePlay() directly. The outer Box's
+  tap handler doesn't fire for taps on the center icon.
+- When controls visible: single-tap center icon = toggle play/pause
+- When controls hidden: double-tap center = toggle play/pause (unchanged)
+
+### Build
+- Build #227 (cfa0ef8): FAILED — dp.toPx() unresolved in offset lambda
+  (needs LocalDensity context)
+- Build #228 (300c583): SUCCESS — fixed with LocalDensity.current
+
+Stage Summary:
+- Scroll now force-scrolls to very top on entry (100ms delay for layout)
+- Seekbar is thicker (5dp) with floating time indicator during drag
+- Double-tap skip animations appear on the tapped side (left/right)
+- Play/pause double-tap animation is smaller in minimized view
+- Center play/pause icon is now single-clickable when controls are visible
