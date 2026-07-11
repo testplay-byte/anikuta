@@ -425,9 +425,15 @@ class PlayerActivity : ComponentActivity() {
     private fun handleEvent(eventId: Int) {
         when (eventId) {
             MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
+                Log.d(TAG, "SUBTITLE_DIAG: FILE_LOADED event received")
                 viewModel?.onFileLoaded()
                 // Subtitle Fix 4: Safety net — ensure subtitles are visible
-                try { MPVLib.setPropertyBoolean("sub-visibility", true) } catch (e: Exception) {}
+                try {
+                    MPVLib.setPropertyBoolean("sub-visibility", true)
+                    Log.d(TAG, "SUBTITLE_DIAG: Set sub-visibility=true")
+                } catch (e: Exception) {
+                    Log.w(TAG, "SUBTITLE_DIAG: Could not set sub-visibility", e)
+                }
                 // Load external subtitle + audio tracks.
                 loadExternalTracks()
                 // Position preservation for quality/server switches.
@@ -600,44 +606,43 @@ class PlayerActivity : ComponentActivity() {
      *     makes the early-out visible in logs.
      */
     private fun loadExternalTracks() {
-        val video = currentVideo ?: return
-        // Early return if no tracks to add — common case (most streams have
-        // embedded tracks only, no external sub/audio URLs).
-        if (video.subtitleTracks.isEmpty() && video.audioTracks.isEmpty()) {
-            Log.d(TAG, "loadExternalTracks: no external tracks (sub=${video.subtitleTracks.size} audio=${video.audioTracks.size})")
+        val video = currentVideo ?: run {
+            Log.w(TAG, "SUBTITLE_DIAG: loadExternalTracks called but currentVideo is null")
             return
         }
+        Log.d(TAG, "SUBTITLE_DIAG: loadExternalTracks — video=${video.videoUrl.take(60)}... subs=${video.subtitleTracks.size} audios=${video.audioTracks.size}")
+        if (video.subtitleTracks.isEmpty() && video.audioTracks.isEmpty()) {
+            Log.d(TAG, "SUBTITLE_DIAG: No external tracks to add")
+            return
+        }
+        // Log current HTTP headers (needed for subtitle URL download)
+        Log.d(TAG, "SUBTITLE_DIAG: Current http-header-fields = ${currentVideoHeaders.take(100)}...")
         try {
-            // Add external subtitle tracks (deduplicated)
-            // Subtitle Fix 1: Use "select" for the FIRST external subtitle so MPV
-            // auto-selects it immediately. Use "auto" for subsequent tracks.
-            // Subtitle Fix 7: Pass "" as title (3rd arg) so MPV uses the filename,
-            // and sub.lang as the lang (4th arg) for proper language detection.
             if (video.subtitleTracks.isNotEmpty()) {
-                var isFirstSub = true
+                Log.d(TAG, "SUBTITLE_DIAG: Adding ${video.subtitleTracks.size} external subtitle track(s)")
                 video.subtitleTracks.forEach { sub ->
+                    Log.d(TAG, "SUBTITLE_DIAG: Subtitle URL = ${sub.url}")
+                    Log.d(TAG, "SUBTITLE_DIAG: Subtitle lang = ${sub.lang}")
                     if (addedTrackUrls.contains(sub.url)) {
-                        Log.d(TAG, "Skipping duplicate subtitle track: ${sub.lang}")
+                        Log.d(TAG, "SUBTITLE_DIAG: Skipping duplicate: ${sub.lang}")
                         return@forEach
                     }
                     try {
-                        // Use "auto" for ALL subtitle tracks — matches aniyomi exactly.
-                        // The "select" flag was causing sid to be set BEFORE the URL
-                        // was downloaded/parsed, resulting in an empty track with no cues.
-                        // With "auto", autoSelectSubtitleTrack() sets sid AFTER the
-                        // track-list settles and the URL has been fetched.
+                        // Re-assert HTTP headers right before sub-add to ensure they apply
+                        if (currentVideoHeaders.isNotBlank()) {
+                            MPVLib.setOptionString("http-header-fields", currentVideoHeaders)
+                            Log.d(TAG, "SUBTITLE_DIAG: Re-asserted http-header-fields before sub-add")
+                        }
                         val flags = "auto"
+                        Log.d(TAG, "SUBTITLE_DIAG: Sending sub-add command: url=${sub.url.take(80)} flags=$flags lang=${sub.lang}")
                         MPVLib.command(arrayOf("sub-add", sub.url, flags, "", sub.lang))
                         addedTrackUrls.add(sub.url)
-                        isFirstSub = false
-                        Log.d(TAG, "Added external subtitle (flags=$flags): ${sub.lang} (${sub.url.take(60)}...)")
+                        Log.d(TAG, "SUBTITLE_DIAG: sub-add sent successfully for lang=${sub.lang}")
                     } catch (e: Exception) {
-                        Log.w(TAG, "Failed to add subtitle track: ${sub.lang}", e)
+                        Log.e(TAG, "SUBTITLE_DIAG: Failed to add subtitle track: ${sub.lang}", e)
                     }
                 }
-                Log.d(TAG, "Processed ${video.subtitleTracks.size} external subtitle track(s)")
-                // Fix 2: Mark that external tracks were just added so
-                // autoSelectSubtitleTrack knows to prefer them over embedded ones
+                Log.d(TAG, "SUBTITLE_DIAG: Processed ${video.subtitleTracks.size} external subtitle track(s)")
                 externalTracksJustAdded = true
             }
             // Add external audio tracks (deduplicated)
@@ -738,16 +743,19 @@ class PlayerActivity : ComponentActivity() {
     private fun handlePropertyString(property: String, value: String) {
         when (property) {
             "track-list" -> {
-                // Track list changed — load tracks from MPV and push to ViewModel
                 mpvViewRef?.let { view ->
                     val (subTracks, audioTracks) = view.loadTracks()
+                    Log.d(TAG, "SUBTITLE_DIAG: track-list changed — ${subTracks.size} sub tracks, ${audioTracks.size} audio tracks")
+                    subTracks.forEach { t ->
+                        Log.d(TAG, "SUBTITLE_DIAG:   sub track: id=${t.id} name='${t.name}' lang='${t.language}'")
+                    }
                     viewModel?.setSubtitleTracks(subTracks)
                     viewModel?.setAudioTracks(audioTracks)
-                    // Auto-select the first subtitle track if none is selected.
                     autoSelectSubtitleTrack(view, subTracks)
-                    // Auto-select the correct audio track based on audio version.
                     autoSelectAudioTrack(view, audioTracks)
-                    Log.d(TAG, "Tracks loaded: ${subTracks.size} sub, ${audioTracks.size} audio")
+                    // Log current sid after auto-select
+                    val currentSid = view.sid
+                    Log.d(TAG, "SUBTITLE_DIAG: After auto-select: sid=$currentSid")
                 }
             }
             // Subtitle Fix 3: Handle sid/aid property changes so the UI stays
@@ -755,7 +763,7 @@ class PlayerActivity : ComponentActivity() {
             "sid" -> {
                 val sid = value.toIntOrNull() ?: -1
                 viewModel?.setCurrentSubtitleId(sid)
-                Log.d(TAG, "sid property changed: $sid")
+                Log.d(TAG, "SUBTITLE_DIAG: sid property changed to: $sid (value='$value')")
             }
             "aid" -> {
                 val aid = value.toIntOrNull() ?: -1
@@ -803,41 +811,36 @@ class PlayerActivity : ComponentActivity() {
         subTracks: List<VideoTrack>,
     ) {
         val currentSid = view.sid
+        Log.d(TAG, "SUBTITLE_DIAG: autoSelectSubtitleTrack — currentSid=$currentSid tracks=${subTracks.size} userDisabled=$userDisabledSubtitles externalJustAdded=$externalTracksJustAdded")
         if (currentSid <= 0) {
-            // No subtitle selected — but did the user manually turn them off?
             if (userDisabledSubtitles) {
-                // User explicitly turned off subtitles — respect their choice
+                Log.d(TAG, "SUBTITLE_DIAG: User disabled subtitles — not selecting")
                 viewModel?.setCurrentSubtitleId(-1)
                 return
             }
-            // Auto-select the first real track (skip "Off" at id=-1)
             val firstTrack = subTracks.firstOrNull { it.id > 0 }
             if (firstTrack != null) {
                 try {
                     view.sid = firstTrack.id
                     viewModel?.setCurrentSubtitleId(firstTrack.id)
-                    Log.d(TAG, "Auto-selected subtitle track: id=${firstTrack.id} name='${firstTrack.name}'")
+                    Log.d(TAG, "SUBTITLE_DIAG: Auto-selected subtitle track: id=${firstTrack.id} name='${firstTrack.name}'")
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to auto-select subtitle track", e)
+                    Log.e(TAG, "SUBTITLE_DIAG: Failed to auto-select subtitle track", e)
                 }
+            } else {
+                Log.d(TAG, "SUBTITLE_DIAG: No real subtitle tracks available to select")
             }
         } else {
-            // A subtitle is already selected.
-            // Subtitle Fix 2: If external tracks were just added, prefer them
-            // over the embedded track that MPV auto-selected. The external track
-            // from the extension is usually the correct one.
             if (externalTracksJustAdded && !userDisabledSubtitles) {
-                // Find an external track (tracks with id > current max embedded id
-                // are likely external). Simplest approach: pick the LAST real track
-                // (external tracks are added after embedded ones).
                 val externalTrack = subTracks.lastOrNull { it.id > 0 }
+                Log.d(TAG, "SUBTITLE_DIAG: External tracks just added — checking if switch needed. currentSid=$currentSid externalTrackId=${externalTrack?.id}")
                 if (externalTrack != null && externalTrack.id != currentSid) {
                     try {
                         view.sid = externalTrack.id
                         viewModel?.setCurrentSubtitleId(externalTrack.id)
-                        Log.d(TAG, "Switched to external subtitle track: id=${externalTrack.id} name='${externalTrack.name}'")
+                        Log.d(TAG, "SUBTITLE_DIAG: Switched to external subtitle track: id=${externalTrack.id} name='${externalTrack.name}'")
                     } catch (e: Exception) {
-                        Log.w(TAG, "Failed to switch to external subtitle track", e)
+                        Log.e(TAG, "SUBTITLE_DIAG: Failed to switch to external subtitle track", e)
                     }
                 }
                 externalTracksJustAdded = false

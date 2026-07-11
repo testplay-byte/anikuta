@@ -187,7 +187,11 @@ class AnikutaMPVView(
             "hwdec",
             if (playerPreferences.tryHWDecoding().get()) "auto" else "no",
         )
-        MPVLib.setOptionString("msg-level", "all=warn")
+        // DIAGNOSTIC: Enable verbose logging for subtitle-related MPV modules.
+        // This will show: HTTP requests for .vtt files, TLS handshake details,
+        // VTT parser output, cue counts, and any errors.
+        // Filter in logcat with: tag:mpv/demux tag:mpv/sub tag:mpv/stream tag:mpv/cplayer
+        MPVLib.setOptionString("msg-level", "all=warn,demuxer=v,sub=v,stream=v,cplayer=v,file=v")
 
         // Subtitle Fix: Removed force-window=yes — this was breaking the subtitle
         // compositor. aniyomi does NOT set force-window. The gpu VO initializes
