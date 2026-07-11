@@ -1027,3 +1027,43 @@ requires unique keys.
 
 ### ntfy
 - Notification sent to TASKISDONE topic
+
+---
+
+## Session 40 (Fullscreen→minimize crash fix + quality sheet display modes + log analysis)
+
+Task ID: PLAYER-QUALITY-MODESWITCH-FIX
+Agent: main (Z.ai Code)
+
+### Log Analysis (user-provided)
+- 7 extensions found: Anikage, Anikoto (en), 123Anime, AnimeKai, AllAnime, AniKoto 180, Anikoto (all)
+- 5 marked "untrusted" (normal for sideloaded extensions)
+- `all.anikoto` FAILED with LinkageError — class loader conflict (duplicate Anikoto variant)
+- Only `en.anikoto` (id=4697393375201558791) is actively used
+- User can safely uninstall `all.anikoto` to clean up
+
+### Fix 1 — Fullscreen → Minimize Crash
+- Root cause: MINIMIZED mode's AndroidView factory ALWAYS created a new
+  AnikutaMPVView and called view.initialize(). MPV can only be initialized
+  once per process — the second initialize() on mode switch caused native SIGABRT.
+- Fix: MINIMIZED factory now checks if mpvView already exists (same pattern
+  as FULLSCREEN factory). Reuses existing view instead of creating new one.
+
+### Fix 2 — Quality Sheet Display Modes
+- New preference: qualitySheetDisplayMode() — 'current' (default) or 'all'
+  - 'current': only qualities for current server + audio version
+  - 'all': all qualities, organized by server → audio version sections
+- QualitySheet rewritten with two modes:
+  - 'all': groups by server → audio version, with headers + sorted by quality desc
+  - 'current': filters to current server + audio only
+- New setting in PlayerSettingsScreen: segmented buttons (Current only / Show all)
+
+### Fix 3 — Selected Quality Highlight
+- Simplified selection check to compare both videoUrl AND videoTitle consistently
+- Extracted QualityOption composable for reuse in both modes
+
+### Build
+- Build #235 (6c4d3b3): SUCCESS
+
+### ntfy
+- Notification sent to TASKISDONE topic
