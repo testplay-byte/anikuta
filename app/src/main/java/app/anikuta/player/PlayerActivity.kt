@@ -1231,7 +1231,7 @@ class PlayerActivity : ComponentActivity() {
                     ?: parsedVideos.find { it.server == intentServer && it.audio == intentAudio }
                 // Fallback: same server (prefer same audio, then first)
                     ?: parsedVideos.filter { it.server == intentServer }
-                        .sortedByDescending<app.anikuta.ui.detail.ParsedVideo> { it.audio == intentAudio }
+                        .sortedByDescending { if (it.audio == intentAudio) 1 else 0 }
                         .firstOrNull()
                 // Last resort: match by videoTitle (the original URL might have the
                 // same underlying stream even if the proxy URL differs)
