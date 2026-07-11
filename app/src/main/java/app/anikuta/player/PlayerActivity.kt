@@ -347,6 +347,7 @@ class PlayerActivity : ComponentActivity() {
                         onAudioDelay = { activity.cycleAudioDelay() },
                         onScreenshot = { activity.takeScreenshot() },
                         onSleepTimer = { activity.startSleepTimer() },
+                        onUserDisabledSubtitles = { disabled -> activity.userDisabledSubtitles = disabled },
                         currentVideoUrl = activity.currentVideoUrl,
                         coverColor = coverColor,
                     )
@@ -1484,6 +1485,8 @@ private fun PlayerScreen(
     onAudioDelay: () -> Unit = {},
     onScreenshot: () -> Unit = {},
     onSleepTimer: () -> Unit = {},
+    // Callback to set the userDisabledSubtitles flag on the Activity
+    onUserDisabledSubtitles: (Boolean) -> Unit = {},
     currentVideoUrl: String = "",
     coverColor: Int = 0,  // ARGB color for dynamic theming (0 = use default theme)
 ) {
@@ -2136,7 +2139,7 @@ private fun PlayerScreen(
                     // track selection (positive → setPropertyInt("sid", id)).
                     mpvView?.sid = trackId
                     // Track whether the user manually disabled subtitles
-                    userDisabledSubtitles = (trackId <= 0)
+                    onUserDisabledSubtitles(trackId <= 0)
                     if (trackId <= 0) {
                         Log.d("PlayerActivity", "Subtitles turned off (sid=no) — userDisabledSubtitles=true")
                     } else {
