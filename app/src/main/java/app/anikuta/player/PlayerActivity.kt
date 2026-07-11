@@ -192,6 +192,9 @@ class PlayerActivity : ComponentActivity() {
     /** Current Video object — holds external subtitle/audio tracks that need
      *  to be loaded into MPV via sub-add/audio-add commands after loadfile. */
     @Volatile private var currentVideo: eu.kanade.tachiyomi.animesource.model.Video? = null
+    /** Whether the user has manually turned off subtitles. Prevents auto-select
+     *  from re-enabling subtitles after the user explicitly turned them off. */
+    @Volatile private var userDisabledSubtitles: Boolean = false
     /** Resolved video list for the current episode — cached so switchServer/
      *  switchAudioVersion / switchQuality don't need to re-resolve from source. */
     @Volatile private var currentEpisodeVideos: List<eu.kanade.tachiyomi.animesource.model.Video> = emptyList()
@@ -567,7 +570,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     /**
-     * Auto-select the first available subtitle track if none is currently selected.
+     * Auto-select the first available subtitle track if none is selected.
      *
      * This mirrors aniyomi's onFinishLoadingTracks() behavior. When tracks are
      * added via `sub-add ... auto`, MPV does NOT auto-select them — sid stays
@@ -575,8 +578,8 @@ class PlayerActivity : ComponentActivity() {
      * (no track selected) and if there are real subtitle tracks available
      * (id >= 1), picks the first one and sets sid.
      *
-     * The user can still turn subtitles off via the SubtitleTracksSheet ("Off"
-     * option sets sid to -1).
+     * Respects [userDisabledSubtitles] — if the user manually turned off
+     * subtitles, we don't auto-select again.
      */
     private fun autoSelectSubtitleTrack(
         view: AnikutaMPVView,
@@ -584,7 +587,13 @@ class PlayerActivity : ComponentActivity() {
     ) {
         val currentSid = view.sid
         if (currentSid <= 0) {
-            // No subtitle selected — pick the first real track (skip "Off" at id=-1)
+            // No subtitle selected — but did the user manually turn them off?
+            if (userDisabledSubtitles) {
+                // User explicitly turned off subtitles — respect their choice
+                viewModel?.setCurrentSubtitleId(-1)
+                return
+            }
+            // Auto-select the first real track (skip "Off" at id=-1)
             val firstTrack = subTracks.firstOrNull { it.id > 0 }
             if (firstTrack != null) {
                 try {
@@ -596,7 +605,10 @@ class PlayerActivity : ComponentActivity() {
                 }
             }
         } else {
+            // A subtitle is already selected — update VM state
             viewModel?.setCurrentSubtitleId(currentSid)
+            // User hasn't disabled subtitles if one is selected
+            userDisabledSubtitles = false
         }
     }
 
@@ -2119,15 +2131,15 @@ private fun PlayerScreen(
             onSelect = { trackId ->
                 Log.d("PlayerActivity", "Subtitle track selected: id=$trackId")
                 try {
-                    // Set the subtitle track ID in MPV
-                    // Use command("set", "sid", value) as primary, setPropertyInt as fallback
-                    // since some MPV builds handle track selection differently
-                    if (trackId == -1) {
-                        // "Off" — set sid to -1 (MPV interprets negative as off)
-                        `is`.xyz.mpv.MPVLib.setPropertyInt("sid", -1)
-                        Log.d("PlayerActivity", "Subtitles turned off (sid=-1)")
+                    // Use the AnikutaMPVView.sid setter which correctly handles
+                    // both "off" (-1 → setPropertyString("sid", "no")) and
+                    // track selection (positive → setPropertyInt("sid", id)).
+                    mpvView?.sid = trackId
+                    // Track whether the user manually disabled subtitles
+                    userDisabledSubtitles = (trackId <= 0)
+                    if (trackId <= 0) {
+                        Log.d("PlayerActivity", "Subtitles turned off (sid=no) — userDisabledSubtitles=true")
                     } else {
-                        `is`.xyz.mpv.MPVLib.setPropertyInt("sid", trackId)
                         Log.d("PlayerActivity", "Subtitle track set: sid=$trackId")
                     }
                     viewModel.setCurrentSubtitleId(trackId)

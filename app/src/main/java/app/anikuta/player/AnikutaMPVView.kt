@@ -84,12 +84,16 @@ class AnikutaMPVView(
     // Set to -1 to disable (off).
 
     /** Currently selected subtitle track ID (-1 = off). */
+    // FIX: MPV's sid/aid properties are node/string properties, not simple integers.
+    // Reading them with getPropertyInt() returns "unsupported format" errors.
+    // aniyomi's TrackDelegate reads them with getPropertyString() and converts
+    // to int (returns -1 for "no" or invalid values). We do the same here.
     var sid: Int
-        get() = getPropertyInt("sid") ?: -1
+        get() {
+            val v = getPropertyString("sid")
+            return v?.toIntOrNull() ?: -1
+        }
         set(value) {
-            // FIX: When turning off subtitles (value = -1), use setPropertyString("sid", "no")
-            // instead of setPropertyInt("sid", -1). Some MPV builds don't accept the int
-            // -1 to mean "off" — "no" is the reliable way. Mirrors aniyomi's TrackDelegate.
             if (value <= 0) {
                 MPVLib.setPropertyString("sid", "no")
             } else {
@@ -99,7 +103,10 @@ class AnikutaMPVView(
 
     /** Currently selected audio track ID (-1 = off). */
     var aid: Int
-        get() = getPropertyInt("aid") ?: -1
+        get() {
+            val v = getPropertyString("aid")
+            return v?.toIntOrNull() ?: -1
+        }
         set(value) {
             if (value <= 0) {
                 MPVLib.setPropertyString("aid", "no")
