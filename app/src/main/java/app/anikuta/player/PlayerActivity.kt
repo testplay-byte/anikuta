@@ -335,6 +335,12 @@ class PlayerActivity : ComponentActivity() {
         val vm = viewModel!!
         val initialPrompt = showFirstTimePrompt
         val activity = this
+        // Set isSwitchingEpisode=true BEFORE setContent so the loading overlay
+        // is visible from the very first composition. Without this, there's a
+        // gap between the player opening and the LaunchedEffect triggering
+        // re-resolution where no loading animation is shown.
+        vm.setSwitchingEpisode(true, "initial")
+        Log.d(TAG, "Initial isSwitchingEpisode=true (player entry)")
         setContent {
             // Compose state for the prompt — changes trigger recomposition
             var promptVisible by remember { mutableStateOf(initialPrompt) }
@@ -1347,8 +1353,8 @@ class PlayerActivity : ComponentActivity() {
             Log.d(TAG, "Updated audio versions for server '${selected.server}': $newServerAudios (current=${selected.audio.name})")
         }
 
-        // Show brief loading indicator
-        vm.setSwitchingEpisode(true)
+        // Show loading indicator — "quality" type freezes the last frame
+        vm.setSwitchingEpisode(true, "quality")
         vm.setControlsVisible(false)
 
         // FIX: Preserve playback position across quality/server switches.
@@ -1629,7 +1635,7 @@ class PlayerActivity : ComponentActivity() {
             return
         }
         resolveInProgress = true
-        vm.setSwitchingEpisode(true)
+        vm.setSwitchingEpisode(true, "initial")
         vm.setControlsVisible(false)
 
         lifecycleScope.launch {

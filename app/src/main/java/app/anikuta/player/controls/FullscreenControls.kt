@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Forward10
@@ -94,6 +95,7 @@ fun FullscreenControls(
     val duration by viewModel.duration.collectAsState()
     val buffering by viewModel.buffering.collectAsState()
     val loadingState by viewModel.loadingState.collectAsState()
+    val bufferAheadTime by viewModel.bufferAheadTime.collectAsState()
 
     Box(modifier = modifier.fillMaxSize()) {
         // Gradient scrims for readability
@@ -210,6 +212,7 @@ fun FullscreenControls(
                     FullscreenSeekbar(
                         position = position,
                         duration = duration,
+                        bufferAheadTime = bufferAheadTime,
                         onSeekTo = onSeekTo,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -317,32 +320,72 @@ private fun FSSkipButton(onClick: () -> Unit) {
 private fun FullscreenSeekbar(
     position: Int,
     duration: Int,
+    bufferAheadTime: Int = 0,
     onSeekTo: (Int) -> Unit,
 ) {
-    // FIX: Replaced the non-interactive progress bar (empty .clickable {}) with
-    // a real M3 Slider that the user can drag to seek. Uses local "scrubbing"
-    // state so the thumb follows the finger during drag.
     var scrubPosition by remember { mutableStateOf<Float?>(null) }
     val displayPosition = scrubPosition ?: position.toFloat().coerceAtLeast(0f)
     val maxRange = duration.toFloat().coerceAtLeast(1f)
+    val progress = (displayPosition / maxRange).coerceIn(0f, 1f)
+    // P2b: Buffer-ahead ratio
+    val bufferProgress = if (duration > 0 && bufferAheadTime > 0) {
+        (bufferAheadTime.toFloat() / maxRange).coerceIn(0f, 1f)
+    } else 0f
 
-    androidx.compose.material3.Slider(
-        value = displayPosition.coerceIn(0f, maxRange),
-        onValueChange = { newValue ->
-            scrubPosition = newValue
-        },
-        onValueChangeFinished = {
-            scrubPosition?.let { onSeekTo(it.toInt()) }
-            scrubPosition = null
-        },
-        valueRange = 0f..maxRange,
-        modifier = Modifier.fillMaxWidth(),
-        colors = androidx.compose.material3.SliderDefaults.colors(
-            thumbColor = MaterialTheme.colorScheme.primary,
-            activeTrackColor = MaterialTheme.colorScheme.primary,
-            inactiveTrackColor = Color.White.copy(alpha = 0.3f),
-        ),
-    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Buffer-ahead segment (visual only, above the slider)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+        ) {
+            // Inactive track
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White.copy(alpha = 0.2f)),
+            )
+            // Buffer-ahead segment
+            if (bufferProgress > progress) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(bufferProgress)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color.White.copy(alpha = 0.4f)),
+                )
+            }
+            // Progress segment
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.primary),
+                )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        // The actual slider
+        androidx.compose.material3.Slider(
+            value = displayPosition.coerceIn(0f, maxRange),
+            onValueChange = { newValue ->
+                scrubPosition = newValue
+            },
+            onValueChangeFinished = {
+                scrubPosition?.let { onSeekTo(it.toInt()) }
+                scrubPosition = null
+            },
+            valueRange = 0f..maxRange,
+            modifier = Modifier.fillMaxWidth(),
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = Color.White.copy(alpha = 0.3f),
+            ),
+        )
+    }
 }
 
 private fun formatTime(seconds: Int): String {

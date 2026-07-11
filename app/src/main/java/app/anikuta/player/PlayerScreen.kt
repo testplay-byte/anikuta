@@ -162,6 +162,7 @@ internal fun PlayerScreen(
     val controlsVisible by viewModel.controlsVisible.collectAsState()
     // Episode switching state — drives the loading overlay on the video area
     val isSwitchingEpisode by viewModel.isSwitchingEpisode.collectAsState()
+    val switchType by viewModel.switchType.collectAsState()
 
     // Auto-hide controls after inactivity:
     // - Fullscreen: 4 seconds (existing behavior)
@@ -379,20 +380,43 @@ internal fun PlayerScreen(
                             modifier = Modifier.fillMaxSize(),
                         )
 
-                        // ---- Episode switching loading overlay ----
-                        // When switching episodes, show a loading overlay that
-                        // covers the video area. The background uses the episode
-                        // thumbnail (if available) with a dark scrim, or a themed
-                        // dark surface. Video player controls are hidden.
+                        // ---- Loading overlay ----
+                        // "initial" and "episode": full overlay with episode thumbnail
+                        // "quality": semi-transparent overlay on top of frozen video frame
                         if (isSwitchingEpisode) {
-                            app.anikuta.player.controls.EpisodeSwitchingOverlay(
-                                episodeThumbnailUrl = currentEpisode?.preview_url,
-                                episodeTitle = currentEpisode?.let {
-                                    app.anikuta.ui.detail.EpisodeTitleParser.getDisplayTitle(
-                                        it.name, it.episode_number,
+                            if (switchType == "quality") {
+                                // Quality/server/audio switch: freeze last frame,
+                                // show semi-transparent loading overlay on top
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    // Semi-transparent dark scrim
+                                    androidx.compose.foundation.Canvas(
+                                        modifier = Modifier.fillMaxSize(),
+                                    ) {
+                                        androidx.compose.ui.graphics.drawscope.drawRect(
+                                            color = Color.Black.copy(alpha = 0.5f),
+                                        )
+                                    }
+                                    // Loading spinner
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        color = Color.White,
+                                        strokeWidth = 3.dp,
+                                        modifier = Modifier.size(48.dp),
                                     )
-                                },
-                            )
+                                }
+                            } else {
+                                // Episode switch or initial entry: full overlay with thumbnail
+                                app.anikuta.player.controls.EpisodeSwitchingOverlay(
+                                    episodeThumbnailUrl = currentEpisode?.preview_url,
+                                    episodeTitle = currentEpisode?.let {
+                                        app.anikuta.ui.detail.EpisodeTitleParser.getDisplayTitle(
+                                            it.name, it.episode_number,
+                                        )
+                                    },
+                                )
+                            }
                         } else {
                             // Controls overlay on top of the video (hidden during switching)
                             app.anikuta.player.controls.MinimizedControls(

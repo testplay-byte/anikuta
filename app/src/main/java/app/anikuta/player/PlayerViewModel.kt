@@ -91,6 +91,13 @@ class PlayerViewModel(
     private val _isSwitchingEpisode = MutableStateFlow(false)
     val isSwitchingEpisode: StateFlow<Boolean> = _isSwitchingEpisode.asStateFlow()
 
+    /** What kind of switch is happening — controls the loading overlay style.
+     *  - "episode": full overlay with episode thumbnail (episode switch)
+     *  - "quality": semi-transparent overlay on top of frozen video frame (quality/server/audio switch)
+     *  - "initial": full overlay with episode thumbnail (player entry) */
+    private val _switchType = MutableStateFlow("initial")
+    val switchType: StateFlow<String> = _switchType.asStateFlow()
+
     /** Available subtitle tracks from MPV. */
     private val _subtitleTracks = MutableStateFlow<List<VideoTrack>>(emptyList())
     val subtitleTracks: StateFlow<List<VideoTrack>> = _subtitleTracks.asStateFlow()
@@ -177,8 +184,11 @@ class PlayerViewModel(
         _currentEpisodeIndex.value = index
     }
 
-    fun setSwitchingEpisode(switching: Boolean) {
+    fun setSwitchingEpisode(switching: Boolean, type: String = "episode") {
         _isSwitchingEpisode.value = switching
+        if (switching) {
+            _switchType.value = type
+        }
     }
 
     // ---- Track management ----
