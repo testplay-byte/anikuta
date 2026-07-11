@@ -197,6 +197,9 @@ class PlayerActivity : ComponentActivity() {
      *  seekToSavedPosition + start-over overlay — only fires on first load, not
      *  on server/audio/quality switches). */
     @Volatile private var isFirstFileLoad: Boolean = true
+    /** Position to seek to after FILE_LOADED for quality/server switches.
+     *  Set by loadSelectedVideo, consumed by handleEvent(FILE_LOADED). */
+    @Volatile private var pendingSeekPosition: Int = -1
     /** Resolved video list for the current episode — cached so switchServer/
      *  switchAudioVersion / switchQuality don't need to re-resolve from source. */
     @Volatile private var currentEpisodeVideos: List<eu.kanade.tachiyomi.animesource.model.Video> = emptyList()
@@ -394,6 +397,19 @@ class PlayerActivity : ComponentActivity() {
                 // FIX (C1): Deduplicated by loadExternalTracks() — safe to call
                 // from FILE_LOADED even if resolveVideosInBackground already added them.
                 loadExternalTracks()
+                // FIX: Position preservation for quality/server switches.
+                // If pendingSeekPosition is set, seek to it after the file loads.
+                // This is more reliable than the MPV "start" property.
+                if (pendingSeekPosition > 0) {
+                    try {
+                        MPVLib.setPropertyInt("time-pos", pendingSeekPosition)
+                        viewModel?.onPositionUpdate(pendingSeekPosition)
+                        Log.d(TAG, "Seeked to pending position: ${pendingSeekPosition}s")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not seek to pending position", e)
+                    }
+                    pendingSeekPosition = -1
+                }
                 // FIX (H4): Only seek to saved position + show start-over overlay
                 // on the FIRST file load for this video, not on every server/audio/
                 // quality switch (which also fires FILE_LOADED).
@@ -1235,8 +1251,16 @@ class PlayerActivity : ComponentActivity() {
         vm.setControlsVisible(false)
 
         // FIX: Preserve playback position across quality/server switches.
-        // Aniyomi sets "start" to current timePos before loadfile. We do the same.
+        // Set pendingSeekPosition — consumed by handleEvent(FILE_LOADED) after
+        // the new video loads. This is more reliable than the MPV "start"
+        // property which may not work consistently across MPV builds.
         val savedPosition = mpvViewRef?.timePos ?: 0
+        if (savedPosition > 5) {
+            pendingSeekPosition = savedPosition
+            Log.d(TAG, "Pending seek position set: ${savedPosition}s")
+        } else {
+            pendingSeekPosition = -1
+        }
 
         // Load into MPV
         lifecycleScope.launch {
@@ -1245,20 +1269,8 @@ class PlayerActivity : ComponentActivity() {
                     if (headers.isNotBlank()) {
                         MPVLib.setOptionString("http-header-fields", headers)
                     }
-                    // Set start position so MPV seeks to it after loading.
-                    // FIX: Use command("set", "start", ...) instead of setOptionString.
-                    // setOptionString is init-only and doesn't work after MPV is
-                    // initialized. The "set" command goes through the property API.
-                    // Mirrors aniyomi's PlayerActivity.setVideo() approach.
-                    if (savedPosition > 5) {
-                        MPVLib.command(arrayOf("set", "start", "$savedPosition"))
-                        Log.d(TAG, "Preserving position: ${savedPosition}s")
-                    }
                     Log.d(TAG, "Loading video: ${currentVideoUrl.take(80)}...")
                     MPVLib.command(arrayOf("loadfile", currentVideoUrl, "replace"))
-                    // Clear the start property so it doesn't affect future loads
-                    // (e.g. episode switching should start from 0 or resume position)
-                    MPVLib.command(arrayOf("set", "start", "none"))
                     launchSwitchTimeout()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load video", e)

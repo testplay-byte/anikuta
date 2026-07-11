@@ -114,8 +114,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
-    // Media session (notification controls)
-    implementation(libs.androidx.media)
+    // Media session dependency removed — PlayerMediaSession was dead code (D.2)
 
     implementation(libs.mpv.lib)
     // FFmpeg native libraries required by libmpv.so. libmpv.so is dynamically

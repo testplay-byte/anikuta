@@ -60,24 +60,28 @@ fun DetailScreen(
     var expandedDescription by remember { mutableStateOf(false) }
 
     // Phase 7.5: Episode display settings
+    // FIX (D.8): Use stateIn().collectAsState() so preferences update reactively
+    // when the user changes them in Settings. Previously used remember { .get() }
+    // which captured the value once and never updated.
     val playerPrefs = remember {
         try { uy.kohesive.injekt.Injekt.get<app.anikuta.player.PlayerPreferences>() }
         catch (e: Exception) { null }
     }
-    val showTitles = remember { playerPrefs?.showEpisodeTitles()?.get() ?: true }
-    val showSummaries = remember { playerPrefs?.showEpisodeSummaries()?.get() ?: true }
-    val showThumbnails = remember { playerPrefs?.showEpisodeThumbnails()?.get() ?: true }
-    val showDates = remember { playerPrefs?.showEpisodeDates()?.get() ?: true }
-    val showEpisodeNumber = remember { playerPrefs?.showEpisodeNumber()?.get() ?: true }
-    val showAudioPills = remember { playerPrefs?.showAudioPills()?.get() ?: true }
-    val synopsisPosition = remember { playerPrefs?.synopsisPosition()?.get() ?: "right" }
-    val datePosition = remember { playerPrefs?.datePosition()?.get() ?: "right_below_synopsis" }
-    val thumbnailSize = remember { playerPrefs?.thumbnailSize()?.get() ?: "medium" }
-    val titlePosition = remember { playerPrefs?.titlePosition()?.get() ?: "right" }
-    val episodeNumberPosition = remember { playerPrefs?.episodeNumberPosition()?.get() ?: "overlay" }
-    val thumbnailPosition = remember { playerPrefs?.thumbnailPosition()?.get() ?: "left" }
-    val animeInfoPosition = remember { playerPrefs?.animeInfoPosition()?.get() ?: "below" }
-    val dynamicThemingEnabled = remember { playerPrefs?.dynamicDetailTheming()?.get() ?: true }
+    val detailScope = androidx.compose.runtime.rememberCoroutineScope()
+    val showTitles by (playerPrefs?.showEpisodeTitles()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
+    val showSummaries by (playerPrefs?.showEpisodeSummaries()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
+    val showThumbnails by (playerPrefs?.showEpisodeThumbnails()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
+    val showDates by (playerPrefs?.showEpisodeDates()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
+    val showEpisodeNumber by (playerPrefs?.showEpisodeNumber()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
+    val showAudioPills by (playerPrefs?.showAudioPills()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
+    val synopsisPosition by (playerPrefs?.synopsisPosition()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("right")).collectAsState()
+    val datePosition by (playerPrefs?.datePosition()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("right_below_synopsis")).collectAsState()
+    val thumbnailSize by (playerPrefs?.thumbnailSize()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("medium")).collectAsState()
+    val titlePosition by (playerPrefs?.titlePosition()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("right")).collectAsState()
+    val episodeNumberPosition by (playerPrefs?.episodeNumberPosition()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("overlay")).collectAsState()
+    val thumbnailPosition by (playerPrefs?.thumbnailPosition()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("left")).collectAsState()
+    val animeInfoPosition by (playerPrefs?.animeInfoPosition()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("below")).collectAsState()
+    val dynamicThemingEnabled by (playerPrefs?.dynamicDetailTheming()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
 
     // Observe play requests from the ViewModel → launch the player.
     androidx.compose.runtime.LaunchedEffect(playRequest) {
