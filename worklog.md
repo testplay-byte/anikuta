@@ -824,3 +824,51 @@ Stage Summary:
 - Double-tap skip animations are smaller and show "+10s"/"-10s" text labels
 - Subtitle tracks from extensions now load via sub-add/audio-add commands
 - Subtitle settings panel is compact, scrollable, and doesn't take full screen
+
+---
+
+## Session 36 (Double-tap text pills + subtitle clickable + settings colors + dismiss together + auto-hide minimized)
+
+Task ID: PLAYER-UI-REFINEMENT-V6
+Agent: main (Z.ai Code)
+
+### Fix 1 — Double-Tap Skip Animations (text-only pill)
+- Removed icon from skip animations — now just "+10s"/"-10s" text in a dark pill
+- Pill: RoundedCornerShape(20dp), 60% black alpha, 18sp bold white text
+- Play/Pause center animation: unchanged (icon in dark circle, 48dp)
+
+### Fix 2 — Subtitle Track Selection (clickable bug)
+- Root cause: SheetOption in PlayerSheet.kt was missing the .clickable {} modifier
+  on its Row. The onClick parameter was declared but never wired to the Row's
+  click handler — so tapping a track did nothing.
+- Fix: Added .clickable { onClick() } to the Row modifier
+- Added logging: "Subtitle track selected: id=X" + "sid=X"
+- Explicit handling for "Off" (id=-1) with separate log message
+
+### Fix 3 — Subtitle Settings Expanded
+- Increased sheet height: 420dp → 500dp
+- Added font family selector (Sans Serif, Serif, Monospace, Roboto)
+- Added Colors section with 3 color pickers (text, border, background)
+  - Presets: White, Black, Yellow, Cyan, Red, Green, Blue, Transparent
+  - Color swatch + hex value display, tap to open preset palette
+- New composables: CompactDropdownRow, ColorPickerRow
+
+### Fix 4 — Dismiss Subtitle Settings + Track Sheet Together
+- SubtitleSettingsSheet onDismiss now calls both showSettings=false AND onDismiss()
+- Closing the settings sheet (tap outside or swipe down) closes both sheets
+
+### Fix 5 — Auto-Hide Controls in Minimized View
+- Extended auto-hide to MINIMIZED mode (was FULLSCREEN-only)
+- Minimized: 5 seconds of inactivity → controls fade out smoothly
+- Fullscreen: 4 seconds (unchanged)
+- Smooth fade via existing AnimatedVisibility (fadeIn/fadeOut)
+
+### Build
+- Build #230 (1aac1e9): SUCCESS
+
+Stage Summary:
+- Double-tap skip animations are now clean text-only pills
+- Subtitle tracks are now clickable (was a missing .clickable modifier bug)
+- Subtitle settings have font family + color pickers, taller sheet
+- Closing subtitle settings also closes the subtitle track sheet
+- Controls auto-hide after 5 seconds in minimized view (smooth fade)
