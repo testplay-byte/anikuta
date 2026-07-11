@@ -193,13 +193,15 @@ class AnikutaMPVView(
         // Filter in logcat with: tag:mpv/demux tag:mpv/sub tag:mpv/stream tag:mpv/cplayer
         MPVLib.setOptionString("msg-level", "all=warn,demuxer=v,sub=v,stream=v,cplayer=v,file=v")
 
-        // Subtitle Fix: Removed force-window=yes — this was breaking the subtitle
-        // compositor. aniyomi does NOT set force-window. The gpu VO initializes
-        // naturally when the first video frame arrives, and the subtitle
-        // compositor attaches correctly to the render pipeline.
-        // If blank video returns on some devices, try force-window=immediate
-        // as a less invasive alternative (handles surface differently).
-        // MPVLib.setOptionString("force-window", "yes")  // REMOVED
+        // FIX: Use force-window=immediate to ensure the GPU VO surface is created
+        // immediately. Without this, h264_mediacodec reports "Both surface and
+        // native_window are NULL" and neither video frames nor subtitles render.
+        // We previously removed force-window entirely (to fix subtitles), but that
+        // caused the surface attachment to fail. force-window=immediate creates
+        // the window immediately but does NOT keep it when no video is playing —
+        // this lets the subtitle compositor attach to the render pipeline correctly
+        // while still ensuring the surface exists for the decoder.
+        MPVLib.setOptionString("force-window", "immediate")
 
         // Subtitle Fix: Removed vid=1 — aniyomi doesn't force vid. Some HLS
         // streams may need it, but it can interfere with the render pipeline.
