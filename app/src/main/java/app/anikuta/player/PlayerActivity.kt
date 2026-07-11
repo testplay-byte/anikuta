@@ -1233,7 +1233,7 @@ class PlayerActivity : ComponentActivity() {
 
         // FIX: Preserve playback position across quality/server switches.
         // Aniyomi sets "start" to current timePos before loadfile. We do the same.
-        val savedPosition = mpvView?.timePos ?: 0
+        val savedPosition = mpvViewRef?.timePos ?: 0
 
         // Load into MPV
         lifecycleScope.launch {
