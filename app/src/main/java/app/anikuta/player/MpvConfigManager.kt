@@ -120,7 +120,7 @@ object MpvConfigManager {
         sub-pos=100
 
         # Network
-        tls-verify=no
+        tls-verify=yes
         ytdl=no
     """.trimIndent()
 

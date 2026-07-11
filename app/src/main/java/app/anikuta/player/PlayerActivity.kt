@@ -112,6 +112,38 @@ class PlayerActivity : ComponentActivity() {
         const val MPV_DIR = "mpv"
 
         /**
+         * Copy cacert.pem from APK assets to the MPV config directory.
+         * This is needed for TLS verification when MPV downloads external
+         * subtitles (.vtt files) over HTTPS. Without the CA bundle, the
+         * TLS handshake fails silently and subtitles never load.
+         * Mirrors aniyomi's copyAssets() function.
+         */
+        fun copyAssets(context: android.content.Context, mpvDir: java.io.File) {
+            val assetManager = context.assets
+            val files = arrayOf("cacert.pem")
+            for (filename in files) {
+                var ins: java.io.InputStream? = null
+                var out: java.io.OutputStream? = null
+                try {
+                    ins = assetManager.open(filename, android.content.res.AssetManager.ACCESS_STREAMING)
+                    val outFile = java.io.File(mpvDir, filename)
+                    // Skip if already exists with same size
+                    if (outFile.exists() && outFile.length() == ins.available().toLong()) {
+                        continue
+                    }
+                    out = java.io.FileOutputStream(outFile)
+                    ins.copyTo(out)
+                    Log.d("PlayerActivity", "Copied asset: $filename (${outFile.length()} bytes)")
+                } catch (e: java.io.IOException) {
+                    Log.w("PlayerActivity", "Failed to copy asset: $filename", e)
+                } finally {
+                    ins?.close()
+                    out?.close()
+                }
+            }
+        }
+
+        /**
          * Build a launch Intent for the player.
          * [anilistId] + [episodeUrl] + [episodeNumber] are optional — when
          * provided, watch progress is saved/resumed + AniList sync happens.
@@ -589,7 +621,12 @@ class PlayerActivity : ComponentActivity() {
                         return@forEach
                     }
                     try {
-                        val flags = if (isFirstSub) "select" else "auto"
+                        // Use "auto" for ALL subtitle tracks — matches aniyomi exactly.
+                        // The "select" flag was causing sid to be set BEFORE the URL
+                        // was downloaded/parsed, resulting in an empty track with no cues.
+                        // With "auto", autoSelectSubtitleTrack() sets sid AFTER the
+                        // track-list settles and the URL has been fetched.
+                        val flags = "auto"
                         MPVLib.command(arrayOf("sub-add", sub.url, flags, "", sub.lang))
                         addedTrackUrls.add(sub.url)
                         isFirstSub = false

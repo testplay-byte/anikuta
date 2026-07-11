@@ -326,66 +326,26 @@ private fun FullscreenSeekbar(
     var scrubPosition by remember { mutableStateOf<Float?>(null) }
     val displayPosition = scrubPosition ?: position.toFloat().coerceAtLeast(0f)
     val maxRange = duration.toFloat().coerceAtLeast(1f)
-    val progress = (displayPosition / maxRange).coerceIn(0f, 1f)
-    // P2b: Buffer-ahead ratio
-    val bufferProgress = if (duration > 0 && bufferAheadTime > 0) {
-        (bufferAheadTime.toFloat() / maxRange).coerceIn(0f, 1f)
-    } else 0f
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // Buffer-ahead segment (visual only, above the slider)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(3.dp)
-        ) {
-            // Inactive track
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color.White.copy(alpha = 0.2f)),
-            )
-            // Buffer-ahead segment
-            if (bufferProgress > progress) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(bufferProgress)
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color.White.copy(alpha = 0.4f)),
-                )
-            }
-            // Progress segment
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.primary),
-                )
-        }
-        Spacer(modifier = Modifier.height(2.dp))
-        // The actual slider
-        androidx.compose.material3.Slider(
-            value = displayPosition.coerceIn(0f, maxRange),
-            onValueChange = { newValue ->
-                scrubPosition = newValue
-            },
-            onValueChangeFinished = {
-                scrubPosition?.let { onSeekTo(it.toInt()) }
-                scrubPosition = null
-            },
-            valueRange = 0f..maxRange,
-            modifier = Modifier.fillMaxWidth(),
-            colors = androidx.compose.material3.SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = Color.White.copy(alpha = 0.3f),
-            ),
-        )
-    }
+    // Single slider — the M3 Slider's inactiveTrackColor shows the buffer
+    // ahead. No separate visual track above (that caused double seekbar).
+    androidx.compose.material3.Slider(
+        value = displayPosition.coerceIn(0f, maxRange),
+        onValueChange = { newValue ->
+            scrubPosition = newValue
+        },
+        onValueChangeFinished = {
+            scrubPosition?.let { onSeekTo(it.toInt()) }
+            scrubPosition = null
+        },
+        valueRange = 0f..maxRange,
+        modifier = Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.SliderDefaults.colors(
+            thumbColor = MaterialTheme.colorScheme.primary,
+            activeTrackColor = MaterialTheme.colorScheme.primary,
+            inactiveTrackColor = Color.White.copy(alpha = 0.3f),
+        ),
+    )
 }
 
 private fun formatTime(seconds: Int): String {

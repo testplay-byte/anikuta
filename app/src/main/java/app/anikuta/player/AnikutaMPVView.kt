@@ -221,8 +221,15 @@ class AnikutaMPVView(
         // Many streaming servers use self-signed or untrusted certificates.
         // Without this, MPV rejects the connection: "The certificate is not
         // correctly signed by the trusted CA" → loading failed.
-        // Safe for a sideloaded app (not distributed via Google Play).
-        MPVLib.setOptionString("tls-verify", "no")
+        // TLS: Use cacert.pem (Mozilla CA bundle) for proper TLS verification.
+        // This is critical for external subtitle downloads — MPV's subtitle
+        // demuxer uses lavf which needs a CA bundle for HTTPS handshakes.
+        // Without it, the TLS handshake fails silently and the .vtt file
+        // is never downloaded, resulting in tracks that appear in the
+        // track-list but have no content (no cues rendered).
+        // Mirrors aniyomi's approach: tls-verify=yes + tls-ca-file=cacert.pem.
+        MPVLib.setOptionString("tls-verify", "yes")
+        MPVLib.setOptionString("tls-ca-file", "${context.filesDir.path}/${PlayerActivity.MPV_DIR}/cacert.pem")
 
         // Limit demuxer cache for mobile.
         // FIX: Increased from 64MB to 256MB to support 2+ minutes of buffering

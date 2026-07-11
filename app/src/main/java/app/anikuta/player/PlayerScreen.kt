@@ -352,6 +352,8 @@ internal fun PlayerScreen(
                                     mpvView = view
                                     onViewCreated(view)
                                     val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
+                                    // Copy cacert.pem from assets to mpv dir for TLS verification
+                                    PlayerActivity.copyAssets(ctx, mpvDir)
                                     view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "warn")
                                     Log.d("PlayerActivity", "MPV initialized")
                                     MPVLib.addLogObserver(observer)
