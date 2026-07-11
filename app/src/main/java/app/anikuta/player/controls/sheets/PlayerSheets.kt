@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
@@ -55,17 +56,19 @@ fun QualitySheet(
     onSelect: (Video) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // FIX (Part 2): Parse each video with VideoTitleParser to show clean
-    // quality labels (e.g. "1080p") instead of raw titles like
-    // "VidPlay-1 - SUB - 1080p". Only show videos matching the current
-    // server + audio version (since quality switching should stay within
-    // the same server/audio).
+    // FIX: Parse each video with VideoTitleParser to show clean quality labels
+    // (e.g. "1080p") instead of raw titles like "VidPlay-1 - SUB - 1080p".
+    //
+    // FIX (crash): Previously used key = { it.videoUrl } which crashed with
+    // "Key was already used" when multiple videos share the same URL (e.g.
+    // different audio versions on the same server might point to the same m3u8).
+    // Now uses the index as the key to guarantee uniqueness.
     PlayerSheet(title = "Quality", onDismiss = onDismiss) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 8.dp),
         ) {
-            items(videos, key = { it.videoUrl }) { video ->
+            itemsIndexed(videos, key = { index, _ -> "quality_$index" }) { index, video ->
                 val parsed = app.anikuta.ui.detail.VideoTitleParser.parse(video)
                 val qualityLabel = parsed.quality?.let { "${it}p" } ?: "Unknown"
                 val subtitle = buildString {
@@ -76,7 +79,8 @@ fun QualitySheet(
                 SheetOption(
                     title = qualityLabel,
                     subtitle = subtitle,
-                    selected = video.videoUrl == currentVideoUrl,
+                    selected = video.videoUrl == currentVideoUrl &&
+                        video.videoTitle == videos.firstOrNull { it.videoUrl == currentVideoUrl }?.videoTitle,
                     onClick = { onSelect(video); onDismiss() },
                 )
             }
