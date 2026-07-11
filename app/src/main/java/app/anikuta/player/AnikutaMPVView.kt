@@ -189,15 +189,18 @@ class AnikutaMPVView(
         )
         MPVLib.setOptionString("msg-level", "all=warn")
 
-        // Force a video window even when paused/before first frame — without
-        // this, some devices never attach the decoded frames to the surface
-        // (symptom: decoder runs, renderFps=0, blank video).
-        MPVLib.setOptionString("force-window", "yes")
+        // Subtitle Fix: Removed force-window=yes — this was breaking the subtitle
+        // compositor. aniyomi does NOT set force-window. The gpu VO initializes
+        // naturally when the first video frame arrives, and the subtitle
+        // compositor attaches correctly to the render pipeline.
+        // If blank video returns on some devices, try force-window=immediate
+        // as a less invasive alternative (handles surface differently).
+        // MPVLib.setOptionString("force-window", "yes")  // REMOVED
 
-        // Force the video track to be selected + displayed. Some HLS streams
-        // don't auto-select the video track, causing audio-only playback with
-        // a blank screen.
-        MPVLib.setOptionString("vid", "1")
+        // Subtitle Fix: Removed vid=1 — aniyomi doesn't force vid. Some HLS
+        // streams may need it, but it can interfere with the render pipeline.
+        // If audio-only playback returns on some streams, handle it conditionally.
+        // MPVLib.setOptionString("vid", "1")  // REMOVED
 
         // Enable demuxer cache so the stream can buffer ahead. Without this,
         // HLS streams from extension proxies (localhost:PORT/variant/...) can
@@ -238,32 +241,58 @@ class AnikutaMPVView(
         // Workaround for https://github.com/mpv-player/mpv/issues/14651
         MPVLib.setOptionString("vd-lavc-film-grain", "cpu")
 
-        // ---- Phase 5.2: Subtitle preferences → MPV properties ----
-        applySubtitlePreferences()
+        // ---- Phase 5.2: Subtitle preferences → MPV properties (init API) ----
+        applySubtitlePreferencesInit()
     }
 
     /**
-     * Apply subtitle preferences to MPV.
+     * Apply subtitle preferences to MPV at INIT time (called from initOptions).
      *
-     * FIX (Part 5): Uses setPropertyString() for runtime-applicable properties
-     * (sub-font, sub-font-size, sub-scale, sub-border-size, sub-bold, sub-italic,
-     * sub-color, sub-border-color, sub-back-color, sub-pos, sub-shadow-offset,
-     * sub-ass-override, sub-delay) so changes apply LIVE without reinitializing
-     * MPV.
+     * Subtitle Fix 2: Uses setOptionString (init API) to match aniyomi's
+     * setupSubtitlesOptions() exactly. aniyomi uses setOptionString for ALL
+     * subtitle properties at init time. Our previous code used setPropertyString
+     * (runtime API) which may not fully register in MPV's render pipeline
+     * during initialization.
      *
-     * FIX (M3): sub-font is also set via setPropertyString() so it can be
-     * changed at runtime — setOptionString is init-only and silently fails
-     * to apply after MPV is initialized.
-     *
-     * Called from initOptions() on initial load AND from the SubtitleSettingsPanel
-     * via onSettingsChanged callback when the user adjusts settings.
+     * Also: sub-ass-override is only set to "force" when the user opts in.
+     * When NOT opted in, we DON'T set it at all — leaving MPV's default
+     * ("auto") which handles ASS subtitles correctly. Previously we set it
+     * to "no" which completely disabled ASS override, potentially breaking
+     * subtitle rendering for ASS-format streams.
+     */
+    private fun applySubtitlePreferencesInit() {
+        try {
+            MPVLib.setOptionString("sub-font", playerPreferences.subtitleFont().get())
+            MPVLib.setOptionString("sub-font-size", playerPreferences.subtitleFontSize().get().toString())
+            MPVLib.setOptionString("sub-scale", playerPreferences.subtitleFontScale().get().toString())
+            MPVLib.setOptionString("sub-border-size", playerPreferences.subtitleBorderSize().get().toString())
+            MPVLib.setOptionString("sub-bold", if (playerPreferences.boldSubtitles().get()) "yes" else "no")
+            MPVLib.setOptionString("sub-italic", if (playerPreferences.italicSubtitles().get()) "yes" else "no")
+            MPVLib.setOptionString("sub-color", colorToHex(playerPreferences.textColorSubtitles().get()))
+            MPVLib.setOptionString("sub-border-color", colorToHex(playerPreferences.borderColorSubtitles().get()))
+            MPVLib.setOptionString("sub-back-color", colorToHex(playerPreferences.backgroundColorSubtitles().get()))
+            MPVLib.setOptionString("sub-pos", playerPreferences.subtitlePosition().get().toString())
+            MPVLib.setOptionString("sub-shadow-offset", playerPreferences.subtitleShadowOffset().get().toString())
+            // Only set sub-ass-override when the user explicitly enables it.
+            // When disabled, leave MPV's default ("auto") — this matches aniyomi.
+            if (playerPreferences.overrideSubsASS().get()) {
+                MPVLib.setOptionString("sub-ass-override", "force")
+                MPVLib.setOptionString("sub-ass-justify", "yes")
+            }
+            MPVLib.setOptionString("sub-delay", (playerPreferences.subtitlesDelay().get() / 1000.0).toString())
+            Log.d("AnikutaMPVView", "Subtitle preferences applied (init, setOptionString)")
+        } catch (e: Exception) {
+            Log.w("AnikutaMPVView", "Could not apply subtitle preferences (init)", e)
+        }
+    }
+
+    /**
+     * Apply subtitle preferences LIVE (called from SubtitleSettingsPanel when
+     * the user changes settings at runtime). Uses setPropertyString (runtime API).
      */
     fun applySubtitlePreferences() {
         try {
-            // FIX (M3): sub-font is a runtime property — use setPropertyString
-            // so it applies live. setOptionString is init-only.
             MPVLib.setPropertyString("sub-font", playerPreferences.subtitleFont().get())
-            // Runtime-applicable properties — use setPropertyString for live updates
             MPVLib.setPropertyString("sub-font-size", playerPreferences.subtitleFontSize().get().toString())
             MPVLib.setPropertyString("sub-scale", playerPreferences.subtitleFontScale().get().toString())
             MPVLib.setPropertyString("sub-border-size", playerPreferences.subtitleBorderSize().get().toString())
@@ -276,9 +305,8 @@ class AnikutaMPVView(
             MPVLib.setPropertyString("sub-shadow-offset", playerPreferences.subtitleShadowOffset().get().toString())
             if (playerPreferences.overrideSubsASS().get()) {
                 MPVLib.setPropertyString("sub-ass-override", "force")
-            } else {
-                MPVLib.setPropertyString("sub-ass-override", "no")
             }
+            // Don't set "no" — leave MPV default ("auto") when not overriding
             MPVLib.setPropertyString("sub-delay", (playerPreferences.subtitlesDelay().get() / 1000.0).toString())
             Log.d("AnikutaMPVView", "Subtitle preferences applied (live update)")
         } catch (e: Exception) {

@@ -394,6 +394,8 @@ class PlayerActivity : ComponentActivity() {
         when (eventId) {
             MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
                 viewModel?.onFileLoaded()
+                // Subtitle Fix 4: Safety net — ensure subtitles are visible
+                try { MPVLib.setPropertyBoolean("sub-visibility", true) } catch (e: Exception) {}
                 // Load external subtitle + audio tracks.
                 loadExternalTracks()
                 // Position preservation for quality/server switches.
