@@ -193,20 +193,19 @@ class AnikutaMPVView(
         // Filter in logcat with: tag:mpv/demux tag:mpv/sub tag:mpv/stream tag:mpv/cplayer
         MPVLib.setOptionString("msg-level", "all=warn,demuxer=v,sub=v,stream=v,cplayer=v,file=v")
 
-        // FIX: Use force-window=immediate to ensure the GPU VO surface is created
-        // immediately. Without this, h264_mediacodec reports "Both surface and
-        // native_window are NULL" and neither video frames nor subtitles render.
-        // We previously removed force-window entirely (to fix subtitles), but that
-        // caused the surface attachment to fail. force-window=immediate creates
-        // the window immediately but does NOT keep it when no video is playing —
-        // this lets the subtitle compositor attach to the render pipeline correctly
-        // while still ensuring the surface exists for the decoder.
-        MPVLib.setOptionString("force-window", "immediate")
+        // Restore force-window=yes — required for the GPU VO surface on Android.
+        // force-window=immediate causes SIGABRT (assertion: WinID != 0 && WinID != -1).
+        // force-window=none causes "Both surface and native_window are NULL" (no rendering).
+        // force-window=yes is the only value that works with this MPV Android build.
+        // The original subtitle rendering issue was NOT caused by force-window —
+        // it was caused by sub-ass-override=no (now fixed: we leave MPV default "auto")
+        // and setPropertyString at init time (now fixed: we use setOptionString).
+        MPVLib.setOptionString("force-window", "yes")
 
-        // Subtitle Fix: Removed vid=1 — aniyomi doesn't force vid. Some HLS
-        // streams may need it, but it can interfere with the render pipeline.
-        // If audio-only playback returns on some streams, handle it conditionally.
-        // MPVLib.setOptionString("vid", "1")  // REMOVED
+        // Restore vid=1 — some HLS streams don't auto-select the video track,
+        // causing audio-only playback. This was removed as a "subtitle fix" but
+        // the real subtitle issue was sub-ass-override and setPropertyString.
+        MPVLib.setOptionString("vid", "1")
 
         // Enable demuxer cache so the stream can buffer ahead. Without this,
         // HLS streams from extension proxies (localhost:PORT/variant/...) can
