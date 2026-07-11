@@ -50,6 +50,11 @@ class PlayerViewModel(
     private val _buffering = MutableStateFlow(false)
     val buffering: StateFlow<Boolean> = _buffering.asStateFlow()
 
+    /** P2b: Demuxer cache time — how far ahead the video is buffered (seconds).
+     *  Used by the seekbar to draw a buffer-ahead segment. */
+    private val _bufferAheadTime = MutableStateFlow(0)
+    val bufferAheadTime: StateFlow<Int> = _bufferAheadTime.asStateFlow()
+
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
@@ -264,6 +269,11 @@ class PlayerViewModel(
 
     fun onVolumeUpdate(value: Int) {
         _volume.value = value
+    }
+
+    /** P2b: Update the buffer-ahead time from demuxer-cache-time. */
+    fun onBufferAheadUpdate(cacheTime: Int) {
+        _bufferAheadTime.value = cacheTime
     }
 
     fun onBufferingChanged(buffering: Boolean) {

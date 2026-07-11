@@ -94,6 +94,7 @@ fun MinimizedControls(
     val duration by viewModel.duration.collectAsState()
     val buffering by viewModel.buffering.collectAsState()
     val loadingState by viewModel.loadingState.collectAsState()
+    val bufferAheadTime by viewModel.bufferAheadTime.collectAsState()
     val isSwitchingEpisode by viewModel.isSwitchingEpisode.collectAsState()
 
     // Double-tap animation state
@@ -326,6 +327,7 @@ fun MinimizedControls(
                     MinimalSeekbar(
                         position = position,
                         duration = duration,
+                        bufferAheadTime = bufferAheadTime,
                         onSeekTo = onSeekTo,
                         modifier = Modifier.weight(1f),
                     )
@@ -366,6 +368,7 @@ private enum class DoubleTapFeedback { Pause, Play, Rewind, Forward }
 private fun MinimalSeekbar(
     position: Int,
     duration: Int,
+    bufferAheadTime: Int = 0,
     onSeekTo: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -375,6 +378,10 @@ private fun MinimalSeekbar(
     val maxRange = duration.toFloat().coerceAtLeast(1f)
     val progress = (displayPosition / maxRange).coerceIn(0f, 1f)
     val isDragging = scrubPosition != null
+    // P2b: Buffer-ahead ratio for the seekbar indicator
+    val bufferProgress = if (duration > 0 && bufferAheadTime > 0) {
+        (bufferAheadTime.toFloat() / maxRange).coerceIn(0f, 1f)
+    } else 0f
 
     Box(
         modifier = modifier
@@ -415,6 +422,16 @@ private fun MinimalSeekbar(
                 .clip(RoundedCornerShape(3.dp))
                 .background(Color.White.copy(alpha = 0.3f)),
         )
+        // P2b: Buffer-ahead segment — lighter color, between progress and end
+        if (bufferProgress > progress) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(bufferProgress)
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color.White.copy(alpha = 0.5f)),
+            )
+        }
         // Active track (progress) — 5dp line in primary color
         Box(
             modifier = Modifier

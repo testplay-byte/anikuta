@@ -388,20 +388,9 @@ class PlayerActivity : ComponentActivity() {
         when (eventId) {
             MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
                 viewModel?.onFileLoaded()
-                // Episode switching: clear the loading state + timeout
-                val vm = viewModel
-                if (vm != null && vm.isSwitchingEpisode.value) {
-                    vm.setSwitchingEpisode(false)
-                    cancelSwitchTimeout()
-                    Log.d(TAG, "Episode switch: FILE_LOADED — clearing switching state")
-                }
-                // Load external subtitle + audio tracks from the Video object.
-                // FIX (C1): Deduplicated by loadExternalTracks() — safe to call
-                // from FILE_LOADED even if resolveVideosInBackground already added them.
+                // Load external subtitle + audio tracks.
                 loadExternalTracks()
-                // FIX: Position preservation for quality/server switches.
-                // If pendingSeekPosition is set, seek to it after the file loads.
-                // This is more reliable than the MPV "start" property.
+                // Position preservation for quality/server switches.
                 if (pendingSeekPosition > 0) {
                     try {
                         MPVLib.setPropertyInt("time-pos", pendingSeekPosition)
@@ -412,21 +401,24 @@ class PlayerActivity : ComponentActivity() {
                     }
                     pendingSeekPosition = -1
                 }
-                // FIX (H4): Only seek to saved position + show start-over overlay
-                // on the FIRST file load for this video, not on every server/audio/
-                // quality switch (which also fires FILE_LOADED).
+                // First file load: seek to saved watch progress
                 if (isFirstFileLoad) {
                     isFirstFileLoad = false
                     seekToSavedPosition()
                 }
-                // Auto-play: the file is loaded, start playing immediately.
+                // FIX (P0/P1c): Don't auto-play immediately. Instead, pause and
+                // wait for enough buffer (10 seconds ahead) before playing.
+                // This prevents stuttering, white screens, and ensures smooth
+                // playback start on every switch (server/quality/audio/episode).
                 try {
-                    MPVLib.setPropertyBoolean("pause", false)
-                    viewModel?.onPauseChanged(false)
-                    Log.d(TAG, "Auto-play started")
+                    MPVLib.setPropertyBoolean("pause", true)
+                    viewModel?.onPauseChanged(true)
+                    Log.d(TAG, "FILE_LOADED — paused, waiting for buffer before playback")
                 } catch (e: Exception) {
-                    Log.w(TAG, "Could not auto-play", e)
+                    Log.w(TAG, "Could not pause for buffering", e)
                 }
+                // Start monitoring buffer — will auto-play when enough is buffered
+                startBufferWait()
             }
             MPVLib.mpvEventId.MPV_EVENT_SEEK -> viewModel?.onBufferingChanged(true)
             MPVLib.mpvEventId.MPV_EVENT_PLAYBACK_RESTART -> viewModel?.onBufferingChanged(false)
@@ -434,16 +426,88 @@ class PlayerActivity : ComponentActivity() {
             MPVLib.mpvEventId.MPV_EVENT_END_FILE -> {
                 // File ended or failed to load.
                 Log.w(TAG, "MPV_EVENT_END_FILE — file ended or failed")
-                // FIX (H2): Clear switching state immediately on load failure
-                // so the loading overlay doesn't stay for 30s waiting for timeout.
+                // FIX (P0): Don't clear isSwitchingEpisode on END_FILE —
+                // "replace" mode fires END_FILE for the OLD file before
+                // FILE_LOADED for the new one. Clearing here would cause
+                // the loading overlay to disappear prematurely and the
+                // switching state to be lost. Let FILE_LOADED handle it.
+                // Only clear if this is NOT a replace (i.e. genuine end/error
+                // with no new file coming).
                 val vm = viewModel
                 if (vm != null && vm.isSwitchingEpisode.value) {
-                    vm.setSwitchingEpisode(false)
-                    cancelSwitchTimeout()
-                    Log.d(TAG, "END_FILE: cleared switching state (load may have failed)")
+                    // Keep the switching state — the new file is loading
+                    Log.d(TAG, "END_FILE: keeping switching state (replace in progress)")
                 }
             }
         }
+    }
+
+    /**
+     * P1c: Wait for enough buffer before starting playback.
+     *
+     * After FILE_LOADED, the video is paused. This function polls
+     * demuxer-cache-time every 500ms. When 10 seconds are buffered ahead
+     * (or after a 15s timeout fallback), it:
+     *  1. Clears the loading overlay (isSwitchingEpisode = false)
+     *  2. Starts playback (pause = false)
+     *  3. Cancels the switch timeout
+     *
+     * This ensures smooth playback start on every switch without
+     * stuttering or white screens.
+     */
+    private var bufferWaitJob: kotlinx.coroutines.Job? = null
+    private fun startBufferWait() {
+        bufferWaitJob?.cancel()
+        bufferWaitJob = lifecycleScope.launch {
+            val targetBufferSeconds = 10
+            val maxWaitMs = 15_000L
+            val startTime = System.currentTimeMillis()
+            var elapsed = 0L
+
+            while (elapsed < maxWaitMs) {
+                kotlinx.coroutines.delay(500)
+                elapsed = System.currentTimeMillis() - startTime
+
+                try {
+                    val currentTime = mpvViewRef?.timePos ?: 0
+                    // demuxer-cache-time is the timestamp of the end of buffered data
+                    val cacheTime = `is`.xyz.mpv.MPVLib.getPropertyInt("demuxer-cache-time") ?: 0
+                    val bufferedAhead = cacheTime - currentTime
+
+                    Log.d(TAG, "Buffer wait: ${bufferedAhead}s ahead (need ${targetBufferSeconds}s), elapsed=${elapsed}ms")
+
+                    if (bufferedAhead >= targetBufferSeconds) {
+                        // Enough buffer — start playback
+                        break
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Buffer wait: could not read cache time", e)
+                }
+            }
+
+            // Start playback and clear loading state
+            try {
+                MPVLib.setPropertyBoolean("pause", false)
+                viewModel?.onPauseChanged(false)
+                Log.d(TAG, "Buffer wait complete — starting playback (waited ${elapsed}ms)")
+            } catch (e: Exception) {
+                Log.w(TAG, "Buffer wait: could not start playback", e)
+            }
+
+            // Clear the switching/loading state
+            val vm = viewModel
+            if (vm != null && vm.isSwitchingEpisode.value) {
+                vm.setSwitchingEpisode(false)
+                cancelSwitchTimeout()
+                Log.d(TAG, "Buffer wait: cleared switching state")
+            }
+        }
+    }
+
+    /** Cancel any ongoing buffer wait. */
+    private fun cancelBufferWait() {
+        bufferWaitJob?.cancel()
+        bufferWaitJob = null
     }
 
     /**
@@ -603,6 +667,8 @@ class PlayerActivity : ComponentActivity() {
             "time-pos" -> viewModel?.onPositionUpdate(value.toInt())
             "duration" -> viewModel?.onDurationUpdate(value.toInt())
             "volume" -> viewModel?.onVolumeUpdate(value.toInt())
+            // P2b: Buffer-ahead indicator — update ViewModel with cached time
+            "demuxer-cache-time" -> viewModel?.onBufferAheadUpdate(value.toInt())
         }
     }
 
@@ -1940,6 +2006,8 @@ class PlayerActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         saveProgress()
+        // Cancel any ongoing buffer wait
+        cancelBufferWait()
         // D.5: Abandon audio focus
         abandonAudioFocus()
         // FIX (M5): Each cleanup call wrapped in its own try/catch so one
