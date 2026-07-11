@@ -1067,3 +1067,62 @@ Agent: main (Z.ai Code)
 
 ### ntfy
 - Notification sent to TASKISDONE topic
+
+---
+
+## Session 41 (Fix 'No source available' after app restart — root cause + safety net)
+
+Task ID: DETAIL-SOURCE-RECOVERY-FIX
+Agent: main (Z.ai Code)
+
+### Root Cause Analysis
+
+**Problem**: After closing and reopening the app, opening an anime, and tapping an
+episode, the user got "No source available" error. They had to refresh the page
+to fix it. Closing and reopening again caused the same error.
+
+**Root cause**: When the app restarts, the DetailViewModel loads episodes from the
+disk cache (EpisodeCacheStore). The disk cache path:
+1. Set `_episodes.value` ← episodes show in the UI ✓
+2. Called `backgroundRefreshEpisodes()` ← async, sets `matchedSource` eventually
+3. But `matchedSource` was NEVER set in the disk cache path itself
+
+The `backgroundRefreshEpisodes()` function DID set `matchedSource` (line 695),
+but:
+1. It's **async** — the user might tap an episode before it completes
+2. It has a **refresh guard** (line 650-653) that SKIPS entirely if the anime
+   was opened recently (within REFRESH_GUARD_MS)
+
+So when the user tapped an episode, `playEpisode()` found `matchedSource == null`
+and returned "No source available".
+
+### Fix 1 — Set matchedSource immediately on disk cache hit
+When the disk cache is loaded, a new coroutine immediately looks up the source
+by name (with retry for async extension loading) and sets `matchedSource` +
+reconstructs `matchedSAnime` from the persistent sAnime URL cache. This runs in
+parallel with `backgroundRefreshEpisodes` but doesn't depend on it.
+
+### Fix 2 — Safety net in playEpisode()
+If `matchedSource` is still null when `playEpisode()` is called (e.g. the source
+lookup from Fix 1 hasn't completed yet), tries to recover it:
+1. Get the source name from `episodeCache` or persistent preference
+2. Look up the source by name (with retry for async loading)
+3. If found, set `matchedSource` + `matchedSAnime` and retry `playEpisode()`
+4. If not found after retries, show a helpful error message
+
+### Fix 3 — Player page resolveSource() retry logic
+Added retry logic (up to 10 retries with 500ms delay) to both the sourceId
+lookup and the name-based lookup. Previously, if extensions weren't loaded yet
+when the user switched episodes, `resolveSource()` returned null immediately.
+Now it waits for extensions to load.
+
+### Verification
+- Detail page: episodes work immediately after app restart (no refresh needed)
+- The "No source available" error should never appear again
+- Player page: episode switching also handles slow extension loading
+
+### Build
+- Build #236 (a91e80f): SUCCESS
+
+### ntfy
+- Notification sent to TASKISDONE topic
