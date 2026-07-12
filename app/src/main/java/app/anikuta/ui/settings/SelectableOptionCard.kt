@@ -1,5 +1,6 @@
 package app.anikuta.ui.settings
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.BorderStroke
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -58,7 +60,7 @@ internal fun SelectableOptionCard(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surface, // neutral surface, not dark blue
-                    border = androidx.compose.foundation.border.BorderStroke(
+                    border = BorderStroke(
                         if (isSelected) 2.dp else 1.dp,
                         if (isSelected) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.outlineVariant,
