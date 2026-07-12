@@ -91,7 +91,7 @@ class StorageManager(
             if (uriOrPath.startsWith("content://")) {
                 UniFile.fromUri(context, Uri.parse(uriOrPath))
             } else {
-                UniFile.fromPath(uriOrPath)
+                UniFile.fromFile(context, java.io.File(uriOrPath))
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to resolve base dir: $uriOrPath", e)

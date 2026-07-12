@@ -6,6 +6,9 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import app.anikuta.core.preference.AndroidPreferenceStore
 import app.anikuta.core.preference.PreferenceStore
+import app.anikuta.core.storage.AndroidStorageFolderProvider
+import app.anikuta.storage.StorageManager
+import app.anikuta.storage.StoragePreferences
 import app.anikuta.data.AnimeDatabase
 import app.anikuta.data.AnimeDatabaseFactory
 import app.anikuta.data.cache.CacheManager
@@ -67,9 +70,9 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { NetworkHelper(get<Context>(), get<NetworkPreferences>()) }
 
         // Storage (SAF folder selection — onboarding picks a folder, persists URI)
-        addSingletonFactory { app.anikuta.core.storage.AndroidStorageFolderProvider(get<Context>()) }
-        addSingletonFactory { app.anikuta.storage.StoragePreferences(get<app.anikuta.core.storage.AndroidStorageFolderProvider>(), get<PreferenceStore>()) }
-        addSingletonFactory { app.anikuta.storage.StorageManager(get<Context>(), get<app.anikuta.storage.StoragePreferences>()) }
+        addSingletonFactory { AndroidStorageFolderProvider(get<Context>()) }
+        addSingletonFactory { StoragePreferences(get<AndroidStorageFolderProvider>(), get<PreferenceStore>()) }
+        addSingletonFactory { StorageManager(get<Context>(), get<StoragePreferences>()) }
 
         // Player preferences + MPV player surface
         addSingletonFactory { PlayerPreferences(get<PreferenceStore>()) }
