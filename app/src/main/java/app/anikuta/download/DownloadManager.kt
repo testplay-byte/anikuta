@@ -70,7 +70,7 @@ class DownloadManager(
             sourceName = sourceName,
             animeTitle = animeTitle,
             episodeUrl = episode.url,
-            episodeName = episode.name,
+            episodeName = episode.name.ifBlank { "Episode ${episode.episode_number}" },
             episodeNumber = episode.episode_number,
         )
 
@@ -100,7 +100,7 @@ class DownloadManager(
                 sourceName = sourceName,
                 animeTitle = animeTitle,
                 episodeUrl = ep.url,
-                episodeName = ep.name,
+                episodeName = ep.name.ifBlank { "Episode ${ep.episode_number}" },
                 episodeNumber = ep.episode_number,
                 order = index,
             )
@@ -174,7 +174,7 @@ class DownloadManager(
             .addTag(UNIQUE_WORK)
             .build()
 
-        workManager.enqueueUniqueWork(UNIQUE_WORK, ExistingWorkPolicy.KEEP, request)
+        workManager.enqueueUniqueWork(UNIQUE_WORK, ExistingWorkPolicy.REPLACE, request)
         Log.d(TAG, "Started download worker")
     }
 

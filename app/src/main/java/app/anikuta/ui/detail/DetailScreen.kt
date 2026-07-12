@@ -14,7 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
@@ -380,15 +379,12 @@ fun DetailScreen(
                                         dynamicColors = null,
                                     )
                                 }
-                                // Download button
+                                // Download button (simplified — no per-row filesystem check to avoid scroll jitter)
                                 IconButton(onClick = { viewModel.downloadEpisode(episode) }) {
                                     Icon(
-                                        if (viewModel.isEpisodeDownloaded(episode.name)) Icons.Default.DownloadDone
-                                        else Icons.Default.Download,
+                                        Icons.Default.Download,
                                         contentDescription = "Download",
-                                        tint = if (viewModel.isEpisodeDownloaded(episode.name))
-                                            MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
@@ -515,15 +511,12 @@ fun DetailScreen(
                                                         dynamicColors = null,
                                                     )
                                                 }
-                                                // Download button
+                                                // Download button (simplified — no per-row filesystem check to avoid scroll jitter)
                                                 IconButton(onClick = { viewModel.downloadEpisode(episode) }) {
                                                     Icon(
-                                                        if (viewModel.isEpisodeDownloaded(episode.name)) Icons.Default.DownloadDone
-                                                        else Icons.Default.Download,
+                                                        Icons.Default.Download,
                                                         contentDescription = "Download",
-                                                        tint = if (viewModel.isEpisodeDownloaded(episode.name))
-                                                            MaterialTheme.colorScheme.primary
-                                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                         modifier = Modifier.size(20.dp),
                                                     )
                                                 }

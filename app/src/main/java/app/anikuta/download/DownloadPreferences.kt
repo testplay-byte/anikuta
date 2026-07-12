@@ -80,7 +80,7 @@ class DownloadPreferences(
         preferenceStore.getBoolean("download_delete_after_watch", false)
 
     fun downloadOverWifiOnly(): Preference<Boolean> =
-        preferenceStore.getBoolean("download_wifi_only", true)
+        preferenceStore.getBoolean("download_wifi_only", false)
 
     /**
      * Migrate old single-value prefs (Phase 6) to single-element ordered lists.
