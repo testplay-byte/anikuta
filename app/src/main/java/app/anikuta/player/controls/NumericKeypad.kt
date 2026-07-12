@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -137,65 +138,85 @@ private fun CustomKeypadSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
-            // Title only — the value itself is shown on the slider/setting row
-            // behind the sheet (the live video + the original UI is the preview).
+            // ---- Title + value display (on top) ----
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 12.dp),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
             )
-
-            // ---- 4×3 keypad grid ----
-            // Layout: 4 columns × 3 rows = 12 buttons.
-            // Left 3×3 = numbers 1-9.
-            // Right column (top→bottom) = Delete, 0, Confirm.
-            val keys = listOf(
-                listOf("1", "2", "3", "DEL"),
-                listOf("4", "5", "6", "0"),
-                listOf("7", "8", "9", "OK"),
-            )
-            keys.forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    row.forEach { key ->
-                        KeypadButton(
-                            key = key,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                when (key) {
-                                    "DEL" -> {
-                                        if (input.isNotEmpty()) {
-                                            input = input.dropLast(1)
-                                        }
-                                    }
-                                    "OK" -> {
-                                        val v = input.toIntOrNull() ?: initial
-                                        onConfirm(v.coerceIn(min, max))
-                                    }
-                                    else -> {
-                                        if (input == "0") input = key
-                                        else if (input.length < 8) input += key
-                                    }
-                                }
-                            },
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+            ) {
+                Text(
+                    text = if (input.isEmpty()) "—" else "$input$suffix",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                )
             }
 
-            // Done button (same as OK but always visible)
-            Button(
-                onClick = {
-                    val v = input.toIntOrNull() ?: initial
-                    onConfirm(v.coerceIn(min, max))
-                },
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            ) { Text("Done") }
+            // ---- Keypad grid (custom layout) ----
+            // 4 columns × 4 rows. Left 3 columns = numbers. Right column =
+            // DEL (spans 2 rows) + OK (spans 2 rows). Bottom row = 0 (spans 3).
+            //   [1][2][3][DEL]
+            //   [4][5][6][   ]   ← DEL spans 2 rows
+            //   [7][8][9][OK ]
+            //   [0  0  0][   ]   ← 0 spans 3 cols, OK spans 2 rows
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Left 3 columns: numbers 1-9 + 0 at bottom
+                Column(
+                    modifier = Modifier.weight(3f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        KeypadButton("1", Modifier.weight(1f)) { if (input == "0") input = "1" else if (input.length < 8) input += "1" }
+                        KeypadButton("2", Modifier.weight(1f)) { if (input == "0") input = "2" else if (input.length < 8) input += "2" }
+                        KeypadButton("3", Modifier.weight(1f)) { if (input == "0") input = "3" else if (input.length < 8) input += "3" }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        KeypadButton("4", Modifier.weight(1f)) { if (input == "0") input = "4" else if (input.length < 8) input += "4" }
+                        KeypadButton("5", Modifier.weight(1f)) { if (input == "0") input = "5" else if (input.length < 8) input += "5" }
+                        KeypadButton("6", Modifier.weight(1f)) { if (input == "0") input = "6" else if (input.length < 8) input += "6" }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        KeypadButton("7", Modifier.weight(1f)) { if (input == "0") input = "7" else if (input.length < 8) input += "7" }
+                        KeypadButton("8", Modifier.weight(1f)) { if (input == "0") input = "8" else if (input.length < 8) input += "8" }
+                        KeypadButton("9", Modifier.weight(1f)) { if (input == "0") input = "9" else if (input.length < 8) input += "9" }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        KeypadButton("0", Modifier.weight(1f)) { if (input == "0") input = "0" else if (input.length < 8) input += "0" }
+                    }
+                }
+                // Right column: DEL (top, taller) + OK (bottom, taller)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    KeypadButton(
+                        key = "DEL",
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        onClick = { if (input.isNotEmpty()) input = input.dropLast(1) },
+                    )
+                    KeypadButton(
+                        key = "OK",
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        onClick = {
+                            val v = input.toIntOrNull() ?: initial
+                            onConfirm(v.coerceIn(min, max))
+                        },
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
@@ -206,27 +227,30 @@ private fun KeypadButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val isAction = key == "OK" || key == "DEL"
     val containerColor = when {
         key == "OK" -> MaterialTheme.colorScheme.primary
         key == "DEL" -> MaterialTheme.colorScheme.surfaceContainerHigh
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh // numbers now use a tonal surface so they read as buttons
     }
     val contentColor = when {
         key == "OK" -> MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.onSurface
     }
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         color = containerColor,
+        shadowElevation = if (isAction) 2.dp else 1.dp,
+        tonalElevation = if (isAction) 2.dp else 1.dp,
         modifier = modifier
-            .aspectRatio(1.6f)
+            .heightIn(min = 52.dp)
             .clickable(onClick = onClick),
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
             when (key) {
-                "DEL" -> Icon(Icons.Default.Backspace, contentDescription = "Delete", tint = contentColor, modifier = Modifier.size(22.dp))
-                "OK" -> Icon(Icons.Default.Check, contentDescription = "Confirm", tint = contentColor, modifier = Modifier.size(24.dp))
-                else -> Text(key, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = contentColor)
+                "DEL" -> Icon(Icons.Default.Backspace, contentDescription = "Delete", tint = contentColor, modifier = Modifier.size(24.dp))
+                "OK" -> Icon(Icons.Default.Check, contentDescription = "Confirm", tint = contentColor, modifier = Modifier.size(26.dp))
+                else -> Text(key, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, color = contentColor)
             }
         }
     }

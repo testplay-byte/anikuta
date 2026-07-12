@@ -93,32 +93,32 @@ fun ColorPickerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .padding(horizontal = 20.dp, vertical = 4.dp),
         ) {
-            // ---- Title + preview row ----
+            // ---- Title + preview row (compact) ----
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(currentColor)
-                        .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp)),
+                        .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
                 )
                 Column {
-                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Text(hex, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
-            // ---- Preset swatches ----
-            Text("Presets", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+            // ---- Preset swatches (compact) ----
+            Text("Presets", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 presets.forEach { (_, colorValue) ->
                     val c = Color(
@@ -129,7 +129,7 @@ fun ColorPickerSheet(
                     )
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(28.dp)
                             .clip(CircleShape)
                             .background(c)
                             .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
@@ -144,18 +144,18 @@ fun ColorPickerSheet(
                 }
             }
 
-            // ---- Custom RGB+A sliders ----
-            Text("Custom", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+            // ---- Custom RGB+A sliders (compact) ----
+            Text("Custom", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
             ColorSliderRow("Red", r) { r = it; onLiveChange(currentInt()) }
             ColorSliderRow("Green", g) { g = it; onLiveChange(currentInt()) }
             ColorSliderRow("Blue", b) { b = it; onLiveChange(currentInt()) }
             ColorSliderRow("Alpha", a) { a = it; onLiveChange(currentInt()) }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             // Done button — just closes the sheet (changes were applied live)
             Button(
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
             ) { Text("Done") }
         }
     }
@@ -163,7 +163,7 @@ fun ColorPickerSheet(
 
 @Composable
 private fun ColorSliderRow(label: String, value: Int, onChange: (Int) -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 2.dp)) {
+    Column(modifier = Modifier.padding(vertical = 0.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -176,7 +176,7 @@ private fun ColorSliderRow(label: String, value: Int, onChange: (Int) -> Unit) {
             value = value.toFloat(),
             onValueChange = { onChange(it.toInt()) },
             valueRange = 0f..255f,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(36.dp),
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.primary,
                 activeTrackColor = MaterialTheme.colorScheme.primary,

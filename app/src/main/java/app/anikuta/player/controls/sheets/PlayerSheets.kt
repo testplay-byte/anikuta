@@ -505,13 +505,14 @@ private fun MoreOptionRow(
  * Height-constrained bottom sheet for subtitle settings.
  *
  * Improvements (player-experiment):
- *  - Max height increased from 400dp to 480dp (1.2× per user request) so more
- *    settings are visible without scrolling.
- *  - The "Subtitle Settings" title is placed in a Row alongside the drag
- *    handle area (top-left), so it reads like a proper sheet header. The drag
- *    handle sits to the RIGHT of the title (both at the very top), matching
- *    the user's request: "on the left side at the very top, on the left of
- *    the drag-and-drop area indicator".
+ *  - Max height reduced to 420dp (was 480dp — user said too tall). Tuned so
+ *    the key settings are visible without scrolling but the video stays
+ *    visible behind the sheet.
+ *  - The "Subtitle Settings" title is at the very top-left of the sheet.
+ *    Removed the custom drag-handle indicator on the right (user found it
+ *    unnecessary) — the sheet is still draggable via the standard
+ *    ModalBottomSheet gesture (the system draws its own drag handle at the
+ *    very top center of the sheet).
  *
  * The video player remains visible behind the sheet.
  */
@@ -531,33 +532,18 @@ fun SubtitleSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // Increased from 400dp to 480dp (1.2×) per user request —
-                // more settings visible without scrolling.
-                .heightIn(max = 480.dp)
+                // Reduced from 480dp to 420dp — was too tall per user feedback.
+                .heightIn(max = 420.dp)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
-            // Header: title at the very top-left, drag handle to its right.
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "Subtitle Settings",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                // Visual drag-handle indicator (decorative — the sheet itself
-                // is draggable via the standard ModalBottomSheet gesture).
-                Box(
-                    modifier = Modifier
-                        .width(32.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(MaterialTheme.colorScheme.outlineVariant),
-                )
-            }
+            // Title at the very top-left of the sheet.
+            Text(
+                text = "Subtitle Settings",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
             // The settings panel scrolls internally
             app.anikuta.player.controls.SubtitleSettingsPanel(
                 onSettingsChanged = {
