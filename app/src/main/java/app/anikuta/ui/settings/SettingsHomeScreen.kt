@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
@@ -66,6 +67,7 @@ fun SettingsHomeScreen(
 ) {
     val categories = listOf(
         SettingsCategory("settings/general", "General", "Clear cache, storage", Icons.Default.CleaningServices, "emerald"),
+        SettingsCategory("settings/data", "Data & Storage", "Storage folder, downloads location", Icons.Default.Folder, "blue"),
         SettingsCategory("settings/player", "Player", "Speed, hardware decoding, audio", Icons.Default.PlayCircle, "violet"),
         SettingsCategory("settings/details", "Details", "Episode list display, thumbnails, titles", Icons.Default.Info, "indigo"),
         SettingsCategory("settings/extensions", "Extensions", "Install, manage, primary source", Icons.Default.Extension, "amber"),

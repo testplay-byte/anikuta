@@ -213,12 +213,17 @@ fun AnikutaNavGraph() {
             composable("settings/general") {
                 app.anikuta.ui.settings.GeneralSettingsScreen(onBack = { navController.popBackStack() })
             }
+            composable("settings/data") {
+                app.anikuta.ui.settings.StorageSettingsScreen(onBack = { navController.popBackStack() })
+            }
             composable("settings/player") {
                 app.anikuta.ui.settings.PlayerSettingsScreen(
                     onBack = { navController.popBackStack() },
                     onOpenEpisodeDisplay = { navController.navigate("settings/player/episodes") },
                     onOpenSubtitleSettings = { navController.navigate("settings/player/subtitles") },
-                    onOpenStorageSettings = { navController.navigate("settings/player/storage") },
+                    onOpenGeneral = { navController.navigate("settings/player/general") },
+                    onOpenPlayback = { navController.navigate("settings/player/playback") },
+                    onOpenDisplayBehavior = { navController.navigate("settings/player/display-behavior") },
                 )
             }
             composable("settings/player/episodes") {
@@ -227,8 +232,14 @@ fun AnikutaNavGraph() {
             composable("settings/player/subtitles") {
                 app.anikuta.ui.settings.SubtitleSettingsScreen(onBack = { navController.popBackStack() })
             }
-            composable("settings/player/storage") {
-                app.anikuta.ui.settings.StorageSettingsScreen(onBack = { navController.popBackStack() })
+            composable("settings/player/general") {
+                app.anikuta.ui.settings.PlayerGeneralSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/player/playback") {
+                app.anikuta.ui.settings.PlayerPlaybackSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/player/display-behavior") {
+                app.anikuta.ui.settings.PlayerDisplayBehaviorSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable("settings/details") {
                 app.anikuta.ui.settings.DetailsSettingsScreen(

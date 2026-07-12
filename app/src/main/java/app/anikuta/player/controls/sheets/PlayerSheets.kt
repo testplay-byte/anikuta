@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -534,6 +536,7 @@ fun SubtitleSettingsSheet(
                 .fillMaxWidth()
                 // Increased from 420dp to 450dp — user wanted slightly taller.
                 .heightIn(max = 450.dp)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 4.dp),
         ) {
             // Title at the very top-left of the sheet (minimal top padding
