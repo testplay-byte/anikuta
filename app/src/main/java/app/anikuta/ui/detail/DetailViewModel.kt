@@ -812,7 +812,7 @@ class DetailViewModel(
 
     /** Get the anime title from the current detail state. */
     private fun getAnimeTitle(): String {
-        return (_anime.value as? DetailState.Success)?.data?.title?.preferred() ?: "Unknown Anime"
+        return (_anime.value as? DetailState.Success)?.anime?.title?.preferred() ?: "Unknown Anime"
     }
 
     /**
