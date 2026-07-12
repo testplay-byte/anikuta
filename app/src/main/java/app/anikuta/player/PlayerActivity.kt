@@ -702,6 +702,7 @@ class PlayerActivity : ComponentActivity() {
         Log.d(TAG, "SUBTITLE_DIAG: loadExternalTracks — video=${video.videoUrl.take(60)}... subs=${video.subtitleTracks.size} audios=${video.audioTracks.size}")
         if (video.subtitleTracks.isEmpty() && video.audioTracks.isEmpty()) {
             Log.d(TAG, "SUBTITLE_DIAG: No external tracks to add")
+            updateSubtitleStatus(PlayerViewModel.SubtitleStatus.NONE, "No subtitles for this episode")
             return
         }
         // Log current HTTP headers (needed for subtitle URL download)
@@ -724,9 +725,11 @@ class PlayerActivity : ComponentActivity() {
                         }
                         val flags = "auto"
                         Log.d(TAG, "SUBTITLE_DIAG: Sending sub-add command: url=${sub.url.take(80)} flags=$flags lang=${sub.lang}")
+                        updateSubtitleStatus(PlayerViewModel.SubtitleStatus.DOWNLOADING, sub.lang)
                         MPVLib.command(arrayOf("sub-add", sub.url, flags, "", sub.lang))
                         addedTrackUrls.add(sub.url)
                         Log.d(TAG, "SUBTITLE_DIAG: sub-add sent successfully for lang=${sub.lang}")
+                        updateSubtitleStatus(PlayerViewModel.SubtitleStatus.LOADED, sub.lang)
                     } catch (e: Exception) {
                         Log.e(TAG, "SUBTITLE_DIAG: Failed to add subtitle track: ${sub.lang}", e)
                     }
@@ -892,23 +895,25 @@ class PlayerActivity : ComponentActivity() {
      *
      * Subtitle default-mode preference (player-experiment branch):
      * Reads `playerPrefs.defaultSubtitleMode()`:
-     * - "off"  = never auto-select; if a track is somehow selected, leave it
-     *            alone (user can still turn subs on manually via the sheet).
-     * - "on"   = always auto-select the best available track. This OVERRIDES
-     *            `userDisabledSubtitles` — the old flag could get flipped by a
-     *            stale SubtitleTracksSheet event (see log 02:51:52.222) and
-     *            kill subtitles right after they were selected. With "on", we
-     *            deterministically re-select on every track-list change until
-     *            the user explicitly picks "Off" in the sheet during THIS
-     *            playback session.
-     * - "auto" = only auto-select if a track matches `preferredSubtitleLanguage`;
-     *            otherwise leave subs off.
+     * - "off"  = never auto-select on new episode. User can still turn on via sheet.
+     * - "on"   = auto-select the best track on new episode. Default.
+     * - "auto" = only auto-select if a track matches `preferredSubtitleLanguage`.
      *
-     * `userDisabledSubtitles` is now only set by an explicit user tap in the
-     * SubtitleTracksSheet (PlayerScreen onSelect), and is reset to false on
-     * every new episode load (see loadSelectedVideo / handleEvent FILE_LOADED).
+     * CRITICAL: In ALL modes, the user's explicit choice during the current
+     * playback session takes precedence. If `userDisabledSubtitles` is true
+     * (user tapped "Off" in the subtitle sheet), autoSelectSubtitleTrack does
+     * NOTHING — it does not fight the user. The flag is reset to false on
+     * every new episode load (loadSelectedVideo / handleEvent FILE_LOADED).
+     *
+     * This fixes the feedback loop where mode=on kept re-enabling subs after
+     * the user tapped Off, making the Off button appear broken.
      */
     @Volatile private var externalTracksJustAdded: Boolean = false
+
+    /** Update the subtitle status indicator shown on the player UI. */
+    private fun updateSubtitleStatus(status: PlayerViewModel.SubtitleStatus, detail: String = "") {
+        viewModel?.setSubtitleStatus(status, detail)
+    }
 
     private fun autoSelectSubtitleTrack(
         view: AnikutaMPVView,
@@ -920,6 +925,16 @@ class PlayerActivity : ComponentActivity() {
             .split(",").map { it.trim().lowercase().ifEmpty { null } }.filterNotNull()
         Log.d(TAG, "SUBTITLE_DIAG: autoSelectSubtitleTrack — currentSid=$currentSid tracks=${subTracks.size} mode=$mode userDisabled=$userDisabledSubtitles externalJustAdded=$externalTracksJustAdded preferredLangs=$preferredLangs")
 
+        // USER CHOICE WINS: if the user explicitly turned off subtitles this
+        // session, do NOT re-select. This prevents the feedback loop where
+        // mode=on fights the user's "Off" tap.
+        if (userDisabledSubtitles) {
+            Log.d(TAG, "SUBTITLE_DIAG: User disabled subtitles this session — not auto-selecting")
+            viewModel?.setCurrentSubtitleId(-1)
+            externalTracksJustAdded = false
+            return
+        }
+
         val realTracks = subTracks.filter { it.id > 0 }
         if (realTracks.isEmpty()) {
             Log.d(TAG, "SUBTITLE_DIAG: No real subtitle tracks available to select")
@@ -927,7 +942,7 @@ class PlayerActivity : ComponentActivity() {
             return
         }
 
-        // "off" — respect the user's choice; do not auto-select.
+        // "off" mode — don't auto-select on new episode.
         if (mode == "off") {
             Log.d(TAG, "SUBTITLE_DIAG: mode=off — not auto-selecting")
             viewModel?.setCurrentSubtitleId(-1)
@@ -950,9 +965,6 @@ class PlayerActivity : ComponentActivity() {
         }
 
         // "on" or "auto (matched)" — select / switch to the best track.
-        // We switch even if currentSid > 0, to:
-        //  (a) prefer the external track when externalTracksJustAdded, and
-        //  (b) recover from the auto-disable race (userDisabledSubtitles flip).
         val shouldSwitch = when {
             currentSid <= 0 -> true
             externalTracksJustAdded && currentSid != bestTrack.id -> true
@@ -963,6 +975,7 @@ class PlayerActivity : ComponentActivity() {
             try {
                 view.sid = bestTrack.id
                 viewModel?.setCurrentSubtitleId(bestTrack.id)
+                updateSubtitleStatus(SubtitleStatus.ON, bestTrack.name)
                 Log.d(TAG, "SUBTITLE_DIAG: Selected subtitle track: id=${bestTrack.id} name='${bestTrack.name}' (mode=$mode)")
             } catch (e: Exception) {
                 Log.e(TAG, "SUBTITLE_DIAG: Failed to set subtitle track", e)

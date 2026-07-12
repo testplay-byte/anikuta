@@ -112,6 +112,41 @@ class PlayerViewModel(
 
     /** Currently selected audio track ID. */
     private val _currentAudioId = MutableStateFlow(-1)
+
+    // ---- Subtitle status indicator (player-experiment branch) ----
+    // Tracks the subtitle pipeline state so the UI can show a temporary pill:
+    //   IDLE → DOWNLOADING → LOADED → ON  (or OFF / NONE / ERROR)
+    // The pill auto-fades after a few seconds (handled in PlayerScreen).
+
+    /** Subtitle pipeline status for the on-screen indicator. */
+    enum class SubtitleStatus {
+        IDLE,           // no subs requested yet
+        DOWNLOADING,    // sub-add sent, waiting for .vtt to download + parse
+        LOADED,         // track added to MPV's track-list
+        ON,             // sid > 0, subtitles rendering
+        OFF,            // user turned off (or mode=off)
+        NONE,           // no subtitle tracks available for this episode
+        ERROR,          // subtitle download/parse failed
+    }
+
+    private val _subtitleStatus = MutableStateFlow(SubtitleStatus.IDLE)
+    val subtitleStatus: StateFlow<SubtitleStatus> = _subtitleStatus.asStateFlow()
+
+    /** Human-readable detail for the subtitle status pill (e.g. track name, error). */
+    private val _subtitleStatusDetail = MutableStateFlow("")
+    val subtitleStatusDetail: StateFlow<String> = _subtitleStatusDetail.asStateFlow()
+
+    /** Monotonic counter — bumped every time the status changes, so the UI can
+     *  re-trigger its auto-fade animation even when the status value is the same. */
+    private val _subtitleStatusTick = MutableStateFlow(0L)
+    val subtitleStatusTick: StateFlow<Long> = _subtitleStatusTick.asStateFlow()
+
+    fun setSubtitleStatus(status: SubtitleStatus, detail: String = "") {
+        _subtitleStatus.value = status
+        _subtitleStatusDetail.value = detail
+        _subtitleStatusTick.value = _subtitleStatusTick.value + 1
+    }
+
     val currentAudioId: StateFlow<Int> = _currentAudioId.asStateFlow()
 
     /** Available servers (from video resolution). */

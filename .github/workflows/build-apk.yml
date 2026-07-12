@@ -63,3 +63,20 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 90
           if-no-files-found: error
+
+      - name: Notify ntfy.sh
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            ICON="✅"
+            TITLE="ANI-KUTA build succeeded"
+          else
+            ICON="❌"
+            TITLE="ANI-KUTA build FAILED"
+          fi
+          curl -H "Title: $TITLE" \
+               -H "Tags: $ICON,android" \
+               -H "Click: https://github.com/testplay-byte/anikuta/actions/runs/${{ github.run_id }}" \
+               -d "Branch: ${{ github.ref_name }} | Commit: ${{ github.sha }} | Status: $STATUS" \
+               https://ntfy.sh/TASKISDONE || true

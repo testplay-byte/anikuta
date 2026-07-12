@@ -16,10 +16,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
@@ -439,6 +442,8 @@ internal fun PlayerScreen(
                                 onSubtitleClick = { showSubtitleSheet = true },
                             )
                         }
+                        // Subtitle status indicator pill (auto-fades after 4s)
+                        SubtitleStatusPill(viewModel = viewModel)
                     }
                 }
 
@@ -693,6 +698,8 @@ internal fun PlayerScreen(
                             },
                     )
                 }
+                // Subtitle status indicator pill (auto-fades after 4s)
+                SubtitleStatusPill(viewModel = viewModel)
             }
         }
     }
@@ -835,8 +842,10 @@ internal fun PlayerScreen(
                     onUserDisabledSubtitles(trackId <= 0)
                     if (trackId <= 0) {
                         Log.d("PlayerActivity", "Subtitles turned off (sid=no) — userDisabledSubtitles=true")
+                        viewModel.setSubtitleStatus(PlayerViewModel.SubtitleStatus.OFF, "User turned off")
                     } else {
                         Log.d("PlayerActivity", "Subtitle track set: sid=$trackId")
+                        viewModel.setSubtitleStatus(PlayerViewModel.SubtitleStatus.ON, "Track $trackId")
                     }
                     viewModel.setCurrentSubtitleId(trackId)
                 } catch (e: Exception) {
@@ -929,5 +938,78 @@ internal fun formatDate(epochMillis: Long): String {
         sdf.format(java.util.Date(epochMillis))
     } catch (e: Exception) {
         ""
+    }
+}
+
+/**
+ * Subtitle status indicator pill — shows a small overlay on the video when
+ * the subtitle pipeline state changes, then auto-fades after 4 seconds.
+ *
+ * States shown:
+ * - DOWNLOADING (blue)  "Downloading subtitles (English)…"
+ * - LOADED      (blue)  "Subtitles loaded (English)"
+ * - ON          (green) "Subtitles ON"
+ * - OFF         (gray)  "Subtitles OFF"
+ * - NONE        (amber) "No subtitles for this episode"
+ * - ERROR       (red)   "Subtitle error"
+ * - IDLE        — not shown
+ *
+ * The pill is positioned at the bottom-center of the video container, above
+ * the controls. It uses [subtitleStatusTick] to re-trigger the fade animation
+ * every time the status changes (even if the status value is the same).
+ */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.SubtitleStatusPill(viewModel: PlayerViewModel) {
+    val status by viewModel.subtitleStatus.collectAsState()
+    val detail by viewModel.subtitleStatusDetail.collectAsState()
+    val tick by viewModel.subtitleStatusTick.collectAsState()
+
+    if (status == PlayerViewModel.SubtitleStatus.IDLE) return
+
+    // Auto-fade: visible for 4s after each tick, then alpha → 0.
+    var alpha by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    LaunchedEffect(tick) {
+        alpha = 1f
+        kotlinx.coroutines.delay(4000)
+        alpha = 0f
+    }
+    if (alpha <= 0f) return
+
+    val (icon, color, label) = when (status) {
+        PlayerViewModel.SubtitleStatus.DOWNLOADING -> Triple("⬇", Color(0xFF42A5F5), "Downloading subtitles" + if (detail.isNotBlank()) " ($detail)" else "" + "…")
+        PlayerViewModel.SubtitleStatus.LOADED -> Triple("✓", Color(0xFF42A5F5), "Subtitles loaded" + if (detail.isNotBlank()) " ($detail)" else "")
+        PlayerViewModel.SubtitleStatus.ON -> Triple("💬", Color(0xFF66BB6A), "Subtitles ON" + if (detail.isNotBlank()) " — $detail" else "")
+        PlayerViewModel.SubtitleStatus.OFF -> Triple("✕", Color(0xFF9E9E9E), "Subtitles OFF")
+        PlayerViewModel.SubtitleStatus.NONE -> Triple("!", Color(0xFFFFA726), "No subtitles for this episode")
+        PlayerViewModel.SubtitleStatus.ERROR -> Triple("✕", Color(0xFFEF5350), "Subtitle error" + if (detail.isNotBlank()) ": $detail" else "")
+        PlayerViewModel.SubtitleStatus.IDLE -> return
+    }
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Color.Black.copy(alpha = 0.75f),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = 56.dp)
+            .alpha(alpha),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = icon,
+                color = color,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = label,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }
