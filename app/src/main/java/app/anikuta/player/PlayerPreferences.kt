@@ -73,7 +73,7 @@ class PlayerPreferences(
      * 'below' = full-width below the thumbnail row.
      */
     fun synopsisPosition(): Preference<String> =
-        preferenceStore.getString("pref_synopsis_position", "right")
+        preferenceStore.getString("pref_synopsis_position", "below")
 
     /**
      * Date position: 'right_below_synopsis' = right of thumbnail, below synopsis (default).
