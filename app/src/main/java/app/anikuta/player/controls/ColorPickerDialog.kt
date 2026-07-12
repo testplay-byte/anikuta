@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
  * and the stored int is ARGB (alpha in the high bits), matching
  * AnikutaMPVView.colorToHex which sends #ARGB to MPV.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ColorPickerSheet(
     title: String,

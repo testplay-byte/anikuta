@@ -64,6 +64,7 @@ import uy.kohesive.injekt.api.get
  * @param onConfirm Called with the user-entered value (clamped to range) when Done/OK is pressed.
  * @param onDismiss Close the sheet without applying (revert is the caller's responsibility if needed).
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun NumericEntrySheet(
     title: String,
@@ -104,6 +105,7 @@ fun NumericEntrySheet(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun CustomKeypadSheet(
     title: String,
@@ -230,6 +232,7 @@ private fun KeypadButton(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun TextFieldEntrySheet(
     title: String,
