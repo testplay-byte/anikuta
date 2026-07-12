@@ -739,8 +739,9 @@ class PlayerActivity : ComponentActivity() {
                         // time to download + parse the .vtt. This is the key
                         // diagnostic: shows track-list, sid, sub-visibility,
                         // sub-text (proves the .vtt has cues).
-                        view.postDelayed({
-                            try { dumpSubtitleState(view) } catch (e: Exception) {}
+                        val viewRef = mpvViewRef
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            viewRef?.let { try { dumpSubtitleState(it) } catch (e: Exception) {} }
                         }, 1500)
                     } catch (e: Exception) {
                         Log.e(TAG, "SUBTITLE_DIAG: Failed to add subtitle track: ${sub.lang}", e)
