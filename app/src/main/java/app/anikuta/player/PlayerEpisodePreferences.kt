@@ -36,7 +36,7 @@ class PlayerEpisodePreferences(
         preferenceStore.getBoolean("player_ep_show_audio_pills", true)
 
     fun synopsisPosition(): Preference<String> =
-        preferenceStore.getString("player_ep_synopsis_pos", "right")
+        preferenceStore.getString("player_ep_synopsis_pos", "below")
 
     fun datePosition(): Preference<String> =
         preferenceStore.getString("player_ep_date_pos", "right_below_synopsis")

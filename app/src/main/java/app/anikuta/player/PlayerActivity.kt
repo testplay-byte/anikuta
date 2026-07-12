@@ -313,11 +313,16 @@ class PlayerActivity : ComponentActivity() {
      *  vs reResolveAndLoadVideo). Only one resolve runs at a time. */
     @Volatile private var resolveInProgress: Boolean = false
     /** Track which external track URLs have been added to MPV to prevent duplicates. */
-    @Volatile private var addedTrackUrls: MutableSet<String> = mutableSetOf()
+    @Volatile private var addedTrackUrls: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
     /** Whether this is the first FILE_LOADED for the current video (controls
      *  seekToSavedPosition + start-over overlay — only fires on first load, not
      *  on server/audio/quality switches). */
     @Volatile private var isFirstFileLoad: Boolean = true
+    /** Whether MPV has finished loading the current file (FILE_LOADED fired).
+     *  sub-add commands are ONLY sent when this is true — sending them before
+     *  FILE_LOADED causes MPV to silently drop the track (Bug #1).
+     *  Reset to false when a new loadfile is sent. */
+    @Volatile private var fileLoaded: Boolean = false
     /** Position to seek to after FILE_LOADED for quality/server switches.
      *  Set by loadSelectedVideo, consumed by handleEvent(FILE_LOADED). */
     @Volatile private var pendingSeekPosition: Int = -1
@@ -515,6 +520,10 @@ class PlayerActivity : ComponentActivity() {
         when (eventId) {
             MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
                 Log.d(TAG, "SUBTITLE_DIAG: FILE_LOADED event received")
+                // Bug #1 fix: Mark file as loaded BEFORE calling loadExternalTracks.
+                // This ensures sub-add commands are accepted by MPV (it silently
+                // drops them if no file is loaded).
+                fileLoaded = true
                 viewModel?.onFileLoaded()
                 // Subtitle Fix 4: Safety net — ensure subtitles are visible
                 try {
@@ -699,6 +708,14 @@ class PlayerActivity : ComponentActivity() {
             Log.w(TAG, "SUBTITLE_DIAG: loadExternalTracks called but currentVideo is null")
             return
         }
+        // Bug #1 fix: Only add tracks when MPV has finished loading the file.
+        // Sending sub-add before FILE_LOADED causes MPV to silently drop the
+        // track. The URL then gets added to addedTrackUrls, blocking the
+        // correct re-add when FILE_LOADED fires (Bug #5).
+        if (!fileLoaded) {
+            Log.d(TAG, "SUBTITLE_DIAG: loadExternalTracks skipped — file not loaded yet (waiting for FILE_LOADED)")
+            return
+        }
         Log.d(TAG, "SUBTITLE_DIAG: loadExternalTracks — video=${video.videoUrl.take(60)}... subs=${video.subtitleTracks.size} audios=${video.audioTracks.size}")
         if (video.subtitleTracks.isEmpty() && video.audioTracks.isEmpty()) {
             Log.d(TAG, "SUBTITLE_DIAG: No external tracks to add")
@@ -707,67 +724,63 @@ class PlayerActivity : ComponentActivity() {
         }
         // Log current HTTP headers (needed for subtitle URL download)
         Log.d(TAG, "SUBTITLE_DIAG: Current http-header-fields = ${currentVideoHeaders.take(100)}...")
-        try {
-            if (video.subtitleTracks.isNotEmpty()) {
-                Log.d(TAG, "SUBTITLE_DIAG: Adding ${video.subtitleTracks.size} external subtitle track(s)")
-                video.subtitleTracks.forEach { sub ->
+        // Bug #2 fix: Run sub-add loop on a background thread to avoid blocking
+        // the main thread. Each sub-add triggers an HTTPS download inside MPV's
+        // native code, which can take 0.3-2s per track. With 6 tracks, that's
+        // ~7s of main-thread blocking → 432 dropped frames (the lag the user
+        // reported). MPVLib.command() is thread-safe (mpv's command interface
+        // is documented as such), so calling it from Dispatchers.IO is safe.
+        val headers = currentVideoHeaders
+        val subsToAdd = video.subtitleTracks.filter { !addedTrackUrls.contains(it.url) }
+        val audiosToAdd = video.audioTracks.filter { !addedTrackUrls.contains(it.url) }
+        if (subsToAdd.isEmpty() && audiosToAdd.isEmpty()) {
+            Log.d(TAG, "SUBTITLE_DIAG: All external tracks already added")
+            return
+        }
+        Log.d(TAG, "SUBTITLE_DIAG: Adding ${subsToAdd.size} sub + ${audiosToAdd.size} audio tracks (background)")
+        lifecycleScope.launch {
+            withContext(kotlinx.coroutines.Dispatchers.IO) {
+                // Sub-add loop on background thread
+                subsToAdd.forEach { sub ->
                     Log.d(TAG, "SUBTITLE_DIAG: Subtitle URL = ${sub.url}")
                     Log.d(TAG, "SUBTITLE_DIAG: Subtitle lang = ${sub.lang}")
-                    if (addedTrackUrls.contains(sub.url)) {
-                        Log.d(TAG, "SUBTITLE_DIAG: Skipping duplicate: ${sub.lang}")
-                        return@forEach
-                    }
                     try {
-                        // Re-assert HTTP headers right before sub-add to ensure they apply
-                        if (currentVideoHeaders.isNotBlank()) {
-                            MPVLib.setOptionString("http-header-fields", currentVideoHeaders)
-                            Log.d(TAG, "SUBTITLE_DIAG: Re-asserted http-header-fields before sub-add")
+                        if (headers.isNotBlank()) {
+                            MPVLib.setOptionString("http-header-fields", headers)
                         }
-                        val flags = "auto"
-                        Log.d(TAG, "SUBTITLE_DIAG: Sending sub-add command: url=${sub.url.take(80)} flags=$flags lang=${sub.lang}")
-                        updateSubtitleStatus(PlayerViewModel.SubtitleStatus.DOWNLOADING, sub.lang)
-                        MPVLib.command(arrayOf("sub-add", sub.url, flags, "", sub.lang))
+                        Log.d(TAG, "SUBTITLE_DIAG: Sending sub-add: url=${sub.url.take(80)} flags=auto lang=${sub.lang}")
+                        MPVLib.command(arrayOf("sub-add", sub.url, "auto", "", sub.lang))
                         addedTrackUrls.add(sub.url)
                         Log.d(TAG, "SUBTITLE_DIAG: sub-add sent successfully for lang=${sub.lang}")
-                        updateSubtitleStatus(PlayerViewModel.SubtitleStatus.LOADED, sub.lang)
-                        // Dump full subtitle state 1.5s after sub-add so MPV has
-                        // time to download + parse the .vtt. This is the key
-                        // diagnostic: shows track-list, sid, sub-visibility,
-                        // sub-text (proves the .vtt has cues).
-                        val viewRef = mpvViewRef
-                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            viewRef?.let { try { dumpSubtitleState(it) } catch (e: Exception) {} }
-                        }, 1500)
                     } catch (e: Exception) {
                         Log.e(TAG, "SUBTITLE_DIAG: Failed to add subtitle track: ${sub.lang}", e)
                     }
                 }
-                Log.d(TAG, "SUBTITLE_DIAG: Processed ${video.subtitleTracks.size} external subtitle track(s)")
-                externalTracksJustAdded = true
-            }
-            // Add external audio tracks (deduplicated)
-            // Fix 7: Pass "" as title, audio.lang as lang
-            if (video.audioTracks.isNotEmpty()) {
-                video.audioTracks.forEach { audio ->
-                    if (addedTrackUrls.contains(audio.url)) {
-                        Log.d(TAG, "Skipping duplicate audio track: ${audio.lang}")
-                        return@forEach
-                    }
+                // Audio-add loop
+                audiosToAdd.forEach { audio ->
                     try {
                         MPVLib.command(arrayOf("audio-add", audio.url, "auto", "", audio.lang))
                         addedTrackUrls.add(audio.url)
-                        Log.d(TAG, "Added external audio: ${audio.lang} (${audio.url.take(60)}...)")
+                        Log.d(TAG, "Added external audio: ${audio.lang}")
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to add audio track: ${audio.lang}", e)
                     }
                 }
-                Log.d(TAG, "Loaded ${video.audioTracks.size} external audio track(s)")
             }
-            // If no external tracks, MPV's track-list will only contain embedded
-            // tracks (if any). The track-list observer will still fire and populate
-            // the sheets with whatever is available.
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to load external tracks", e)
+            // Back on main thread: trigger track-list refresh + auto-select
+            Log.d(TAG, "SUBTITLE_DIAG: Processed ${subsToAdd.size} sub + ${audiosToAdd.size} audio track(s)")
+            externalTracksJustAdded = true
+            mpvViewRef?.let { view ->
+                val (subTracks, audioTracks) = view.loadTracks()
+                viewModel?.setSubtitleTracks(subTracks)
+                viewModel?.setAudioTracks(audioTracks)
+                autoSelectSubtitleTrack(view, subTracks)
+            }
+            // Diagnostic dump after all sub-adds complete
+            val viewRef = mpvViewRef
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                viewRef?.let { try { dumpSubtitleState(it) } catch (e: Exception) {} }
+            }, 1500)
         }
     }
 
@@ -991,11 +1004,22 @@ class PlayerActivity : ComponentActivity() {
             return
         }
 
-        // Pick the best track: language match first, else first available.
-        val langMatch = realTracks.firstOrNull { track ->
+        // Bug #3 fix: Pick the best track: language match first, else first available.
+        // When multiple tracks match the preferred language, prefer "Full Subtitles"
+        // over "Signs & Songs" (which only translate on-screen text, not dialogue).
+        val langMatches = realTracks.filter { track ->
             val t = track.language?.lowercase() ?: ""
             preferredLangs.any { p -> t == p || t.startsWith(p) || p.startsWith(t) }
         }
+        // Sort by track quality: "full" > neutral > "signs"/"songs"
+        val langMatch = langMatches.sortedBy { track ->
+            val name = track.name.lowercase()
+            when {
+                name.contains("full") -> 0   // prefer full dialogue subtitles
+                name.contains("signs") || name.contains("songs") -> 2  // deprioritize signs/songs
+                else -> 1  // neutral
+            }
+        }.firstOrNull()
         val bestTrack = langMatch ?: realTracks.first()
         Log.d(TAG, "SUBTITLE_DIAG: bestTrack id=${bestTrack.id} name='${bestTrack.name}' lang='${bestTrack.language}' (langMatch=${langMatch != null})")
 
@@ -1007,10 +1031,15 @@ class PlayerActivity : ComponentActivity() {
         }
 
         // "on" or "auto (matched)" — select / switch to the best track.
+        // Bug fix: Removed the `currentSid != bestTrack.id -> true` condition
+        // that was overriding the user's manual track selection. Once a track
+        // is selected (currentSid > 0), only switch if NEW external tracks
+        // were just added (externalTracksJustAdded). Otherwise, respect the
+        // user's choice — they may have intentionally selected a non-English
+        // track (e.g. Indonesian, Thai).
         val shouldSwitch = when {
             currentSid <= 0 -> true
             externalTracksJustAdded && currentSid != bestTrack.id -> true
-            currentSid != bestTrack.id -> true
             else -> false
         }
         if (shouldSwitch) {
@@ -1019,9 +1048,23 @@ class PlayerActivity : ComponentActivity() {
                 viewModel?.setCurrentSubtitleId(bestTrack.id)
                 updateSubtitleStatus(PlayerViewModel.SubtitleStatus.ON, bestTrack.name)
                 Log.d(TAG, "SUBTITLE_DIAG: Selected subtitle track: id=${bestTrack.id} name='${bestTrack.name}' (mode=$mode)")
-                // Dump state immediately after selection + again in 2s (after .vtt downloads)
                 dumpSubtitleState(view)
                 view.postDelayed({ try { dumpSubtitleState(view) } catch (e: Exception) {} }, 2000)
+                // Bug #4 fix: Re-assert sid after 500ms. MPV may internally reset
+                // sid to "no" when the track-list changes (e.g. when sub-add with
+                // "auto" flag completes). This re-assertion ensures the selected
+                // track stays selected.
+                val targetSid = bestTrack.id
+                view.postDelayed({
+                    if (!userDisabledSubtitles && view.sid != targetSid) {
+                        try {
+                            view.sid = targetSid
+                            Log.d(TAG, "SUBTITLE_DIAG: Re-asserted sid=$targetSid after MPV reset (was ${view.sid})")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "SUBTITLE_DIAG: Could not re-assert sid", e)
+                        }
+                    }
+                }, 500)
             } catch (e: Exception) {
                 Log.e(TAG, "SUBTITLE_DIAG: Failed to set subtitle track", e)
             }
@@ -1552,10 +1595,8 @@ class PlayerActivity : ComponentActivity() {
         // Reset user flags — new video loaded, user hasn't interacted yet
         userChangedAudioTrack = false
         userDisabledSubtitles = false
-        // FIX: Reset track dedup set. Do NOT reset isFirstFileLoad here —
-        // that flag controls whether seekToSavedPosition() fires on FILE_LOADED.
-        // For quality/server switches, we handle position via the MPV "start"
-        // property instead (see below).
+        // Bug #1/#5 fix: Reset file-loaded flag + track dedup set for the new file.
+        fileLoaded = false
         addedTrackUrls.clear()
 
         // Update VM state (for UI reactivity)
@@ -1824,6 +1865,9 @@ class PlayerActivity : ComponentActivity() {
             reResolveAndLoadVideo()
         } else {
             videoLoaded = true
+            // Bug #1/#5 fix: reset for new file
+            fileLoaded = false
+            addedTrackUrls.clear()
             Log.d(TAG, "Loading video (direct URL): ${url.take(80)}...")
             try {
                 MPVLib.command(arrayOf("loadfile", url, "replace"))
@@ -1956,6 +2000,9 @@ class PlayerActivity : ComponentActivity() {
                             MPVLib.setOptionString("http-header-fields", currentVideoHeaders)
                         }
                         Log.d(TAG, "Re-resolve: loading fresh URL: ${currentVideoUrl.take(80)}...")
+                        // Bug #1/#5 fix: reset for new file
+                        fileLoaded = false
+                        addedTrackUrls.clear()
                         MPVLib.command(arrayOf("loadfile", currentVideoUrl, "replace"))
                         launchSwitchTimeout()
                     } catch (e: Exception) {
