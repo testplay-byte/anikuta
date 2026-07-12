@@ -46,22 +46,24 @@ class AnikutaCrashHandler(private val context: Context) : Thread.UncaughtExcepti
         } catch (ioe: Exception) {
             Log.e(TAG, "Failed to write crash report file", ioe)
         }
-        // 2. Launch the error activity on the main thread, then kill the process.
-        //    We post to the main looper because uncaughtException may run on a
-        //    background thread, and startActivity must be called consistently.
-        mainHandler.post {
-            try {
-                val intent = Intent(context, ErrorActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                }
-                context.startActivity(intent)
-            } catch (ie: Exception) {
-                Log.e(TAG, "Failed to launch ErrorActivity", ie)
+        // 2. Launch ErrorActivity SYNCHRONOUSLY (not via mainHandler.post).
+        //    When the crash is on the main thread (e.g. a Compose layout
+        //    exception), the main Looper is already dead — a posted runnable
+        //    would never execute, and the system would show its default crash
+        //    dialog instead of our ErrorActivity. startActivity with NEW_TASK
+        //    is safe to call from any thread.
+        try {
+            val intent = Intent(context, ErrorActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             }
-            Process.killProcess(Process.myPid())
-            // As a fallback in case killProcess returns (it usually doesn't).
-            System.exit(10)
+            context.startActivity(intent)
+        } catch (ie: Exception) {
+            Log.e(TAG, "Failed to launch ErrorActivity", ie)
         }
+        // 3. Kill the current process so a fresh one starts for ErrorActivity.
+        Process.killProcess(Process.myPid())
+        // Fallback in case killProcess returns (it usually doesn't).
+        System.exit(10)
     }
 
     private fun buildReport(t: Thread, e: Throwable): String {
