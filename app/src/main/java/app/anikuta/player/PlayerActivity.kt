@@ -975,7 +975,7 @@ class PlayerActivity : ComponentActivity() {
             try {
                 view.sid = bestTrack.id
                 viewModel?.setCurrentSubtitleId(bestTrack.id)
-                updateSubtitleStatus(SubtitleStatus.ON, bestTrack.name)
+                updateSubtitleStatus(PlayerViewModel.SubtitleStatus.ON, bestTrack.name)
                 Log.d(TAG, "SUBTITLE_DIAG: Selected subtitle track: id=${bestTrack.id} name='${bestTrack.name}' (mode=$mode)")
             } catch (e: Exception) {
                 Log.e(TAG, "SUBTITLE_DIAG: Failed to set subtitle track", e)
