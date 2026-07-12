@@ -76,10 +76,10 @@ class DownloadProvider(
      */
     fun isEpisodeDownloaded(episodeName: String, animeTitle: String, sourceName: String): Boolean {
         val episodeDir = findEpisodeDir(episodeName, animeTitle, sourceName) ?: return false
-        return episodeDir.listFiles().any { file ->
+        return episodeDir.listFiles()?.any { file ->
             val name = file.name?.lowercase() ?: ""
             name.endsWith(".mkv") || name.endsWith(".mp4")
-        }
+        } ?: false
     }
 
     /**
@@ -91,7 +91,7 @@ class DownloadProvider(
      */
     fun getDownloadedVideoFile(episodeName: String, animeTitle: String, sourceName: String): UniFile? {
         val episodeDir = findEpisodeDir(episodeName, animeTitle, sourceName) ?: return null
-        return episodeDir.listFiles().firstOrNull { file ->
+        return episodeDir.listFiles()?.firstOrNull { file ->
             val name = file.name?.lowercase() ?: ""
             name.endsWith(".mkv") || name.endsWith(".mp4")
         }

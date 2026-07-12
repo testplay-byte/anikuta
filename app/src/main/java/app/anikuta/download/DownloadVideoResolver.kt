@@ -2,6 +2,7 @@ package app.anikuta.download
 
 import android.util.Log
 import app.anikuta.download.DownloadPreferences
+import app.anikuta.download.DownloadPreferences.PriorityMode
 import app.anikuta.source.AndroidAnimeSourceManager
 import app.anikuta.ui.detail.VideoTitleParser
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource

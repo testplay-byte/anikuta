@@ -72,8 +72,8 @@ class DownloadsViewModel : ViewModel() {
 
         // Observe download queue
         viewModelScope.launch {
-            store?.queue?.collect { entries ->
-                _queue.value = entries
+            manager?.queue?.collect { downloads ->
+                _queue.value = downloads
             }
         }
     }
