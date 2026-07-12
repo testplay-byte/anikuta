@@ -126,6 +126,9 @@ dependencies {
     // WorkManager (download manager)
     implementation(libs.work.runtime)
 
+    // UniFile (SAF / DocumentFile wrapper for folder selection)
+    implementation(libs.unifile)
+
     // androidx.preference (extension settings UI — PreferenceFragmentCompat)
     implementation(libs.preference.ktx)
 

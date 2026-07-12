@@ -66,6 +66,11 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { NetworkPreferences(get<PreferenceStore>()) }
         addSingletonFactory { NetworkHelper(get<Context>(), get<NetworkPreferences>()) }
 
+        // Storage (SAF folder selection — onboarding picks a folder, persists URI)
+        addSingletonFactory { app.anikuta.core.storage.AndroidStorageFolderProvider(get<Context>()) }
+        addSingletonFactory { app.anikuta.storage.StoragePreferences(get<app.anikuta.core.storage.AndroidStorageFolderProvider>(), get<PreferenceStore>()) }
+        addSingletonFactory { app.anikuta.storage.StorageManager(get<Context>(), get<app.anikuta.storage.StoragePreferences>()) }
+
         // Player preferences + MPV player surface
         addSingletonFactory { PlayerPreferences(get<PreferenceStore>()) }
         addSingletonFactory { PlayerEpisodePreferences(get<PreferenceStore>()) }

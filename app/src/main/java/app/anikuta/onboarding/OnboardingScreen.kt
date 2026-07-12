@@ -546,28 +546,63 @@ private fun PermissionCard(
 
 @Composable
 private fun ExpressiveStorageStep(onFolderSelected: (String) -> Unit, selectedUri: String?) {
-    LaunchedEffect(Unit) {
-        if (selectedUri == null) {
-            onFolderSelected("default://Android/data/app.anikuta/files/")
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val storagePrefs = remember { uy.kohesive.injekt.Injekt.get<app.anikuta.storage.StoragePreferences>() }
+
+    // Real SAF folder picker — launches ACTION_OPEN_DOCUMENT_TREE.
+    val pickFolder = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree(),
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            // Take persistable permission so the URI survives process death.
+            val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, flags)
+            } catch (e: SecurityException) {
+                android.util.Log.w("Onboarding", "Persistable URI grant failed (non-fatal)", e)
+            }
+            // Persist the URI immediately (survives onboarding cancel/relaunch).
+            storagePrefs.baseStorageDirectory().set(uri.toString())
+            onFolderSelected(uri.toString())
         }
     }
+
+    // Show a readable path for the selected URI.
+    val displayPath = remember(selectedUri) {
+        if (selectedUri == null) null
+        else if (selectedUri.startsWith("content://")) {
+            try {
+                com.hippo.unifile.UniFile.fromUri(context, android.net.Uri.parse(selectedUri))?.filePath
+                    ?: selectedUri.takeLast(40)
+            } catch (e: Exception) { selectedUri.takeLast(40) }
+        } else {
+            selectedUri
+        }
+    }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Storage Folder", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "Pick where ANI-KUTA stores downloads and cache.",
+            "Pick where ANI-KUTA stores downloads, data, backups, and cache.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(24.dp))
-        // Expressive folder card
+        // Primary: launch SAF picker
         Surface(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
             shape = RoundedCornerShape(16.dp),
             color = if (selectedUri != null) MaterialTheme.colorScheme.primaryContainer
                 else MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 1.dp,
-            onClick = { onFolderSelected("default://Android/data/app.anikuta/files/") },
+            onClick = {
+                try { pickFolder.launch(null) }
+                catch (e: android.content.ActivityNotFoundException) {
+                    android.util.Log.e("Onboarding", "No SAF picker available", e)
+                }
+            },
         ) {
             Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -577,23 +612,33 @@ private fun ExpressiveStorageStep(onFolderSelected: (String) -> Unit, selectedUr
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         if (selectedUri != null) "Folder Selected" else "Select Folder",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        "Default: Android/data/app.anikuta/files/",
+                        displayPath ?: "Tap to choose a folder on your device",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                 }
                 if (selectedUri != null) {
-                    Spacer(modifier = Modifier.weight(1f))
                     Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 }
             }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        // Secondary: use app-private default (no SAF)
+        androidx.compose.material3.TextButton(onClick = {
+            val default = storagePrefs.baseStorageDirectory().get()
+            storagePrefs.baseStorageDirectory().set(default)
+            onFolderSelected(default)
+        }) {
+            Text("Use default (app-private storage)")
         }
     }
 }
