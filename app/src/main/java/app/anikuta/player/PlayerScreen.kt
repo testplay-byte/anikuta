@@ -962,7 +962,17 @@ private fun androidx.compose.foundation.layout.BoxScope.SubtitleStatusPill(viewM
     val detail by viewModel.subtitleStatusDetail.collectAsState()
     val tick by viewModel.subtitleStatusTick.collectAsState()
 
-    if (status == PlayerViewModel.SubtitleStatus.IDLE) return
+    // Only show the pill for transient / informative states. ON and OFF are
+    // the user's explicit choice (or the normal auto-selected state) — they
+    // don't need a popup every time a video starts. The pill is reserved for:
+    //   DOWNLOADING — "fetching subtitles..." (brief, informative)
+    //   NONE        — "no subtitles for this episode" (saves the user opening the sheet)
+    //   ERROR       — "subtitle error" (something went wrong)
+    // LOADED is skipped too (it immediately transitions to ON, which we skip).
+    val shouldShow = status == PlayerViewModel.SubtitleStatus.DOWNLOADING ||
+        status == PlayerViewModel.SubtitleStatus.NONE ||
+        status == PlayerViewModel.SubtitleStatus.ERROR
+    if (!shouldShow) return
 
     // Auto-fade: visible for 4s after each tick, then alpha → 0.
     var alpha by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
@@ -975,12 +985,11 @@ private fun androidx.compose.foundation.layout.BoxScope.SubtitleStatusPill(viewM
 
     val (icon, color, label) = when (status) {
         PlayerViewModel.SubtitleStatus.DOWNLOADING -> Triple("⬇", Color(0xFF42A5F5), "Downloading subtitles" + if (detail.isNotBlank()) " ($detail)" else "" + "…")
-        PlayerViewModel.SubtitleStatus.LOADED -> Triple("✓", Color(0xFF42A5F5), "Subtitles loaded" + if (detail.isNotBlank()) " ($detail)" else "")
-        PlayerViewModel.SubtitleStatus.ON -> Triple("💬", Color(0xFF66BB6A), "Subtitles ON" + if (detail.isNotBlank()) " — $detail" else "")
-        PlayerViewModel.SubtitleStatus.OFF -> Triple("✕", Color(0xFF9E9E9E), "Subtitles OFF")
         PlayerViewModel.SubtitleStatus.NONE -> Triple("!", Color(0xFFFFA726), "No subtitles for this episode")
         PlayerViewModel.SubtitleStatus.ERROR -> Triple("✕", Color(0xFFEF5350), "Subtitle error" + if (detail.isNotBlank()) ": $detail" else "")
-        PlayerViewModel.SubtitleStatus.IDLE -> return
+        // ON / OFF / LOADED / IDLE are filtered out above; these are unreachable
+        // but required for exhaustiveness.
+        else -> return
     }
 
     Surface(

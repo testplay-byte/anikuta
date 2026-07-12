@@ -285,11 +285,12 @@ class PlayerPreferences(
      * Verbose MPV logging — when enabled, sets logLvl="v" and msg-level="all=v"
      * so MPV forwards ALL internal log messages (libass, demuxer, stream, sub,
      * cplayer) to the LogObserver. Essential for debugging subtitle rendering.
-     * Default: true (debug builds — we need visibility right now). Set to false
-     * once subtitles are confirmed working, for performance.
+     * Default: false (subtitles are confirmed working — verbose logging has a
+     * performance cost). Toggle ON in Settings > Player > Subtitles if you need
+     * to debug subtitles again.
      */
     fun verboseLogging(): Preference<Boolean> =
-        preferenceStore.getBoolean("pref_verbose_mpv_logging", true)
+        preferenceStore.getBoolean("pref_verbose_mpv_logging", false)
 
     /** Subtitle delay in milliseconds (can be negative). Default: 0. */
     fun subtitlesDelay(): Preference<Int> =

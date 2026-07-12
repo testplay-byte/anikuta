@@ -160,9 +160,23 @@ class AnikutaMPVView(
                 val id = getTrackId(i) ?: continue
                 val title = getTrackTitle(i)
                 val lang = getTrackLang(i)
+                // Build a user-friendly display name. The MPV `title` field for
+                // external .vtt subs is usually the filename (e.g.
+                // "cuhcdrfytgvhjue6t576buy57g4e.vtt") which is ugly and
+                // meaningless. So: prefer the language; only fall back to title
+                // if it looks like a real human-readable label (not a hash.vtt).
+                val isUglyFilename = title.isNotBlank() && (
+                    title.endsWith(".vtt", ignoreCase = true) ||
+                    title.endsWith(".srt", ignoreCase = true) ||
+                    title.endsWith(".ass", ignoreCase = true) ||
+                    title.endsWith(".ssa", ignoreCase = true) ||
+                    // hash-like: long alphanumeric string with no spaces
+                    (title.length > 20 && title.none { it == ' ' })
+                )
+                val displayTitle = if (isUglyFilename) "" else title
                 val name = when {
-                    title.isNotBlank() && lang.isNotBlank() -> "$title ($lang)"
-                    title.isNotBlank() -> title
+                    displayTitle.isNotBlank() && lang.isNotBlank() -> "$displayTitle ($lang)"
+                    displayTitle.isNotBlank() -> displayTitle
                     lang.isNotBlank() -> lang
                     else -> "Track $id"
                 }

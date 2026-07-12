@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -15,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -184,6 +187,7 @@ private fun QualityOption(
  * (not full screen) so the video player remains visible behind it. The settings
  * panel scrolls internally if needed.
  */
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SubtitleTracksSheet(
     viewModel: PlayerViewModel,
@@ -210,70 +214,104 @@ fun SubtitleTracksSheet(
     }
 
     PlayerSheet(title = "Subtitles", onDismiss = onDismiss) {
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(bottom = 8.dp),
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             // "Subtitle settings" button at top
-            item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showSettings = true }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showSettings = true }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        androidx.compose.material3.Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Text(
-                            text = "Subtitle Settings",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
                     androidx.compose.material3.Icon(
-                        imageVector = Icons.Default.ChevronRight,
+                        imageVector = Icons.Default.Settings,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
                     )
-                }
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                )
-            }
-            // Track list
-            items(tracks, key = { it.id }) { track ->
-                SheetOption(
-                    title = track.name,
-                    subtitle = track.language,
-                    selected = track.id == currentId,
-                    onClick = { onSelect(track.id); onDismiss() },
-                )
-            }
-            // Subtitle Fix 6: Show message when no real subtitle tracks exist
-            if (tracks.size <= 1) {
-                item {
                     Text(
-                        text = "No subtitles found in this stream.\n" +
-                            "The extension may not provide external subtitles for this episode.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        text = "Subtitle Settings",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
+                androidx.compose.material3.Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
             }
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+
+            // ---- Button-style track selection (chips) ----
+            // The "Off" button is visually distinct (outline style) from the
+            // language buttons (filled style when selected). This matches the
+            // modern streaming-app pattern (YouTube, Netflix, etc.).
+            if (tracks.size <= 1) {
+                // Only "Off" exists — no real subtitle tracks.
+                Text(
+                    text = "No subtitles found in this stream.\n" +
+                        "The extension may not provide external subtitles for this episode.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                )
+            } else {
+                Text(
+                    text = "Subtitle track",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
+                )
+                // Wrap chips in a FlowRow so they reflow on narrow screens.
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    tracks.forEach { track ->
+                        val isSelected = track.id == currentId
+                        if (track.id <= 0) {
+                            // "Off" — outline style (secondary action)
+                            androidx.compose.material3.AssistChip(
+                                onClick = { onSelect(track.id); onDismiss() },
+                                label = { Text("Off", fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
+                                leadingIcon = if (isSelected) {
+                                    { androidx.compose.material3.Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                } else null,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    if (isSelected) 2.dp else 1.dp,
+                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                ),
+                            )
+                        } else {
+                            // Language track — filled when selected, tonal when not
+                            androidx.compose.material3.FilterChip(
+                                selected = isSelected,
+                                onClick = { onSelect(track.id); onDismiss() },
+                                label = { Text(track.name, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
+                                leadingIcon = if (isSelected) {
+                                    { androidx.compose.material3.Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                } else null,
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
