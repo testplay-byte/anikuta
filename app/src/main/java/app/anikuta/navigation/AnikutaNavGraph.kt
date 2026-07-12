@@ -218,6 +218,7 @@ fun AnikutaNavGraph() {
                     onBack = { navController.popBackStack() },
                     onOpenEpisodeDisplay = { navController.navigate("settings/player/episodes") },
                     onOpenSubtitleSettings = { navController.navigate("settings/player/subtitles") },
+                    onOpenStorageSettings = { navController.navigate("settings/player/storage") },
                 )
             }
             composable("settings/player/episodes") {
@@ -225,6 +226,9 @@ fun AnikutaNavGraph() {
             }
             composable("settings/player/subtitles") {
                 app.anikuta.ui.settings.SubtitleSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/player/storage") {
+                app.anikuta.ui.settings.StorageSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable("settings/details") {
                 app.anikuta.ui.settings.DetailsSettingsScreen(

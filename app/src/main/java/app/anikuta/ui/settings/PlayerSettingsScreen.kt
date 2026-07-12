@@ -3,16 +3,7 @@ package app.anikuta.ui.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.PictureInPicture
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.ViewAgenda
-import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -23,15 +14,25 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Player settings subpage.
- * Phase 1.7: Added default view, gestures, auto-hide, skip duration.
- * Original: Speed, hardware decoding, audio language.
+ * Player settings main page — reorganized into clear, logical sections.
+ *
+ * Structure:
+ *   1. General — default view, quality sheet display
+ *   2. Playback — speed, hardware decoding, audio language
+ *   3. Subtitles — default mode, preferred language, → subpage
+ *   4. Display & Behavior — top bar, auto-hide, gestures, PiP, skip button
+ *   5. Episode list — → subpage
+ *   6. Storage — → subpage
+ *
+ * Selection options use SingleChoiceSegmentedButtonRow (same style as the
+ * episode display settings page).
  */
 @Composable
 fun PlayerSettingsScreen(
     onBack: () -> Unit,
     onOpenEpisodeDisplay: () -> Unit = {},
     onOpenSubtitleSettings: () -> Unit = {},
+    onOpenStorageSettings: () -> Unit = {},
 ) {
     val prefs: PlayerPreferences = remember { Injekt.get() }
     val scope = rememberCoroutineScope()
@@ -39,19 +40,14 @@ fun PlayerSettingsScreen(
     val hwdec by prefs.tryHWDecoding().stateIn(scope).collectAsState()
     var audioLang by remember { mutableStateOf(prefs.preferredAudioLanguages().get()) }
     val defaultView by prefs.defaultPlayerView().stateIn(scope).collectAsState()
+    val subtitleMode by prefs.defaultSubtitleMode().stateIn(scope).collectAsState()
+    var subtitleLang by remember { mutableStateOf(prefs.preferredSubtitleLanguage().get()) }
     val skipDuration by prefs.skipButtonDuration().stateIn(scope).collectAsState()
     val gesturesEnabled by prefs.playerGesturesEnabled().stateIn(scope).collectAsState()
     val autoHide by prefs.autoHideControls().stateIn(scope).collectAsState()
-    // FIX: showTopBar must be observed via stateIn() so the Switch recomposes
-    // immediately when toggled. Previously it used prefs.showPlayerTopBar().get()
-    // which is read once and never updates — causing the toggle to appear "stuck"
-    // until another control triggered a recomposition.
     val showTopBar by prefs.showPlayerTopBar().stateIn(scope).collectAsState()
     val qualityDisplayMode by prefs.qualitySheetDisplayMode().stateIn(scope).collectAsState()
     val pipOnExit by prefs.pipOnExit().stateIn(scope).collectAsState()
-    // Subtitle defaults (player-experiment branch): mode + preferred language.
-    val subtitleMode by prefs.defaultSubtitleMode().stateIn(scope).collectAsState()
-    var subtitleLang by remember { mutableStateOf(prefs.preferredSubtitleLanguage().get()) }
 
     SettingsSubpageScaffold(title = "Player", onBack = onBack) {
         LazyColumn(
@@ -59,12 +55,13 @@ fun PlayerSettingsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // Default view (Phase 1.7)
+            // ═══ 1. General ═══
             item {
-                SettingsGroupCard(title = "Default view") {
+                SettingsGroupCard(title = "General") {
+                    // Default view
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Text("Which mode to open the player in", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Text("Ask shows a prompt the first time", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Default view", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("Which mode to open the player in", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
                         SingleChoiceSegmentedButtonRow {
                             SegmentedButton(
@@ -84,24 +81,71 @@ fun PlayerSettingsScreen(
                             ) { Text("Ask") }
                         }
                     }
+                    HorizontalDivider()
+                    // Quality sheet display
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text("Quality sheet display", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("Choose what qualities to show in the quality picker", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(10.dp))
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(
+                                selected = qualityDisplayMode == "current",
+                                onClick = { prefs.qualitySheetDisplayMode().set("current") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            ) { Text("Current only") }
+                            SegmentedButton(
+                                selected = qualityDisplayMode == "all",
+                                onClick = { prefs.qualitySheetDisplayMode().set("all") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            ) { Text("Show all") }
+                        }
+                    }
                 }
             }
 
-            // Subtitle defaults (player-experiment branch)
+            // ═══ 2. Playback ═══
+            item {
+                SettingsGroupCard(title = "Playback") {
+                    // Speed slider
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text("Playback speed: %.2fx".format(speed), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Slider(
+                            value = speed,
+                            onValueChange = { prefs.playerSpeed().set(it) },
+                            valueRange = 0.25f..2.0f,
+                            steps = 6,
+                        )
+                    }
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Memory,
+                        title = "Hardware decoding",
+                        subtitle = "Use GPU for video decoding (recommended)",
+                        checked = hwdec,
+                        onCheckedChange = { prefs.tryHWDecoding().set(it) },
+                    )
+                    HorizontalDivider()
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text("Preferred audio languages", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("Comma-separated, e.g. jpn,eng", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = audioLang,
+                            onValueChange = { audioLang = it; prefs.preferredAudioLanguages().set(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text("jpn,eng") },
+                        )
+                    }
+                }
+            }
+
+            // ═══ 3. Subtitles ═══
             item {
                 SettingsGroupCard(title = "Subtitles") {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        LeadingIcon(Icons.Default.Subtitles)
-                        Text(
-                            "Default subtitle mode",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            "What to do when an episode starts playing",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Text("Default subtitle mode", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("What to do when an episode starts playing", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
                         SingleChoiceSegmentedButtonRow {
                             SegmentedButton(
@@ -129,16 +173,8 @@ fun PlayerSettingsScreen(
                     }
                     HorizontalDivider()
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text(
-                            "Preferred subtitle language",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            "Used by Auto mode, and as a tiebreaker for On",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Text("Preferred subtitle language", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("Used by Auto mode, and as a tiebreaker for On", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(4.dp))
                         OutlinedTextField(
                             value = subtitleLang,
@@ -149,95 +185,24 @@ fun PlayerSettingsScreen(
                         )
                     }
                     HorizontalDivider()
-                    // Link to the dedicated subtitle settings subpage
                     ClickableSettingsRow(
                         icon = Icons.Default.Subtitles,
-                        title = "Subtitle settings",
+                        title = "Subtitle appearance",
                         subtitle = "Font, size, colors, position, delay",
                         onClick = onOpenSubtitleSettings,
                     )
                 }
             }
 
-            // Episode list display
+            // ═══ 4. Display & Behavior ═══
             item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    SettingsGroupCard(title = "Episode list") {
-                        ClickableSettingsRow(
-                            icon = Icons.Default.ViewAgenda,
-                            title = "Episode display",
-                            subtitle = "Customize how episodes appear in the player",
-                            onClick = onOpenEpisodeDisplay,
-                        )
-                    }
-                }
-            }
-
-            // Playback settings (original + new)
-            item {
-                SettingsGroupCard(title = "Playback") {
-                    // Speed slider
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        LeadingIcon(Icons.Default.Speed)
-                        Text("Playback speed: %.2fx".format(speed), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Slider(
-                            value = speed,
-                            onValueChange = { prefs.playerSpeed().set(it) },
-                            valueRange = 0.25f..2.0f,
-                            steps = 6,
-                        )
-                    }
-                    HorizontalDivider()
-                    // HW decoding
-                    SwitchSettingsRow(
-                        icon = Icons.Default.Memory,
-                        title = "Hardware decoding",
-                        subtitle = "Use GPU for video decoding (recommended)",
-                        checked = hwdec,
-                        onCheckedChange = { prefs.tryHWDecoding().set(it) },
-                    )
-                    HorizontalDivider()
-                    // Audio language
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        LeadingIcon(Icons.Default.RecordVoiceOver)
-                        Text("Preferred audio languages", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(4.dp))
-                        OutlinedTextField(
-                            value = audioLang,
-                            onValueChange = { audioLang = it; prefs.preferredAudioLanguages().set(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            placeholder = { Text("jpn,eng") },
-                        )
-                    }
-                }
-            }
-
-            // Player behavior (Phase 1.7)
-            item {
-                SettingsGroupCard(title = "Player behavior") {
-                    SwitchSettingsRow(
-                        icon = Icons.Default.TouchApp,
-                        title = "Gestures",
-                        subtitle = "Swipe to seek, brightness, volume, double-tap",
-                        checked = gesturesEnabled,
-                        onCheckedChange = { prefs.playerGesturesEnabled().set(it) },
-                    )
-                    HorizontalDivider()
+                SettingsGroupCard(title = "Display & Behavior") {
                     SwitchSettingsRow(
                         icon = Icons.Default.Visibility,
                         title = "Show top bar",
-                        subtitle = "Show the floating navigation bar in minimized mode",
+                        subtitle = "Floating navigation bar in minimized mode",
                         checked = showTopBar,
                         onCheckedChange = { prefs.showPlayerTopBar().set(it) },
-                    )
-                    HorizontalDivider()
-                    SwitchSettingsRow(
-                        icon = Icons.Default.PictureInPicture,
-                        title = "Auto PiP on exit",
-                        subtitle = "Enter picture-in-picture when pressing Home while playing",
-                        checked = pipOnExit,
-                        onCheckedChange = { prefs.pipOnExit().set(it) },
                     )
                     HorizontalDivider()
                     SwitchSettingsRow(
@@ -249,41 +214,52 @@ fun PlayerSettingsScreen(
                     )
                     HorizontalDivider()
                     SwitchSettingsRow(
+                        icon = Icons.Default.TouchApp,
+                        title = "Gestures",
+                        subtitle = "Swipe to seek, brightness, volume, double-tap",
+                        checked = gesturesEnabled,
+                        onCheckedChange = { prefs.playerGesturesEnabled().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.PictureInPicture,
+                        title = "Auto PiP on exit",
+                        subtitle = "Enter picture-in-picture when pressing Home",
+                        checked = pipOnExit,
+                        onCheckedChange = { prefs.pipOnExit().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
                         icon = Icons.Default.SkipNext,
                         title = "Skip button",
                         subtitle = "Skip opening duration: ${skipDuration}s",
                         checked = skipDuration > 0,
-                        onCheckedChange = {
-                            prefs.skipButtonDuration().set(if (it) 85 else 0)
-                        },
+                        onCheckedChange = { prefs.skipButtonDuration().set(if (it) 85 else 0) },
                     )
-                    HorizontalDivider()
-                    // Quality sheet display mode
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text(
-                            "Quality sheet display",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            "Choose what qualities to show in the quality picker",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        SingleChoiceSegmentedButtonRow {
-                            SegmentedButton(
-                                selected = qualityDisplayMode == "current",
-                                onClick = { prefs.qualitySheetDisplayMode().set("current") },
-                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            ) { Text("Current only") }
-                            SegmentedButton(
-                                selected = qualityDisplayMode == "all",
-                                onClick = { prefs.qualitySheetDisplayMode().set("all") },
-                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            ) { Text("Show all") }
-                        }
-                    }
+                }
+            }
+
+            // ═══ 5. Episode list ═══
+            item {
+                SettingsGroupCard(title = "Episode list") {
+                    ClickableSettingsRow(
+                        icon = Icons.Default.ViewAgenda,
+                        title = "Episode display",
+                        subtitle = "Customize how episodes appear in the player",
+                        onClick = onOpenEpisodeDisplay,
+                    )
+                }
+            }
+
+            // ═══ 6. Storage ═══
+            item {
+                SettingsGroupCard(title = "Storage") {
+                    ClickableSettingsRow(
+                        icon = Icons.Default.Folder,
+                        title = "Storage folder",
+                        subtitle = "Where downloads, data, and backups are stored",
+                        onClick = onOpenStorageSettings,
+                    )
                 }
             }
         }
