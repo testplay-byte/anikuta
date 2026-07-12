@@ -196,19 +196,22 @@ private fun CustomKeypadSheet(
                         KeypadButton("0", Modifier.weight(1f)) { if (input == "0") input = "0" else if (input.length < 8) input += "0" }
                     }
                 }
-                // Right column: DEL (top, taller) + OK (bottom, taller)
+                // Right column: DEL (top, 2 rows tall) + OK (bottom, 2 rows tall).
+                // Fixed height (not weight) so the sheet doesn't expand to fill
+                // the screen — each action button = 2 number rows + spacing =
+                // 52 + 8 + 52 = 112dp.
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     KeypadButton(
                         key = "DEL",
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(112.dp),
                         onClick = { if (input.isNotEmpty()) input = input.dropLast(1) },
                     )
                     KeypadButton(
                         key = "OK",
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(112.dp),
                         onClick = {
                             val v = input.toIntOrNull() ?: initial
                             onConfirm(v.coerceIn(min, max))
