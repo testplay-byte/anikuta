@@ -491,24 +491,43 @@ fun DetailScreen(
                                         verticalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
                                         itemsIndexed(es.episodeList, key = { _, it -> it.url }) { index, episode ->
-                                            EpisodeRow(
-                                                episode = episode,
-                                                onClick = { viewModel.playEpisode(episode) },
-                                                showThumbnails = showThumbnails,
-                                                showSummaries = showSummaries,
-                                                showTitles = showTitles,
-                                                showDates = showDates,
-                                                showEpisodeNumber = showEpisodeNumber,
-                                                showAudioPills = showAudioPills,
-                                                synopsisPosition = synopsisPosition,
-                                                datePosition = datePosition,
-                                                thumbnailSize = thumbnailSize,
-                                                titlePosition = titlePosition,
-                                                episodeNumberPosition = episodeNumberPosition,
-                                                thumbnailPosition = thumbnailPosition,
-                                                index = index,
-                                                dynamicColors = null,
-                                            )
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Box(modifier = Modifier.weight(1f)) {
+                                                    EpisodeRow(
+                                                        episode = episode,
+                                                        onClick = { viewModel.playEpisode(episode) },
+                                                        showThumbnails = showThumbnails,
+                                                        showSummaries = showSummaries,
+                                                        showTitles = showTitles,
+                                                        showDates = showDates,
+                                                        showEpisodeNumber = showEpisodeNumber,
+                                                        showAudioPills = showAudioPills,
+                                                        synopsisPosition = synopsisPosition,
+                                                        datePosition = datePosition,
+                                                        thumbnailSize = thumbnailSize,
+                                                        titlePosition = titlePosition,
+                                                        episodeNumberPosition = episodeNumberPosition,
+                                                        thumbnailPosition = thumbnailPosition,
+                                                        index = index,
+                                                        dynamicColors = null,
+                                                    )
+                                                }
+                                                // Download button
+                                                IconButton(onClick = { viewModel.downloadEpisode(episode) }) {
+                                                    Icon(
+                                                        if (viewModel.isEpisodeDownloaded(episode.name)) Icons.Default.DownloadDone
+                                                        else Icons.Default.Download,
+                                                        contentDescription = "Download",
+                                                        tint = if (viewModel.isEpisodeDownloaded(episode.name))
+                                                            MaterialTheme.colorScheme.primary
+                                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(20.dp),
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
