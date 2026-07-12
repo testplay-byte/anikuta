@@ -33,9 +33,14 @@ import uy.kohesive.injekt.api.get
 /**
  * A custom segmented button row with better visual styling.
  * Rounded container with clear selected/unselected states.
+ *
+ * NOTE: The shared [StyledSegmentedRow] is now in SelectableOptionCard.kt
+ * (internal). This local declaration was removed to avoid a conflicting
+ * overload. LayoutSettingsScreen uses the shared one.
  */
+// (removed — using shared StyledSegmentedRow from SelectableOptionCard.kt)
 @Composable
-private fun StyledSegmentedRow(
+private fun StyledSegmentedRowRemoved(
     options: List<Pair<String, Boolean>>,
     onSelect: (Int) -> Unit,
 ) {
