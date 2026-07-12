@@ -302,22 +302,14 @@ internal fun PlayerScreen(
                 }
 
                 // ---- Video area (themed background + rounded corners) ----
-                // FIX: Restructured video container to fix multiple issues:
-                //  1. Themed background (was Color.Black) — the side padding
-                //     gap now uses MaterialTheme.colorScheme.background so it
-                //     matches the rest of the player.
-                //  2. statusBarsPadding() when top bar is hidden — video starts
-                //     BELOW the status bar (YouTube-style), never under it.
-                //  3. Single clip (was double-clipped) — prevents the video
-                //     from being cut off at rounded corners.
-                //  4. Removed the inner padding Box that created an ugly black
-                //     border on all sides.
+                // Added top padding (8dp) when top bar is shown so there's a
+                // small gap between the top nav bar and the video player.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(
                             if (!showTopBar) Modifier.statusBarsPadding()
-                            else Modifier,
+                            else Modifier.padding(top = 8.dp),
                         )
                         .background(MaterialTheme.colorScheme.background),
                 ) {

@@ -31,6 +31,7 @@ import uy.kohesive.injekt.api.get
 fun PlayerSettingsScreen(
     onBack: () -> Unit,
     onOpenEpisodeDisplay: () -> Unit = {},
+    onOpenSubtitleSettings: () -> Unit = {},
 ) {
     val prefs: PlayerPreferences = remember { Injekt.get() }
     val scope = rememberCoroutineScope()
@@ -51,8 +52,6 @@ fun PlayerSettingsScreen(
     // Subtitle defaults (player-experiment branch): mode + preferred language.
     val subtitleMode by prefs.defaultSubtitleMode().stateIn(scope).collectAsState()
     var subtitleLang by remember { mutableStateOf(prefs.preferredSubtitleLanguage().get()) }
-    val verboseLogging by prefs.verboseLogging().stateIn(scope).collectAsState()
-    val useCustomKeypad by prefs.useCustomKeypad().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Player", onBack = onBack) {
         LazyColumn(
@@ -150,20 +149,12 @@ fun PlayerSettingsScreen(
                         )
                     }
                     HorizontalDivider()
-                    SwitchSettingsRow(
+                    // Link to the dedicated subtitle settings subpage
+                    ClickableSettingsRow(
                         icon = Icons.Default.Subtitles,
-                        title = "Verbose MPV logging",
-                        subtitle = "Show full subtitle pipeline in logcat (libass, .vtt, cues). Restart player to apply.",
-                        checked = verboseLogging,
-                        onCheckedChange = { prefs.verboseLogging().set(it) },
-                    )
-                    HorizontalDivider()
-                    SwitchSettingsRow(
-                        icon = Icons.Default.Subtitles,
-                        title = "Custom numeric keypad (experimental)",
-                        subtitle = "Use an in-app keypad for subtitle value entry instead of the device keyboard",
-                        checked = useCustomKeypad,
-                        onCheckedChange = { prefs.useCustomKeypad().set(it) },
+                        title = "Subtitle settings",
+                        subtitle = "Font, size, colors, position, delay",
+                        onClick = onOpenSubtitleSettings,
                     )
                 }
             }

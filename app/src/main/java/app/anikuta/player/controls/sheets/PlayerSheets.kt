@@ -532,17 +532,18 @@ fun SubtitleSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // Reduced from 480dp to 420dp — was too tall per user feedback.
-                .heightIn(max = 420.dp)
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                // Increased from 420dp to 450dp — user wanted slightly taller.
+                .heightIn(max = 450.dp)
+                .padding(horizontal = 20.dp, vertical = 4.dp),
         ) {
-            // Title at the very top-left of the sheet.
+            // Title at the very top-left of the sheet (minimal top padding
+            // so it sits right under the system drag handle).
             Text(
                 text = "Subtitle Settings",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 12.dp),
+                modifier = Modifier.padding(bottom = 10.dp),
             )
             // The settings panel scrolls internally
             app.anikuta.player.controls.SubtitleSettingsPanel(

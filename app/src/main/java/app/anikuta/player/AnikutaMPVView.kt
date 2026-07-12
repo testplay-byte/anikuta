@@ -227,12 +227,11 @@ class AnikutaMPVView(
             "hwdec",
             if (playerPreferences.tryHWDecoding().get()) "auto" else "no",
         )
-        // Log level — verbose shows the full subtitle pipeline (libass font
-        // setup, .vtt download, cue parse, render). Wired to the
-        // verboseLogging() preference so it can be toggled in settings without
-        // rebuilding. Default ON while we debug subtitles.
-        val verbose = playerPreferences.verboseLogging().get()
-        MPVLib.setOptionString("msg-level", if (verbose) "all=v" else "all=warn")
+        // Log level — warn (matches aniyomi). Verbose logging was removed as a
+        // preference (subtitles are confirmed working). If debugging is needed
+        // again, change this to "all=v" and the logLvl in PlayerActivity.initMpvView
+        // to "v". See SUBTITLES_FIX.md for the full debugging history.
+        MPVLib.setOptionString("msg-level", "all=warn")
 
         // Keep the file loaded so seeking works after EOF.
         MPVLib.setPropertyBoolean("keep-open", true)
@@ -312,22 +311,25 @@ class AnikutaMPVView(
     fun applySubtitlePreferences() {
         try {
             MPVLib.setPropertyString("sub-font", playerPreferences.subtitleFont().get())
-            MPVLib.setPropertyString("sub-font-size", playerPreferences.subtitleFontSize().get().toString())
-            MPVLib.setPropertyString("sub-scale", playerPreferences.subtitleFontScale().get().toString())
-            MPVLib.setPropertyString("sub-border-size", playerPreferences.subtitleBorderSize().get().toString())
+            // FIX: Use setPropertyInt for numeric properties — setPropertyString
+            // with a string value doesn't reliably update numeric MPV properties
+            // at runtime (font size especially was not being applied). This was
+            // the root cause of the "font size change not reflected on video" bug.
+            MPVLib.setPropertyInt("sub-font-size", playerPreferences.subtitleFontSize().get())
+            MPVLib.setPropertyDouble("sub-scale", playerPreferences.subtitleFontScale().get().toDouble())
+            MPVLib.setPropertyInt("sub-border-size", playerPreferences.subtitleBorderSize().get())
             MPVLib.setPropertyString("sub-bold", if (playerPreferences.boldSubtitles().get()) "yes" else "no")
             MPVLib.setPropertyString("sub-italic", if (playerPreferences.italicSubtitles().get()) "yes" else "no")
             MPVLib.setPropertyString("sub-color", colorToHex(playerPreferences.textColorSubtitles().get()))
             MPVLib.setPropertyString("sub-border-color", colorToHex(playerPreferences.borderColorSubtitles().get()))
             MPVLib.setPropertyString("sub-back-color", colorToHex(playerPreferences.backgroundColorSubtitles().get()))
-            MPVLib.setPropertyString("sub-pos", playerPreferences.subtitlePosition().get().toString())
-            MPVLib.setPropertyString("sub-shadow-offset", playerPreferences.subtitleShadowOffset().get().toString())
+            MPVLib.setPropertyInt("sub-pos", playerPreferences.subtitlePosition().get())
+            MPVLib.setPropertyInt("sub-shadow-offset", playerPreferences.subtitleShadowOffset().get())
             if (playerPreferences.overrideSubsASS().get()) {
                 MPVLib.setPropertyString("sub-ass-override", "force")
             }
-            // Don't set "no" — leave MPV default ("auto") when not overriding
             MPVLib.setPropertyString("sub-delay", (playerPreferences.subtitlesDelay().get() / 1000.0).toString())
-            Log.d("AnikutaMPVView", "Subtitle preferences applied (live update)")
+            Log.d("AnikutaMPVView", "Subtitle preferences applied (live update, setPropertyInt for numerics)")
         } catch (e: Exception) {
             Log.w("AnikutaMPVView", "Could not apply subtitle preferences", e)
         }

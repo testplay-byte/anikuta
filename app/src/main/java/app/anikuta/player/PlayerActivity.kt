@@ -185,11 +185,6 @@ class PlayerActivity : ComponentActivity() {
             videoHeaders: String,
             logLevel: String = "warn",
         ) {
-            // Override logLevel if verbose logging preference is enabled.
-            val effectiveLogLevel = try {
-                val prefs = uy.kohesive.injekt.Injekt.get<PlayerPreferences>()
-                if (prefs.verboseLogging().get()) "v" else logLevel
-            } catch (e: Exception) { logLevel }
             val mpvDir = context.filesDir.resolve(MPV_DIR).apply { mkdirs() }
 
             // 2. Write clean config files (default minimal; user can override
@@ -211,8 +206,8 @@ class PlayerActivity : ComponentActivity() {
             MPVLib.setOptionString("sub-use-margins", "yes")
 
             // 5. Initialize MPV. vo defaults to "gpu" inside BaseMPVView.
-            view.initialize(mpvDir.absolutePath, context.cacheDir.absolutePath, effectiveLogLevel)
-            Log.d("PlayerActivity", "MPV initialized (configDir=${mpvDir.absolutePath}, logLvl=$effectiveLogLevel)")
+            view.initialize(mpvDir.absolutePath, context.cacheDir.absolutePath, logLevel)
+            Log.d("PlayerActivity", "MPV initialized (configDir=${mpvDir.absolutePath})")
 
             // 6. Register observers (matches aniyomi).
             MPVLib.addLogObserver(observer)
