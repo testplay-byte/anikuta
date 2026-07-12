@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
@@ -47,6 +48,9 @@ fun PlayerSettingsScreen(
     val showTopBar by prefs.showPlayerTopBar().stateIn(scope).collectAsState()
     val qualityDisplayMode by prefs.qualitySheetDisplayMode().stateIn(scope).collectAsState()
     val pipOnExit by prefs.pipOnExit().stateIn(scope).collectAsState()
+    // Subtitle defaults (player-experiment branch): mode + preferred language.
+    val subtitleMode by prefs.defaultSubtitleMode().stateIn(scope).collectAsState()
+    var subtitleLang by remember { mutableStateOf(prefs.preferredSubtitleLanguage().get()) }
 
     SettingsSubpageScaffold(title = "Player", onBack = onBack) {
         LazyColumn(
@@ -78,6 +82,70 @@ fun PlayerSettingsScreen(
                                 shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                             ) { Text("Ask") }
                         }
+                    }
+                }
+            }
+
+            // Subtitle defaults (player-experiment branch)
+            item {
+                SettingsGroupCard(title = "Subtitles") {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        LeadingIcon(Icons.Default.Subtitles)
+                        Text(
+                            "Default subtitle mode",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            "What to do when an episode starts playing",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(
+                                selected = subtitleMode == "off",
+                                onClick = { prefs.defaultSubtitleMode().set("off") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                            ) { Text("Off") }
+                            SegmentedButton(
+                                selected = subtitleMode == "on",
+                                onClick = { prefs.defaultSubtitleMode().set("on") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                            ) { Text("On") }
+                            SegmentedButton(
+                                selected = subtitleMode == "auto",
+                                onClick = { prefs.defaultSubtitleMode().set("auto") },
+                                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                            ) { Text("Auto") }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Off = never show · On = always show first track · Auto = only if language matches",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    HorizontalDivider()
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(
+                            "Preferred subtitle language",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            "Used by Auto mode, and as a tiebreaker for On",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = subtitleLang,
+                            onValueChange = { subtitleLang = it; prefs.preferredSubtitleLanguage().set(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text("en,eng") },
+                        )
                     }
                 }
             }

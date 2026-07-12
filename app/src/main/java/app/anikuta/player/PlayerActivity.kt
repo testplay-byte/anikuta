@@ -890,8 +890,23 @@ class PlayerActivity : ComponentActivity() {
      * we prefer the external track over the embedded one — external tracks
      * from the extension are usually the "real" subtitles the user wants.
      *
-     * Respects [userDisabledSubtitles] — if the user manually turned off
-     * subtitles, we don't auto-select again.
+     * Subtitle default-mode preference (player-experiment branch):
+     * Reads `playerPrefs.defaultSubtitleMode()`:
+     * - "off"  = never auto-select; if a track is somehow selected, leave it
+     *            alone (user can still turn subs on manually via the sheet).
+     * - "on"   = always auto-select the best available track. This OVERRIDES
+     *            `userDisabledSubtitles` — the old flag could get flipped by a
+     *            stale SubtitleTracksSheet event (see log 02:51:52.222) and
+     *            kill subtitles right after they were selected. With "on", we
+     *            deterministically re-select on every track-list change until
+     *            the user explicitly picks "Off" in the sheet during THIS
+     *            playback session.
+     * - "auto" = only auto-select if a track matches `preferredSubtitleLanguage`;
+     *            otherwise leave subs off.
+     *
+     * `userDisabledSubtitles` is now only set by an explicit user tap in the
+     * SubtitleTracksSheet (PlayerScreen onSelect), and is reset to false on
+     * every new episode load (see loadSelectedVideo / handleEvent FILE_LOADED).
      */
     @Volatile private var externalTracksJustAdded: Boolean = false
 
@@ -900,43 +915,62 @@ class PlayerActivity : ComponentActivity() {
         subTracks: List<VideoTrack>,
     ) {
         val currentSid = view.sid
-        Log.d(TAG, "SUBTITLE_DIAG: autoSelectSubtitleTrack — currentSid=$currentSid tracks=${subTracks.size} userDisabled=$userDisabledSubtitles externalJustAdded=$externalTracksJustAdded")
-        if (currentSid <= 0) {
-            if (userDisabledSubtitles) {
-                Log.d(TAG, "SUBTITLE_DIAG: User disabled subtitles — not selecting")
-                viewModel?.setCurrentSubtitleId(-1)
-                return
-            }
-            val firstTrack = subTracks.firstOrNull { it.id > 0 }
-            if (firstTrack != null) {
-                try {
-                    view.sid = firstTrack.id
-                    viewModel?.setCurrentSubtitleId(firstTrack.id)
-                    Log.d(TAG, "SUBTITLE_DIAG: Auto-selected subtitle track: id=${firstTrack.id} name='${firstTrack.name}'")
-                } catch (e: Exception) {
-                    Log.e(TAG, "SUBTITLE_DIAG: Failed to auto-select subtitle track", e)
-                }
-            } else {
-                Log.d(TAG, "SUBTITLE_DIAG: No real subtitle tracks available to select")
+        val mode = playerPrefs?.defaultSubtitleMode()?.get() ?: "on"
+        val preferredLangs = (playerPrefs?.preferredSubtitleLanguage()?.get() ?: "en,eng")
+            .split(",").map { it.trim().lowercase().ifEmpty { null } }.filterNotNull()
+        Log.d(TAG, "SUBTITLE_DIAG: autoSelectSubtitleTrack — currentSid=$currentSid tracks=${subTracks.size} mode=$mode userDisabled=$userDisabledSubtitles externalJustAdded=$externalTracksJustAdded preferredLangs=$preferredLangs")
+
+        val realTracks = subTracks.filter { it.id > 0 }
+        if (realTracks.isEmpty()) {
+            Log.d(TAG, "SUBTITLE_DIAG: No real subtitle tracks available to select")
+            viewModel?.setCurrentSubtitleId(-1)
+            return
+        }
+
+        // "off" — respect the user's choice; do not auto-select.
+        if (mode == "off") {
+            Log.d(TAG, "SUBTITLE_DIAG: mode=off — not auto-selecting")
+            viewModel?.setCurrentSubtitleId(-1)
+            return
+        }
+
+        // Pick the best track: language match first, else first available.
+        val langMatch = realTracks.firstOrNull { track ->
+            val t = track.language?.lowercase() ?: ""
+            preferredLangs.any { p -> t == p || t.startsWith(p) || p.startsWith(t) }
+        }
+        val bestTrack = langMatch ?: realTracks.first()
+        Log.d(TAG, "SUBTITLE_DIAG: bestTrack id=${bestTrack.id} name='${bestTrack.name}' lang='${bestTrack.language}' (langMatch=${langMatch != null})")
+
+        // "auto" — only select if a language match was found.
+        if (mode == "auto" && langMatch == null) {
+            Log.d(TAG, "SUBTITLE_DIAG: mode=auto and no language match — not selecting")
+            viewModel?.setCurrentSubtitleId(-1)
+            return
+        }
+
+        // "on" or "auto (matched)" — select / switch to the best track.
+        // We switch even if currentSid > 0, to:
+        //  (a) prefer the external track when externalTracksJustAdded, and
+        //  (b) recover from the auto-disable race (userDisabledSubtitles flip).
+        val shouldSwitch = when {
+            currentSid <= 0 -> true
+            externalTracksJustAdded && currentSid != bestTrack.id -> true
+            currentSid != bestTrack.id -> true
+            else -> false
+        }
+        if (shouldSwitch) {
+            try {
+                view.sid = bestTrack.id
+                viewModel?.setCurrentSubtitleId(bestTrack.id)
+                Log.d(TAG, "SUBTITLE_DIAG: Selected subtitle track: id=${bestTrack.id} name='${bestTrack.name}' (mode=$mode)")
+            } catch (e: Exception) {
+                Log.e(TAG, "SUBTITLE_DIAG: Failed to set subtitle track", e)
             }
         } else {
-            if (externalTracksJustAdded && !userDisabledSubtitles) {
-                val externalTrack = subTracks.lastOrNull { it.id > 0 }
-                Log.d(TAG, "SUBTITLE_DIAG: External tracks just added — checking if switch needed. currentSid=$currentSid externalTrackId=${externalTrack?.id}")
-                if (externalTrack != null && externalTrack.id != currentSid) {
-                    try {
-                        view.sid = externalTrack.id
-                        viewModel?.setCurrentSubtitleId(externalTrack.id)
-                        Log.d(TAG, "SUBTITLE_DIAG: Switched to external subtitle track: id=${externalTrack.id} name='${externalTrack.name}'")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "SUBTITLE_DIAG: Failed to switch to external subtitle track", e)
-                    }
-                }
-                externalTracksJustAdded = false
-            }
-            // Update VM state with current sid
             viewModel?.setCurrentSubtitleId(currentSid)
         }
+        externalTracksJustAdded = false
     }
 
     /**

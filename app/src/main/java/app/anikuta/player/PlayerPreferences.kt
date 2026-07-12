@@ -153,10 +153,11 @@ class PlayerPreferences(
      * Default player view mode: "minimized", "fullscreen", or "ask".
      * When "ask", shows a prompt the first time (then remembers the user's choice
      * by switching to the selected mode).
-     * Default: "ask".
+     * Default: "minimized" (changed from "ask" per user request — most users want
+     * to land in the YouTube-style minimized view, not get prompted).
      */
     fun defaultPlayerView(): Preference<String> =
-        preferenceStore.getString("pref_default_player_view", "ask")
+        preferenceStore.getString("pref_default_player_view", "minimized")
 
     /**
      * Skip button duration in seconds. Used for the "skip opening" button.
@@ -255,6 +256,30 @@ class PlayerPreferences(
     /** Override ASS/SSA subtitle styling. Default: false. */
     fun overrideSubsASS(): Preference<Boolean> =
         preferenceStore.getBoolean("pref_override_subtitles_ass", false)
+
+    /**
+     * Default subtitle behavior when an episode starts playing:
+     * - "off"  = subtitles off (do not auto-select any track)
+     * - "on"   = subtitles on, auto-select the first/best-matching track
+     * - "auto" = subtitles on only if a track matches [preferredSubtitleLanguage]
+     *
+     * This replaces the old implicit "always auto-select" behaviour that was
+     * racy with the SubtitleTracksSheet and could auto-disable subs right
+     * after they were selected. Default: "on".
+     *
+     * Wired into PlayerActivity.autoSelectSubtitleTrack.
+     */
+    fun defaultSubtitleMode(): Preference<String> =
+        preferenceStore.getString("pref_default_subtitle_mode", "on")
+
+    /**
+     * Preferred subtitle language code(s), comma-separated (e.g. "en,eng" or
+     * "jpn"). Used when [defaultSubtitleMode] is "auto" to pick a matching
+     * track, and as a tiebreaker when "on" finds multiple tracks. Default:
+     * "en,eng" (English).
+     */
+    fun preferredSubtitleLanguage(): Preference<String> =
+        preferenceStore.getString("pref_preferred_subtitle_lang", "en,eng")
 
     /** Subtitle delay in milliseconds (can be negative). Default: 0. */
     fun subtitlesDelay(): Preference<Int> =
