@@ -956,7 +956,7 @@ internal fun formatDate(epochMillis: Long): String {
  * the controls. It uses [subtitleStatusTick] to re-trigger the fade animation
  * every time the status changes (even if the status value is the same).
  */
-@Composable
+@androidx.compose.runtime.Composable
 private fun androidx.compose.foundation.layout.BoxScope.SubtitleStatusPill(viewModel: PlayerViewModel) {
     val status by viewModel.subtitleStatus.collectAsState()
     val detail by viewModel.subtitleStatusDetail.collectAsState()
