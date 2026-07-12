@@ -213,8 +213,12 @@ class AnikutaMPVView(
             "hwdec",
             if (playerPreferences.tryHWDecoding().get()) "auto" else "no",
         )
-        // Clean log level — matches aniyomi (verbose would be `all=v`).
-        MPVLib.setOptionString("msg-level", "all=warn")
+        // Log level — verbose shows the full subtitle pipeline (libass font
+        // setup, .vtt download, cue parse, render). Wired to the
+        // verboseLogging() preference so it can be toggled in settings without
+        // rebuilding. Default ON while we debug subtitles.
+        val verbose = playerPreferences.verboseLogging().get()
+        MPVLib.setOptionString("msg-level", if (verbose) "all=v" else "all=warn")
 
         // Keep the file loaded so seeking works after EOF.
         MPVLib.setPropertyBoolean("keep-open", true)

@@ -281,6 +281,16 @@ class PlayerPreferences(
     fun preferredSubtitleLanguage(): Preference<String> =
         preferenceStore.getString("pref_preferred_subtitle_lang", "en,eng")
 
+    /**
+     * Verbose MPV logging — when enabled, sets logLvl="v" and msg-level="all=v"
+     * so MPV forwards ALL internal log messages (libass, demuxer, stream, sub,
+     * cplayer) to the LogObserver. Essential for debugging subtitle rendering.
+     * Default: true (debug builds — we need visibility right now). Set to false
+     * once subtitles are confirmed working, for performance.
+     */
+    fun verboseLogging(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_verbose_mpv_logging", true)
+
     /** Subtitle delay in milliseconds (can be negative). Default: 0. */
     fun subtitlesDelay(): Preference<Int> =
         preferenceStore.getInt("pref_subtitles_delay", 0)

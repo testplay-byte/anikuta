@@ -51,6 +51,7 @@ fun PlayerSettingsScreen(
     // Subtitle defaults (player-experiment branch): mode + preferred language.
     val subtitleMode by prefs.defaultSubtitleMode().stateIn(scope).collectAsState()
     var subtitleLang by remember { mutableStateOf(prefs.preferredSubtitleLanguage().get()) }
+    val verboseLogging by prefs.verboseLogging().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Player", onBack = onBack) {
         LazyColumn(
@@ -147,6 +148,14 @@ fun PlayerSettingsScreen(
                             placeholder = { Text("en,eng") },
                         )
                     }
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Subtitles,
+                        title = "Verbose MPV logging",
+                        subtitle = "Show full subtitle pipeline in logcat (libass, .vtt, cues). Restart player to apply.",
+                        checked = verboseLogging,
+                        onCheckedChange = { prefs.verboseLogging().set(it) },
+                    )
                 }
             }
 

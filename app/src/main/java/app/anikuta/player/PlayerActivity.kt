@@ -185,6 +185,11 @@ class PlayerActivity : ComponentActivity() {
             videoHeaders: String,
             logLevel: String = "warn",
         ) {
+            // Override logLevel if verbose logging preference is enabled.
+            val effectiveLogLevel = try {
+                val prefs = uy.kohesive.injekt.Injekt.get<PlayerPreferences>()
+                if (prefs.verboseLogging().get()) "v" else logLevel
+            } catch (e: Exception) { logLevel }
             val mpvDir = context.filesDir.resolve(MPV_DIR).apply { mkdirs() }
 
             // 2. Write clean config files (default minimal; user can override
@@ -206,8 +211,8 @@ class PlayerActivity : ComponentActivity() {
             MPVLib.setOptionString("sub-use-margins", "yes")
 
             // 5. Initialize MPV. vo defaults to "gpu" inside BaseMPVView.
-            view.initialize(mpvDir.absolutePath, context.cacheDir.absolutePath, logLevel)
-            Log.d("PlayerActivity", "MPV initialized (configDir=${mpvDir.absolutePath})")
+            view.initialize(mpvDir.absolutePath, context.cacheDir.absolutePath, effectiveLogLevel)
+            Log.d("PlayerActivity", "MPV initialized (configDir=${mpvDir.absolutePath}, logLvl=$effectiveLogLevel)")
 
             // 6. Register observers (matches aniyomi).
             MPVLib.addLogObserver(observer)
@@ -730,6 +735,13 @@ class PlayerActivity : ComponentActivity() {
                         addedTrackUrls.add(sub.url)
                         Log.d(TAG, "SUBTITLE_DIAG: sub-add sent successfully for lang=${sub.lang}")
                         updateSubtitleStatus(PlayerViewModel.SubtitleStatus.LOADED, sub.lang)
+                        // Dump full subtitle state 1.5s after sub-add so MPV has
+                        // time to download + parse the .vtt. This is the key
+                        // diagnostic: shows track-list, sid, sub-visibility,
+                        // sub-text (proves the .vtt has cues).
+                        view.postDelayed({
+                            try { dumpSubtitleState(view) } catch (e: Exception) {}
+                        }, 1500)
                     } catch (e: Exception) {
                         Log.e(TAG, "SUBTITLE_DIAG: Failed to add subtitle track: ${sub.lang}", e)
                     }
@@ -915,6 +927,40 @@ class PlayerActivity : ComponentActivity() {
         viewModel?.setSubtitleStatus(status, detail)
     }
 
+    /**
+     * Dump the full subtitle state from MPV for debugging. Called after sub-add
+     * and on track-list changes. Logs:
+     *  - track-list/count + each track's type/id/lang/title/selected/codec
+     *  - current sid, secondary-sid, sub-visibility, sub-start, sub-delay
+     *  - sub-text (the current subtitle text, if any — proves the .vtt has content)
+     * This is the key diagnostic: if sub-text is empty after sid=1, the .vtt
+     * has no cues for the current timestamp; if sub-visibility is false, subs
+     * are hidden; if track-list shows no 'sub' track, sub-add failed.
+     */
+    private fun dumpSubtitleState(view: AnikutaMPVView) {
+        try {
+            val count = MPVLib.getPropertyInt("track-list/count") ?: -1
+            val sid = view.sid
+            val subVis = MPVLib.getPropertyBoolean("sub-visibility") ?: true
+            val subStart = try { MPVLib.getPropertyInt("sub-start") ?: -1 } catch (e: Exception) { -1 }
+            val subText = try { MPVLib.getPropertyString("sub-text") ?: "" } catch (e: Exception) { "" }
+            val subDelay = try { MPVLib.getPropertyString("sub-delay") ?: "0" } catch (e: Exception) { "0" }
+            Log.d(TAG, "SUB_DUMP: track-count=$count sid=$sid sub-visibility=$subVis sub-start=$subStart sub-delay=$subDelay sub-text='${subText.take(80)}'")
+            for (i in 0 until count) {
+                val type = MPVLib.getPropertyString("track-list/$i/type") ?: "?"
+                val id = MPVLib.getPropertyInt("track-list/$i/id") ?: -1
+                val lang = MPVLib.getPropertyString("track-list/$i/lang") ?: ""
+                val title = MPVLib.getPropertyString("track-list/$i/title") ?: ""
+                val selected = MPVLib.getPropertyBoolean("track-list/$i/selected") ?: false
+                val codec = MPVLib.getPropertyString("track-list/$i/codec") ?: ""
+                val external = MPVLib.getPropertyBoolean("track-list/$i/external") ?: false
+                Log.d(TAG, "SUB_DUMP:   [$i] type=$type id=$id lang='$lang' title='$title' selected=$selected codec='$codec' external=$external")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "SUB_DUMP: failed to dump subtitle state", e)
+        }
+    }
+
     private fun autoSelectSubtitleTrack(
         view: AnikutaMPVView,
         subTracks: List<VideoTrack>,
@@ -977,6 +1023,9 @@ class PlayerActivity : ComponentActivity() {
                 viewModel?.setCurrentSubtitleId(bestTrack.id)
                 updateSubtitleStatus(PlayerViewModel.SubtitleStatus.ON, bestTrack.name)
                 Log.d(TAG, "SUBTITLE_DIAG: Selected subtitle track: id=${bestTrack.id} name='${bestTrack.name}' (mode=$mode)")
+                // Dump state immediately after selection + again in 2s (after .vtt downloads)
+                dumpSubtitleState(view)
+                view.postDelayed({ try { dumpSubtitleState(view) } catch (e: Exception) {} }, 2000)
             } catch (e: Exception) {
                 Log.e(TAG, "SUBTITLE_DIAG: Failed to set subtitle track", e)
             }
