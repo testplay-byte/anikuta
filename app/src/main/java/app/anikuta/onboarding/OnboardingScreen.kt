@@ -631,15 +631,6 @@ private fun ExpressiveStorageStep(onFolderSelected: (String) -> Unit, selectedUr
                 }
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
-        // Secondary: use app-private default (no SAF)
-        androidx.compose.material3.TextButton(onClick = {
-            val default = storagePrefs.baseStorageDirectory().get()
-            storagePrefs.baseStorageDirectory().set(default)
-            onFolderSelected(default)
-        }) {
-            Text("Use default (app-private storage)")
-        }
     }
 }
 

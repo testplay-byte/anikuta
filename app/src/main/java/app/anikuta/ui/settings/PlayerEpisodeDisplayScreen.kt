@@ -18,9 +18,6 @@ import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Title
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -154,138 +151,111 @@ fun PlayerEpisodeDisplayScreen(onBack: () -> Unit) {
                     }
                 }
 
-                // Layout positions
+                // Layout positions — uses StyledSegmentedRow (matches details-page design language)
                 item {
                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        SettingsGroupCard(title = "Positions") {
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Text("Title", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                Text("Where the episode title appears", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(10.dp))
-                                SingleChoiceSegmentedButtonRow {
-                                    SegmentedButton(
-                                        selected = titlePos == "right",
-                                        onClick = { prefs.titlePosition().set("right") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                                    ) { Text("Right") }
-                                    SegmentedButton(
-                                        selected = titlePos == "below",
-                                        onClick = { prefs.titlePosition().set("below") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                                    ) { Text("Below") }
-                                }
+                        SettingsGroupCard(title = "Text content") {
+                            LabeledSection("Title", "Where the episode title appears") {
+                                StyledSegmentedRow(
+                                    options = listOf("Right" to (titlePos == "right"), "Below" to (titlePos == "below")),
+                                    onSelect = { prefs.titlePosition().set(if (it == 0) "right" else "below") },
+                                )
                             }
                             HorizontalDivider()
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Text("Synopsis", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                Text("Where the episode description appears", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(10.dp))
-                                SingleChoiceSegmentedButtonRow {
-                                    SegmentedButton(
-                                        selected = synopsisPos == "right",
-                                        onClick = { prefs.synopsisPosition().set("right") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                                    ) { Text("Right") }
-                                    SegmentedButton(
-                                        selected = synopsisPos == "below",
-                                        onClick = { prefs.synopsisPosition().set("below") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                                    ) { Text("Below") }
-                                }
-                            }
-                            HorizontalDivider()
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Text("Date & audio pills", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                Text("Where the date and SUB/DUB tags appear", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(10.dp))
-                                SingleChoiceSegmentedButtonRow {
-                                    SegmentedButton(
-                                        selected = datePos == "right_above_synopsis",
-                                        onClick = { prefs.datePosition().set("right_above_synopsis") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                                    ) { Text("Above") }
-                                    SegmentedButton(
-                                        selected = datePos == "right_below_synopsis",
-                                        onClick = { prefs.datePosition().set("right_below_synopsis") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-                                    ) { Text("Below") }
-                                    SegmentedButton(
-                                        selected = datePos == "below",
-                                        onClick = { prefs.datePosition().set("below") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-                                    ) { Text("Full") }
-                                }
-                            }
-                            HorizontalDivider()
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Text("Episode number position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                Text("Overlay on thumbnail or badge next to title", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(10.dp))
-                                SingleChoiceSegmentedButtonRow {
-                                    SegmentedButton(
-                                        selected = epNumPos == "overlay",
-                                        onClick = { prefs.episodeNumberPosition().set("overlay") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                                    ) { Text("Overlay") }
-                                    SegmentedButton(
-                                        selected = epNumPos == "badge",
-                                        onClick = { prefs.episodeNumberPosition().set("badge") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                                    ) { Text("Badge") }
-                                }
-                            }
-                            HorizontalDivider()
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Text("Thumbnail side", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                Text("Left or right side of the episode card", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(10.dp))
-                                SingleChoiceSegmentedButtonRow {
-                                    SegmentedButton(
-                                        selected = thumbPos == "left",
-                                        onClick = { prefs.thumbnailPosition().set("left") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                                    ) { Text("Left") }
-                                    SegmentedButton(
-                                        selected = thumbPos == "right",
-                                        onClick = { prefs.thumbnailPosition().set("right") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                                    ) { Text("Right") }
-                                }
+                            LabeledSection("Synopsis", "Where the episode description appears") {
+                                StyledSegmentedRow(
+                                    options = listOf("Right" to (synopsisPos == "right"), "Below" to (synopsisPos == "below")),
+                                    onSelect = { prefs.synopsisPosition().set(if (it == 0) "right" else "below") },
+                                )
                             }
                         }
                     }
                 }
 
-                // Thumbnail size
                 item {
                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        SettingsGroupCard(title = "Thumbnail size") {
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Text("Size", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                Text("Small, medium, or large", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(10.dp))
-                                SingleChoiceSegmentedButtonRow {
-                                    SegmentedButton(
-                                        selected = thumbSize == "small",
-                                        onClick = { prefs.thumbnailSize().set("small") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                                    ) { Text("Small") }
-                                    SegmentedButton(
-                                        selected = thumbSize == "medium",
-                                        onClick = { prefs.thumbnailSize().set("medium") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-                                    ) { Text("Medium") }
-                                    SegmentedButton(
-                                        selected = thumbSize == "large",
-                                        onClick = { prefs.thumbnailSize().set("large") },
-                                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-                                    ) { Text("Large") }
-                                }
+                        SettingsGroupCard(title = "Badges & pills") {
+                            LabeledSection("Date & audio pills", "Where the date and SUB/DUB tags appear") {
+                                StyledSegmentedRow(
+                                    options = listOf(
+                                        "Above" to (datePos == "right_above_synopsis"),
+                                        "Below" to (datePos == "right_below_synopsis"),
+                                        "Full" to (datePos == "below"),
+                                    ),
+                                    onSelect = { idx ->
+                                        prefs.datePosition().set(when (idx) {
+                                            0 -> "right_above_synopsis"
+                                            1 -> "right_below_synopsis"
+                                            else -> "below"
+                                        })
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        SettingsGroupCard(title = "Episode number") {
+                            LabeledSection("Position", "Overlay on thumbnail or badge next to title") {
+                                StyledSegmentedRow(
+                                    options = listOf("Overlay" to (epNumPos == "overlay"), "Badge" to (epNumPos == "badge")),
+                                    onSelect = { prefs.episodeNumberPosition().set(if (it == 0) "overlay" else "badge") },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        SettingsGroupCard(title = "Thumbnail") {
+                            LabeledSection("Side", "Left or right side of the episode card") {
+                                StyledSegmentedRow(
+                                    options = listOf("Left" to (thumbPos == "left"), "Right" to (thumbPos == "right")),
+                                    onSelect = { prefs.thumbnailPosition().set(if (it == 0) "left" else "right") },
+                                )
+                            }
+                            HorizontalDivider()
+                            LabeledSection("Size", "Small, medium, or large") {
+                                StyledSegmentedRow(
+                                    options = listOf(
+                                        "Small" to (thumbSize == "small"),
+                                        "Medium" to (thumbSize == "medium"),
+                                        "Large" to (thumbSize == "large"),
+                                    ),
+                                    onSelect = { idx ->
+                                        prefs.thumbnailSize().set(when (idx) {
+                                            0 -> "small"
+                                            1 -> "medium"
+                                            else -> "large"
+                                        })
+                                    },
+                                )
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * A labeled section with title, description, and content below.
+ * Matches the details-page LayoutSettingsScreen design language.
+ */
+@Composable
+private fun LabeledSection(
+    title: String,
+    description: String,
+    content: @Composable () -> Unit,
+) {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(10.dp))
+        content()
     }
 }

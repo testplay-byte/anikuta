@@ -126,17 +126,6 @@ fun StorageSettingsScreen(
                         ) {
                             Text("Change folder")
                         }
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = {
-                                // Reset to default (app-private storage)
-                                val default = storagePrefs.baseStorageDirectory().get()
-                                storagePrefs.baseStorageDirectory().set(default)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Use default (app-private storage)")
-                        }
                     }
                 }
             }
