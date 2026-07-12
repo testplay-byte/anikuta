@@ -1031,10 +1031,15 @@ class PlayerActivity : ComponentActivity() {
         }
 
         // "on" or "auto (matched)" — select / switch to the best track.
+        // Bug fix: Removed the `currentSid != bestTrack.id -> true` condition
+        // that was overriding the user's manual track selection. Once a track
+        // is selected (currentSid > 0), only switch if NEW external tracks
+        // were just added (externalTracksJustAdded). Otherwise, respect the
+        // user's choice — they may have intentionally selected a non-English
+        // track (e.g. Indonesian, Thai).
         val shouldSwitch = when {
             currentSid <= 0 -> true
             externalTracksJustAdded && currentSid != bestTrack.id -> true
-            currentSid != bestTrack.id -> true
             else -> false
         }
         if (shouldSwitch) {
