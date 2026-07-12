@@ -122,6 +122,7 @@ dependencies {
     // MPVLib static initializer crashes with UnsatisfiedLinkError. aniyomi
     // declares the same dependency (gradle/aniyomi.versions.toml: ffmpeg-kit).
     implementation(libs.ffmpeg.kit)
+    implementation(libs.arthenica.smartexceptions)
 
     // WorkManager (download manager)
     implementation(libs.work.runtime)

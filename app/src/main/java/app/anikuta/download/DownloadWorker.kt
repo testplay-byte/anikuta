@@ -96,21 +96,27 @@ class DownloadWorker(
                 if (!hasMinDiskSpace()) {
                     throw Exception("Insufficient disk space (need ${MIN_DISK_SPACE_MB} MB)")
                 }
+                Log.d(TAG, "Disk space OK. Creating directories...")
 
                 // 3. Create tmp directory
                 val animeDir = downloadProvider.getAnimeDir(download.animeTitle, download.sourceName)
                     ?: throw Exception("Could not create anime directory")
                 val tmpDir = animeDir.createDirectory("_tmp_${download.id}")
                     ?: throw Exception("Could not create temp directory")
+                Log.d(TAG, "Created tmp dir: ${tmpDir.filePath ?: tmpDir.uri}")
 
                 // 4. Build FFmpeg command
                 val outputPath = tmpDir.createFile("video.mkv")!!
+                Log.d(TAG, "Output file: ${outputPath.filePath ?: outputPath.uri}")
                 val ffmpegCmd = buildFFmpegCommand(video, outputPath, download)
+                Log.d(TAG, "FFmpeg command: $ffmpegCmd")
 
                 // 5. Execute FFmpeg
+                Log.d(TAG, "Starting FFmpeg execution...")
                 val success = executeFFmpeg(ffmpegCmd, download)
 
                 if (success) {
+                    Log.d(TAG, "FFmpeg succeeded. Moving file to episode dir...")
                     // 6. Rename tmp dir → episode dir
                     val episodeDirName = buildValidFilename(download.episodeName.ifBlank { "Episode" })
                     val episodeDir = animeDir.createDirectory(episodeDirName)!!
@@ -123,19 +129,20 @@ class DownloadWorker(
                         }
                     }
                     tmpDir.delete()
+                    Log.d(TAG, "File moved. tmpDir deleted.")
 
                     // 7. Mark as downloaded
                     download.status = Download.State.DOWNLOADED
                     download.progress = 100
                     downloadStore.update(download.id, status = Download.State.DOWNLOADED.value, progress = 100)
-                    Log.d(TAG, "Download complete: ${download.episodeName}")
+                    Log.d(TAG, "✅ Download complete: ${download.episodeName}")
                     return
                 } else {
                     throw Exception("FFmpeg failed (return code non-zero)")
                 }
             } catch (e: Exception) {
                 lastError = e.message ?: "Unknown error"
-                Log.w(TAG, "Download attempt $attempt failed: $lastError")
+                Log.e(TAG, "❌ Download attempt $attempt failed: $lastError", e)
 
                 // Clean up tmp dir
                 try {
@@ -203,20 +210,21 @@ class DownloadWorker(
      * Execute FFmpeg synchronously and report progress.
      * @return true if FFmpeg succeeded (return code 0), false otherwise
      */
-    private suspend fun executeFFmpeg(command: String, download: Download): Boolean {
-        val duration = download.video?.let { v ->
-            // Try to get duration from MPV or metadata — for now use FFmpeg's own duration detection
-            0.0
-        } ?: 0.0
+    private fun executeFFmpeg(command: String, download: Download): Boolean {
+        Log.d(TAG, "executeFFmpeg: command length=${command.length}")
 
         val session = FFmpegKit.execute(command)
         val returnCode = session.returnCode
 
+        Log.d(TAG, "FFmpeg return code: ${returnCode.value} (isSuccess=${ReturnCode.isSuccess(returnCode)}, isCancel=${ReturnCode.isCancel(returnCode)})")
+
         if (ReturnCode.isSuccess(returnCode)) {
-            Log.d(TAG, "FFmpeg success for ${download.episodeName}")
+            Log.d(TAG, "✅ FFmpeg success for ${download.episodeName}")
             return true
         } else {
-            Log.e(TAG, "FFmpeg failed for ${download.episodeName}: ${returnCode.value} — ${session.allLogsAsString.take(500)}")
+            val logs = session.allLogsAsString
+            Log.e(TAG, "❌ FFmpeg failed for ${download.episodeName}: rc=${returnCode.value}")
+            Log.e(TAG, "FFmpeg logs (last 1000 chars): ${logs.takeLast(1000)}")
             return false
         }
     }

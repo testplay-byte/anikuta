@@ -21,6 +21,7 @@ paging = "3.3.6"
 injekt = "91edab2317"
 mpv-lib = "1.18.n"
 ffmpeg-kit = "1.18"
+arthenica-smartexceptions = "0.2.1"
 sqldelight = "2.0.2"
 coil = "3.1.0"
 media = "1.7.0"
@@ -66,6 +67,7 @@ mpv-lib = { group = "com.github.aniyomiorg", name = "aniyomi-mpv-lib", version.r
 # this dependency, System.loadLibrary("mpv") crashes with
 # UnsatisfiedLinkError: dlopen failed: library "libavcodec.so" not found.
 ffmpeg-kit = { group = "com.github.jmir1", name = "ffmpeg-kit", version.ref = "ffmpeg-kit" }
+arthenica-smartexceptions = { group = "com.arthenica", name = "smart-exception-java", version.ref = "arthenica-smartexceptions" }
 sqldelight-android-driver = { group = "app.cash.sqldelight", name = "android-driver", version.ref = "sqldelight" }
 sqldelight-coroutines = { group = "app.cash.sqldelight", name = "coroutines-extensions-jvm", version.ref = "sqldelight" }
 sqldelight-android-paging = { group = "app.cash.sqldelight", name = "androidx-paging3-extensions", version.ref = "sqldelight" }
