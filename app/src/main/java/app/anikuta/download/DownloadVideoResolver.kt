@@ -90,7 +90,7 @@ class DownloadVideoResolver(
         val audioOrder = downloadPrefs.preferredAudioOrder().get()
         val serverOrder = downloadPrefs.preferredServerOrder().get()
         val qualityFirst = downloadPrefs.qualityVsAudioPriority().get() ==
-            DownloadPreferences.PriorityMode.QUALITY_FIRST.value
+            PriorityMode.QUALITY_FIRST.value
 
         // Score each video: lower score = higher priority
         val scored = parsed.mapIndexed { index, pv ->
