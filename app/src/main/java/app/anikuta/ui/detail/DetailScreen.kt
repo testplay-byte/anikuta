@@ -13,6 +13,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
@@ -353,24 +356,43 @@ fun DetailScreen(
                     // header) and 4dp vertical padding (so 8dp total between episodes).
                     itemsIndexed(loadedEpisodes.episodeList, key = { _, it -> it.url }) { index, episode ->
                         Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                            EpisodeRow(
-                                episode = episode,
-                                onClick = { viewModel.playEpisode(episode) },
-                                showThumbnails = showThumbnails,
-                                showSummaries = showSummaries,
-                                showTitles = showTitles,
-                                showDates = showDates,
-                                showEpisodeNumber = showEpisodeNumber,
-                                showAudioPills = showAudioPills,
-                                synopsisPosition = synopsisPosition,
-                                datePosition = datePosition,
-                                thumbnailSize = thumbnailSize,
-                                titlePosition = titlePosition,
-                                episodeNumberPosition = episodeNumberPosition,
-                                thumbnailPosition = thumbnailPosition,
-                                index = index,
-                                dynamicColors = null,
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    EpisodeRow(
+                                        episode = episode,
+                                        onClick = { viewModel.playEpisode(episode) },
+                                        showThumbnails = showThumbnails,
+                                        showSummaries = showSummaries,
+                                        showTitles = showTitles,
+                                        showDates = showDates,
+                                        showEpisodeNumber = showEpisodeNumber,
+                                        showAudioPills = showAudioPills,
+                                        synopsisPosition = synopsisPosition,
+                                        datePosition = datePosition,
+                                        thumbnailSize = thumbnailSize,
+                                        titlePosition = titlePosition,
+                                        episodeNumberPosition = episodeNumberPosition,
+                                        thumbnailPosition = thumbnailPosition,
+                                        index = index,
+                                        dynamicColors = null,
+                                    )
+                                }
+                                // Download button
+                                IconButton(onClick = { viewModel.downloadEpisode(episode) }) {
+                                    Icon(
+                                        if (viewModel.isEpisodeDownloaded(episode.name)) Icons.Default.DownloadDone
+                                        else Icons.Default.Download,
+                                        contentDescription = "Download",
+                                        tint = if (viewModel.isEpisodeDownloaded(episode.name))
+                                            MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 } else {

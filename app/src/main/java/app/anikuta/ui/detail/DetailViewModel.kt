@@ -766,6 +766,50 @@ class DetailViewModel(
         _playRequest.value = null
     }
 
+    // ---- Download support ----
+
+    private val downloadManager: app.anikuta.download.DownloadManager? = try {
+        uy.kohesive.injekt.Injekt.get()
+    } catch (e: Exception) { null }
+
+    /**
+     * Enqueue a single episode for download. Resolves the source + anime title
+     * from the current state.
+     */
+    fun downloadEpisode(episode: app.anikuta.source.api.model.SEpisode) {
+        val source = matchedSource ?: return
+        val animeTitle = animeTitle.value.ifBlank { "Unknown Anime" }
+        downloadManager?.enqueueDownload(
+            anilistId = anilistId,
+            sourceId = source.id,
+            sourceName = source.name,
+            animeTitle = animeTitle,
+            episode = episode,
+        )
+        Log.d(TAG, "Download enqueued: ${episode.name}")
+    }
+
+    /** Download all episodes in the list. */
+    fun downloadAllEpisodes(episodes: List<app.anikuta.source.api.model.SEpisode>) {
+        val source = matchedSource ?: return
+        val animeTitle = animeTitle.value.ifBlank { "Unknown Anime" }
+        downloadManager?.enqueueDownloads(
+            anilistId = anilistId,
+            sourceId = source.id,
+            sourceName = source.name,
+            animeTitle = animeTitle,
+            episodes = episodes,
+        )
+        Log.d(TAG, "Download all enqueued: ${episodes.size} episodes")
+    }
+
+    /** Check if an episode is downloaded. */
+    fun isEpisodeDownloaded(episodeName: String): Boolean {
+        val source = matchedSource ?: return false
+        val title = animeTitle.value.ifBlank { return false }
+        return downloadManager?.isEpisodeDownloaded(episodeName, title, source.name) ?: false
+    }
+
     /**
      * Toggle the saved state for this anime.
      *

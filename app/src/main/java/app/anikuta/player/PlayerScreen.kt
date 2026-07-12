@@ -358,7 +358,8 @@ internal fun PlayerScreen(
                                             Log.d("PlayerActivity", "Video URL is localhost proxy — deferring to loadVideoIfPending for re-resolution")
                                         } else {
                                             Log.d("PlayerActivity", "Loading video (direct URL): ${url.take(80)}...")
-                                            MPVLib.command(arrayOf("loadfile", url, "replace"))
+                                            val resolvedUrl = app.anikuta.player.resolveUrlForMpv(url, ctx)
+                                            MPVLib.command(arrayOf("loadfile", resolvedUrl, "replace"))
                                         }
                                     } else {
                                         Log.d("PlayerActivity", "Video load delayed (prompt showing)")
@@ -609,7 +610,8 @@ internal fun PlayerScreen(
                                     Log.d("PlayerActivity", "Video URL is localhost proxy — deferring to loadVideoIfPending for re-resolution")
                                 } else {
                                     Log.d("PlayerActivity", "Loading video (direct URL): ${url.take(80)}...")
-                                    MPVLib.command(arrayOf("loadfile", url, "replace"))
+                                    val resolvedUrlFs = app.anikuta.player.resolveUrlForMpv(url, ctx)
+                                    MPVLib.command(arrayOf("loadfile", resolvedUrlFs, "replace"))
                                 }
                             }
                             view

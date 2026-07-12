@@ -268,6 +268,12 @@ fun AnikutaNavGraph() {
                 )
             }
             composable("settings/downloads") {
+                app.anikuta.ui.download.DownloadQueueScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenSettings = { navController.navigate("settings/downloads/settings") },
+                )
+            }
+            composable("settings/downloads/settings") {
                 app.anikuta.ui.settings.DownloadsSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable("settings/tracking") {

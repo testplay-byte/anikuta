@@ -1256,7 +1256,8 @@ class PlayerActivity : ComponentActivity() {
                             Log.d(TAG, "Set video headers (${headers.length} chars)")
                         }
                         Log.d(TAG, "Loading new video: ${currentVideoUrl.take(80)}...")
-                        MPVLib.command(arrayOf("loadfile", currentVideoUrl, "replace"))
+                        val resolvedUrl = resolveUrlForMpv(currentVideoUrl, this@PlayerActivity)
+                        MPVLib.command(arrayOf("loadfile", resolvedUrl, "replace"))
                         // Auto-play will happen when MPV_EVENT_FILE_LOADED fires
                         // (see handleEvent). The loading overlay will be cleared
                         // when onFileLoaded() is called.
@@ -1641,7 +1642,8 @@ class PlayerActivity : ComponentActivity() {
                         MPVLib.setOptionString("http-header-fields", headers)
                     }
                     Log.d(TAG, "Loading video: ${currentVideoUrl.take(80)}...")
-                    MPVLib.command(arrayOf("loadfile", currentVideoUrl, "replace"))
+                    val resolvedUrl2 = resolveUrlForMpv(currentVideoUrl, this@PlayerActivity)
+                    MPVLib.command(arrayOf("loadfile", resolvedUrl2, "replace"))
                     launchSwitchTimeout()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load video", e)
@@ -1870,7 +1872,8 @@ class PlayerActivity : ComponentActivity() {
             addedTrackUrls.clear()
             Log.d(TAG, "Loading video (direct URL): ${url.take(80)}...")
             try {
-                MPVLib.command(arrayOf("loadfile", url, "replace"))
+                val resolvedUrl3 = resolveUrlForMpv(url, this@PlayerActivity)
+                MPVLib.command(arrayOf("loadfile", resolvedUrl3, "replace"))
             } catch (e: Exception) {
                 Log.w(TAG, "Could not load video", e)
                 videoLoaded = false // allow retry
@@ -2003,7 +2006,8 @@ class PlayerActivity : ComponentActivity() {
                         // Bug #1/#5 fix: reset for new file
                         fileLoaded = false
                         addedTrackUrls.clear()
-                        MPVLib.command(arrayOf("loadfile", currentVideoUrl, "replace"))
+                        val resolvedUrl4 = resolveUrlForMpv(currentVideoUrl, this@PlayerActivity)
+                        MPVLib.command(arrayOf("loadfile", resolvedUrl4, "replace"))
                         launchSwitchTimeout()
                     } catch (e: Exception) {
                         Log.e(TAG, "Re-resolve: failed to load video", e)
