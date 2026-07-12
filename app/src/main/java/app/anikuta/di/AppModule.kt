@@ -128,7 +128,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { DownloadPreferences(get<PreferenceStore>()) }
         addSingletonFactory { DownloadStore(get<PreferenceStore>()) }
         addSingletonFactory { DownloadProvider(get<Context>(), get<app.anikuta.storage.StorageManager>()) }
-        addSingletonFactory { DownloadVideoResolver(get<app.anikuta.source.AndroidAnimeSourceManager>(), get<DownloadPreferences>()) }
+        addSingletonFactory { DownloadVideoResolver(get<AnimeSourceManager>(), get<DownloadPreferences>()) }
         addSingletonFactory { DownloadManager(get<Context>(), get(), get()) }
 
         // AniList client

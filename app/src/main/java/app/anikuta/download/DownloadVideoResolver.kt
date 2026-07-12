@@ -2,6 +2,7 @@ package app.anikuta.download
 
 import android.util.Log
 import app.anikuta.download.DownloadPreferences
+import app.anikuta.domain.source.anime.service.AnimeSourceManager
 import app.anikuta.source.AndroidAnimeSourceManager
 import app.anikuta.ui.detail.VideoTitleParser
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
@@ -22,7 +23,7 @@ import uy.kohesive.injekt.api.get
  * automatically selects the best video based on DownloadPreferences.
  */
 class DownloadVideoResolver(
-    private val sourceManager: AndroidAnimeSourceManager,
+    private val sourceManager: AnimeSourceManager,
     private val downloadPrefs: DownloadPreferences,
 ) {
 

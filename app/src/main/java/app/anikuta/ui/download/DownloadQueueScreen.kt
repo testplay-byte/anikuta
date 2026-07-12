@@ -56,6 +56,11 @@ fun DownloadQueueScreen(
     val viewModel: DownloadQueueViewModel = viewModel()
     val queue by viewModel.queue.collectAsState()
 
+    val downloading = queue.count { it.status == Download.State.DOWNLOADING }
+    val queued = queue.count { it.status == Download.State.QUEUE }
+    val completed = queue.count { it.status == Download.State.DOWNLOADED }
+    val failed = queue.count { it.status == Download.State.ERROR }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -65,63 +70,107 @@ fun DownloadQueueScreen(
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Download settings")
-                    }
-                },
             )
         },
     ) { padding ->
-        if (queue.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center,
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // ---- Stats bar + Settings button ----
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.Download,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "No downloads yet",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "Download episodes from the anime detail page",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    )
+                // Stats on the left
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (downloading > 0) {
+                        StatChip("$downloading", "downloading", MaterialTheme.colorScheme.primary)
+                    }
+                    if (queued > 0) {
+                        StatChip("$queued", "queued", MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (completed > 0) {
+                        StatChip("$completed", "done", MaterialTheme.colorScheme.tertiary)
+                    }
+                    if (failed > 0) {
+                        StatChip("$failed", "failed", MaterialTheme.colorScheme.error)
+                    }
+                    if (downloading == 0 && queued == 0 && completed == 0 && failed == 0) {
+                        Text("No downloads", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                // Settings button on the right
+                FilledTonalButton(onClick = onOpenSettings) {
+                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Settings")
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(queue, key = { it.id }) { download ->
-                    DownloadQueueItem(
-                        download = download,
-                        onCancel = { viewModel.cancelDownload(download.id) },
-                        onRetry = { viewModel.retryDownload(download.id) },
-                        onRemove = { viewModel.removeDownload(download.id) },
-                    )
+
+            HorizontalDivider()
+
+            // ---- Queue list ----
+            if (queue.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text("No downloads yet", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Download episodes from the anime detail page", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    }
                 }
-                if (queue.any { it.status == Download.State.DOWNLOADED }) {
-                    item {
-                        TextButton(onClick = { viewModel.clearCompleted() }) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Clear completed")
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(queue, key = { it.id }) { download ->
+                        DownloadQueueItem(
+                            download = download,
+                            onCancel = { viewModel.cancelDownload(download.id) },
+                            onRetry = { viewModel.retryDownload(download.id) },
+                            onRemove = { viewModel.removeDownload(download.id) },
+                        )
+                    }
+                    if (completed > 0) {
+                        item {
+                            TextButton(onClick = { viewModel.clearCompleted() }) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Clear completed")
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun StatChip(count: String, label: String, color: androidx.compose.ui.graphics.Color) {
+    Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+        color = color.copy(alpha = 0.12f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(count, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = color)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.8f))
         }
     }
 }
