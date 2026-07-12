@@ -778,12 +778,12 @@ class DetailViewModel(
      */
     fun downloadEpisode(episode: app.anikuta.source.api.model.SEpisode) {
         val source = matchedSource ?: return
-        val animeTitle = animeTitle.value.ifBlank { "Unknown Anime" }
+        val title = getAnimeTitle()
         downloadManager?.enqueueDownload(
             anilistId = anilistId,
             sourceId = source.id,
             sourceName = source.name,
-            animeTitle = animeTitle,
+            animeTitle = title,
             episode = episode,
         )
         Log.d(TAG, "Download enqueued: ${episode.name}")
@@ -792,12 +792,12 @@ class DetailViewModel(
     /** Download all episodes in the list. */
     fun downloadAllEpisodes(episodes: List<app.anikuta.source.api.model.SEpisode>) {
         val source = matchedSource ?: return
-        val animeTitle = animeTitle.value.ifBlank { "Unknown Anime" }
+        val title = getAnimeTitle()
         downloadManager?.enqueueDownloads(
             anilistId = anilistId,
             sourceId = source.id,
             sourceName = source.name,
-            animeTitle = animeTitle,
+            animeTitle = title,
             episodes = episodes,
         )
         Log.d(TAG, "Download all enqueued: ${episodes.size} episodes")
@@ -806,8 +806,13 @@ class DetailViewModel(
     /** Check if an episode is downloaded. */
     fun isEpisodeDownloaded(episodeName: String): Boolean {
         val source = matchedSource ?: return false
-        val title = animeTitle.value.ifBlank { return false }
+        val title = getAnimeTitle().ifBlank { return false }
         return downloadManager?.isEpisodeDownloaded(episodeName, title, source.name) ?: false
+    }
+
+    /** Get the anime title from the current detail state. */
+    private fun getAnimeTitle(): String {
+        return (_anime.value as? DetailState.Success)?.data?.title?.preferred() ?: "Unknown Anime"
     }
 
     /**
