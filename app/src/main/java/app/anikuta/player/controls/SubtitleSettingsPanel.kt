@@ -193,7 +193,7 @@ fun SubtitleSettingsPanel(
         )
     }
 
-    // ---- Keypad dialogs ----
+    // ---- Keypad sheets (bottom sheet, not popup) ----
     editingDialog?.let { dialogKey ->
         val (title, initial, suffix, min, max) = when (dialogKey) {
             "fontSize" -> Tuple5("Font size", fontSize, "", 20, 100)
@@ -204,12 +204,23 @@ fun SubtitleSettingsPanel(
             "delay" -> Tuple5("Delay", delay, "ms", -5000, 5000)
             else -> return@let
         }
-        NumericEntryDialog(
+        NumericEntrySheet(
             title = title,
             initial = initial,
             suffix = suffix,
             min = min,
             max = max,
+            onLiveChange = { v ->
+                // Live-apply so the user sees the change on the video behind the sheet.
+                when (dialogKey) {
+                    "fontSize" -> { prefs.subtitleFontSize().set(v.coerceIn(min, max)); onSettingsChanged() }
+                    "fontScale" -> { prefs.subtitleFontScale().set((v.coerceIn(min, max)) / 10f); onSettingsChanged() }
+                    "borderSize" -> { prefs.subtitleBorderSize().set(v.coerceIn(min, max)); onSettingsChanged() }
+                    "position" -> { prefs.subtitlePosition().set(v.coerceIn(min, max)); onSettingsChanged() }
+                    "shadow" -> { prefs.subtitleShadowOffset().set(v.coerceIn(min, max)); onSettingsChanged() }
+                    "delay" -> { prefs.subtitlesDelay().set(v.coerceIn(min, max)); onSettingsChanged() }
+                }
+            },
             onConfirm = { v ->
                 when (dialogKey) {
                     "fontSize" -> prefs.subtitleFontSize().set(v)
@@ -226,7 +237,7 @@ fun SubtitleSettingsPanel(
         )
     }
 
-    // ---- Color dialogs ----
+    // ---- Color sheets (bottom sheet, live preview) ----
     colorDialog?.let { dialogKey ->
         val (title, initial, setter) = when (dialogKey) {
             "text" -> Triple("Text color", textColor) { v: Int -> prefs.textColorSubtitles().set(v) }
@@ -234,13 +245,13 @@ fun SubtitleSettingsPanel(
             "bg" -> Triple("Background color", bgColor) { v: Int -> prefs.backgroundColorSubtitles().set(v) }
             else -> return@let
         }
-        ColorPickerDialog(
+        ColorPickerSheet(
             title = title,
             initialColor = initial,
-            onConfirm = { v ->
+            onLiveChange = { v ->
+                // Live-apply so the user sees the color change on the video behind the sheet.
                 setter(v)
                 onSettingsChanged()
-                colorDialog = null
             },
             onDismiss = { colorDialog = null },
         )

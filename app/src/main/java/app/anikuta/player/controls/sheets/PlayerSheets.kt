@@ -1,8 +1,10 @@
 package app.anikuta.player.controls.sheets
 
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,10 +14,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
@@ -500,10 +504,16 @@ private fun MoreOptionRow(
 /**
  * Height-constrained bottom sheet for subtitle settings.
  *
- * Unlike the full PlayerSheet (which uses skipPartiallyExpanded = true and
- * takes most of the screen), this sheet uses a max height of ~60% of the
- * screen so the video player remains visible behind it. The settings panel
- * scrolls internally if the content exceeds the sheet height.
+ * Improvements (player-experiment):
+ *  - Max height increased from 400dp to 480dp (1.2× per user request) so more
+ *    settings are visible without scrolling.
+ *  - The "Subtitle Settings" title is placed in a Row alongside the drag
+ *    handle area (top-left), so it reads like a proper sheet header. The drag
+ *    handle sits to the RIGHT of the title (both at the very top), matching
+ *    the user's request: "on the left side at the very top, on the left of
+ *    the drag-and-drop area indicator".
+ *
+ * The video player remains visible behind the sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -521,19 +531,33 @@ fun SubtitleSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // Constrain height so video player stays visible but give enough
-                // room for all settings. Reduced from 500dp to 400dp per feedback
-                // (500dp was too tall). The panel scrolls internally if needed.
-                .heightIn(max = 400.dp)
+                // Increased from 400dp to 480dp (1.2×) per user request —
+                // more settings visible without scrolling.
+                .heightIn(max = 480.dp)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
-            Text(
-                text = "Subtitle Settings",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
+            // Header: title at the very top-left, drag handle to its right.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "Subtitle Settings",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                // Visual drag-handle indicator (decorative — the sheet itself
+                // is draggable via the standard ModalBottomSheet gesture).
+                Box(
+                    modifier = Modifier
+                        .width(32.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.outlineVariant),
+                )
+            }
             // The settings panel scrolls internally
             app.anikuta.player.controls.SubtitleSettingsPanel(
                 onSettingsChanged = {

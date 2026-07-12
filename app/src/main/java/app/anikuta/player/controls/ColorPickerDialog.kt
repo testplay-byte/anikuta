@@ -12,19 +12,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,30 +34,42 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
- * An improved color picker dialog for subtitle colors. Combines:
- *  - A row of preset swatches (one-tap quick select)
- *  - RGB sliders for custom color selection
- *  - A live preview + hex display
+ * A bottom-sheet color picker for subtitle colors. Shown from the bottom of
+ * the screen (NOT a center popup) so the video player stays visible behind it
+ * and the user can see subtitle colors changing in real time.
  *
- * This replaces the old DropdownMenu-with-fixed-prescents which didn't allow
- * custom colors.
+ * Features:
+ *  - A row of preset swatches (one-tap quick select)
+ *  - RGB + Alpha sliders for custom color selection
+ *  - A live preview + hex display
+ *  - Live-applies the color on every change (onLiveChange) so the user sees
+ *    the effect immediately. onConfirm/onDismiss just close the sheet.
+ *
+ * COLOR BUG FIX: The previous version called Compose's Color(a, r, g, b)
+ * constructor, but that constructor is Color(red, green, blue, alpha). So the
+ * preview showed the wrong color (channels swapped). Fixed to Color(r, g, b, a)
+ * and the stored int is ARGB (alpha in the high bits), matching
+ * AnikutaMPVView.colorToHex which sends #ARGB to MPV.
  */
 @Composable
-fun ColorPickerDialog(
+fun ColorPickerSheet(
     title: String,
     initialColor: Int,
-    onConfirm: (Int) -> Unit,
+    onLiveChange: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var a by remember { mutableStateOf((initialColor shr 24) and 0xFF) }
-    var r by remember { mutableStateOf((initialColor shr 16) and 0xFF) }
-    var g by remember { mutableStateOf((initialColor shr 8) and 0xFF) }
-    var b by remember { mutableStateOf(initialColor and 0xFF) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Extract ARGB channels from the stored int (ARGB layout: alpha in high byte).
+    var a by remember { mutableIntStateOf((initialColor shr 24) and 0xFF) }
+    var r by remember { mutableIntStateOf((initialColor shr 16) and 0xFF) }
+    var g by remember { mutableIntStateOf((initialColor shr 8) and 0xFF) }
+    var b by remember { mutableIntStateOf(initialColor and 0xFF) }
 
-    val currentColor = Color(a.toInt(), r.toInt(), g.toInt(), b.toInt())
+    fun currentInt() = (a shl 24) or (r shl 16) or (g shl 8) or b
+    // Compose Color constructor is Color(red, green, blue, alpha) — NOT (a,r,g,b).
+    val currentColor = Color(r, g, b, a)
     val hex = String.format("#%02X%02X%02X%02X", a, r, g, b)
 
     val presets = listOf(
@@ -70,74 +83,85 @@ fun ColorPickerDialog(
         "Transparent" to 0x00000000,
     )
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                val colorInt = (a.toInt() shl 24) or (r.toInt() shl 16) or (g.toInt() shl 8) or b.toInt()
-                onConfirm(colorInt)
-            }) { Text("Apply") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        title = { Text(title, fontWeight = FontWeight.Bold) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // ---- Live preview ----
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+        ) {
+            // ---- Title + preview row ----
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(currentColor)
+                        .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp)),
+                )
+                Column {
+                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(hex, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            // ---- Preset swatches ----
+            Text("Presets", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                presets.forEach { (_, colorValue) ->
+                    val c = Color(
+                        red = (colorValue shr 16) and 0xFF,
+                        green = (colorValue shr 8) and 0xFF,
+                        blue = colorValue and 0xFF,
+                        alpha = (colorValue shr 24) and 0xFF,
+                    )
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(currentColor)
-                            .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp)),
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(c)
+                            .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                            .clickable {
+                                a = (colorValue shr 24) and 0xFF
+                                r = (colorValue shr 16) and 0xFF
+                                g = (colorValue shr 8) and 0xFF
+                                b = colorValue and 0xFF
+                                onLiveChange(currentInt())
+                            },
                     )
-                    Column {
-                        Text("Preview", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(hex, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    }
                 }
-
-                // ---- Preset swatches ----
-                Text("Presets", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    presets.forEach { (_, colorValue) ->
-                        val c = Color(colorValue)
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(c)
-                                .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                                .clickable {
-                                    a = (colorValue shr 24) and 0xFF
-                                    r = (colorValue shr 16) and 0xFF
-                                    g = (colorValue shr 8) and 0xFF
-                                    b = colorValue and 0xFF
-                                },
-                        )
-                    }
-                }
-
-                // ---- Custom RGB+A sliders ----
-                Text("Custom", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
-                ColorSliderRow("Red", r, 0xFF) { r = it }
-                ColorSliderRow("Green", g, 0xFF) { g = it }
-                ColorSliderRow("Blue", b, 0xFF) { b = it }
-                ColorSliderRow("Alpha", a, 0xFF) { a = it }
             }
-        },
-    )
+
+            // ---- Custom RGB+A sliders ----
+            Text("Custom", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+            ColorSliderRow("Red", r) { r = it; onLiveChange(currentInt()) }
+            ColorSliderRow("Green", g) { g = it; onLiveChange(currentInt()) }
+            ColorSliderRow("Blue", b) { b = it; onLiveChange(currentInt()) }
+            ColorSliderRow("Alpha", a) { a = it; onLiveChange(currentInt()) }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            // Done button — just closes the sheet (changes were applied live)
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            ) { Text("Done") }
+        }
+    }
 }
 
 @Composable
-private fun ColorSliderRow(label: String, value: Int, max: Int, onChange: (Int) -> Unit) {
+private fun ColorSliderRow(label: String, value: Int, onChange: (Int) -> Unit) {
     Column(modifier = Modifier.padding(vertical = 2.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -150,7 +174,7 @@ private fun ColorSliderRow(label: String, value: Int, max: Int, onChange: (Int) 
         Slider(
             value = value.toFloat(),
             onValueChange = { onChange(it.toInt()) },
-            valueRange = 0f..max.toFloat(),
+            valueRange = 0f..255f,
             modifier = Modifier.fillMaxWidth(),
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.primary,
