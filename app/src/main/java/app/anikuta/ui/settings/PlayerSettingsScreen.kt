@@ -52,6 +52,7 @@ fun PlayerSettingsScreen(
     val subtitleMode by prefs.defaultSubtitleMode().stateIn(scope).collectAsState()
     var subtitleLang by remember { mutableStateOf(prefs.preferredSubtitleLanguage().get()) }
     val verboseLogging by prefs.verboseLogging().stateIn(scope).collectAsState()
+    val useCustomKeypad by prefs.useCustomKeypad().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Player", onBack = onBack) {
         LazyColumn(
@@ -155,6 +156,14 @@ fun PlayerSettingsScreen(
                         subtitle = "Show full subtitle pipeline in logcat (libass, .vtt, cues). Restart player to apply.",
                         checked = verboseLogging,
                         onCheckedChange = { prefs.verboseLogging().set(it) },
+                    )
+                    HorizontalDivider()
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Subtitles,
+                        title = "Custom numeric keypad (experimental)",
+                        subtitle = "Use an in-app keypad for subtitle value entry instead of the device keyboard",
+                        checked = useCustomKeypad,
+                        onCheckedChange = { prefs.useCustomKeypad().set(it) },
                     )
                 }
             }

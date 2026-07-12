@@ -292,6 +292,16 @@ class PlayerPreferences(
     fun verboseLogging(): Preference<Boolean> =
         preferenceStore.getBoolean("pref_verbose_mpv_logging", false)
 
+    /**
+     * Experimental: Use a custom in-app numeric keypad for subtitle setting
+     * value entry (instead of the device's soft keyboard). When enabled,
+     * tapping a slider's value opens a compact 4×3 keypad dialog. Default:
+     * true (experimental — user wants to try it). Set to false to use the
+     * device keyboard instead.
+     */
+    fun useCustomKeypad(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_use_custom_keypad", true)
+
     /** Subtitle delay in milliseconds (can be negative). Default: 0. */
     fun subtitlesDelay(): Preference<Int> =
         preferenceStore.getInt("pref_subtitles_delay", 0)

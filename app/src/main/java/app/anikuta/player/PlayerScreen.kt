@@ -440,8 +440,6 @@ internal fun PlayerScreen(
                                 onSubtitleClick = { showSubtitleSheet = true },
                             )
                         }
-                        // Subtitle status indicator pill (auto-fades after 4s)
-                        SubtitleStatusPill(viewModel = viewModel)
                     }
                 }
 
@@ -696,8 +694,6 @@ internal fun PlayerScreen(
                             },
                     )
                 }
-                // Subtitle status indicator pill (auto-fades after 4s)
-                SubtitleStatusPill(viewModel = viewModel)
             }
         }
     }

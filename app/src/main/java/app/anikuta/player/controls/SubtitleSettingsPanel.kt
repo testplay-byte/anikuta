@@ -17,9 +17,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -40,26 +43,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.anikuta.player.PlayerPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Subtitle settings panel — compact, scrollable, no live preview.
+ * Subtitle settings panel — compact, scrollable, sectioned.
  *
- * Three sections:
- * 1. Typography: font size, scale, bold, italic, border size
- * 2. Position & Misc: position, shadow, ASS override, delay
- *
- * Design:
- *  - No live preview (the video player itself shows the subtitles)
- *  - Scrollable (verticalScroll) so it works in a constrained-height sheet
- *  - Compact slider rows with value displayed on the right
- *  - Themed with MaterialTheme.colorScheme for dynamic theming support
- *
- * Hosted in a PlayerSheet that doesn't take the full screen — the sheet
- * height is constrained so the video player remains visible behind it.
+ * Improvements (player-experiment):
+ *  - Removed the top explanatory note (clutter).
+ *  - Each section is visually separated with dividers + spacing.
+ *  - Font selector is a full-width styled dropdown.
+ *  - Slider values are tappable → opens a custom numeric keypad dialog
+ *    (experimental, toggleable via [PlayerPreferences.useCustomKeypad]).
+ *  - Color picker opens a full RGB+A dialog (presets + custom sliders).
+ *  - Delay uses a stepper (−/value/+) instead of a slider.
  */
 @Composable
 fun SubtitleSettingsPanel(
@@ -82,109 +80,176 @@ fun SubtitleSettingsPanel(
     val overrideASS by prefs.overrideSubsASS().stateIn(scope).collectAsState()
     val delay by prefs.subtitlesDelay().stateIn(scope).collectAsState()
 
-    // Scrollable column — allows the settings to scroll if they exceed the sheet height
+    // Dialog state — which setting is being edited via keypad/dialog.
+    var editingDialog by remember { mutableStateOf<String?>(null) }
+    var colorDialog by remember { mutableStateOf<String?>(null) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState()),
     ) {
-        // Subtitle Fix 4: Explanatory note about ASS styling
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        ) {
-            Text(
-                text = "Note: These settings only affect plain-text subtitles. " +
-                    "ASS/SSA subtitles use their own styling unless you enable " +
-                    "'Override ASS styling' below.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            )
-        }
-
-        // ---- Typography ----
+        // ═══════ Section: Typography ═══════
         SectionHeader("Typography")
-        // Font family selector
-        CompactDropdownRow(
-            label = "Font",
+        // Font family — full-width styled dropdown
+        FontSelectorRow(
             value = font,
-            options = listOf("Sans Serif", "Serif", "Monospace", "Roboto"),
             onChange = { prefs.subtitleFont().set(it); onSettingsChanged() },
         )
-        CompactSliderRow(
+        SectionDivider()
+
+        // Font size — slider + tappable value
+        TappableSliderRow(
             label = "Font size",
             valueText = fontSize.toString(),
             value = fontSize.toFloat(),
             range = 20f..100f,
             onChange = { prefs.subtitleFontSize().set(it.toInt()); onSettingsChanged() },
+            onTapValue = { editingDialog = "fontSize" },
         )
-        CompactSliderRow(
+        SectionDivider()
+
+        TappableSliderRow(
             label = "Scale",
             valueText = "%.1fx".format(fontScale),
             value = fontScale,
             range = 0.5f..3f,
             onChange = { prefs.subtitleFontScale().set(it); onSettingsChanged() },
+            onTapValue = { editingDialog = "fontScale" },
         )
-        CompactSliderRow(
+        SectionDivider()
+
+        TappableSliderRow(
             label = "Border size",
             valueText = borderSize.toString(),
             value = borderSize.toFloat(),
             range = 0f..10f,
             onChange = { prefs.subtitleBorderSize().set(it.toInt()); onSettingsChanged() },
+            onTapValue = { editingDialog = "borderSize" },
         )
+        SectionDivider()
+
         CompactSwitchRow(label = "Bold", checked = bold, onChange = { prefs.boldSubtitles().set(it); onSettingsChanged() })
         CompactSwitchRow(label = "Italic", checked = italic, onChange = { prefs.italicSubtitles().set(it); onSettingsChanged() })
 
-        Spacer(modifier = Modifier.height(16.dp))
+        SectionSpacer()
 
-        // ---- Colors ----
+        // ═══════ Section: Colors ═══════
         SectionHeader("Colors")
         ColorPickerRow(
             label = "Text color",
             color = textColor,
-            onChange = { prefs.textColorSubtitles().set(it); onSettingsChanged() },
+            onTap = { colorDialog = "text" },
         )
+        SectionDivider()
         ColorPickerRow(
             label = "Border color",
             color = borderColor,
-            onChange = { prefs.borderColorSubtitles().set(it); onSettingsChanged() },
+            onTap = { colorDialog = "border" },
         )
+        SectionDivider()
         ColorPickerRow(
             label = "Background color",
             color = bgColor,
-            onChange = { prefs.backgroundColorSubtitles().set(it); onSettingsChanged() },
+            onTap = { colorDialog = "bg" },
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        SectionSpacer()
 
-        // ---- Position & Misc ----
+        // ═══════ Section: Position & Misc ═══════
         SectionHeader("Position & Misc")
-        CompactSliderRow(
+        TappableSliderRow(
             label = "Position",
             valueText = "$position%",
             value = position.toFloat(),
             range = 0f..100f,
             onChange = { prefs.subtitlePosition().set(it.toInt()); onSettingsChanged() },
+            onTapValue = { editingDialog = "position" },
         )
-        CompactSliderRow(
+        SectionDivider()
+
+        TappableSliderRow(
             label = "Shadow offset",
             valueText = shadowOffset.toString(),
             value = shadowOffset.toFloat(),
             range = 0f..10f,
             onChange = { prefs.subtitleShadowOffset().set(it.toInt()); onSettingsChanged() },
+            onTapValue = { editingDialog = "shadow" },
         )
-        CompactSwitchRow(label = "Override ASS styling", checked = overrideASS, onChange = { prefs.overrideSubsASS().set(it); onSettingsChanged() })
-        CompactSliderRow(
-            label = "Delay",
-            valueText = "${delay}ms",
-            value = delay.toFloat(),
-            range = -5000f..5000f,
-            onChange = { prefs.subtitlesDelay().set(it.toInt()); onSettingsChanged() },
+        SectionDivider()
+
+        CompactSwitchRow(
+            label = "Override ASS styling",
+            checked = overrideASS,
+            onChange = { prefs.overrideSubsASS().set(it); onSettingsChanged() },
+        )
+        SectionDivider()
+
+        // Delay — stepper instead of slider
+        DelayStepperRow(
+            delay = delay,
+            onChange = { prefs.subtitlesDelay().set(it); onSettingsChanged() },
+            onTapValue = { editingDialog = "delay" },
+        )
+    }
+
+    // ---- Keypad dialogs ----
+    editingDialog?.let { dialogKey ->
+        val (title, initial, suffix, min, max) = when (dialogKey) {
+            "fontSize" -> Tuple5("Font size", fontSize, "", 20, 100)
+            "fontScale" -> Tuple5("Scale (×10)", (fontScale * 10).toInt(), "", 5, 30)
+            "borderSize" -> Tuple5("Border size", borderSize, "", 0, 10)
+            "position" -> Tuple5("Position", position, "%", 0, 100)
+            "shadow" -> Tuple5("Shadow offset", shadowOffset, "", 0, 10)
+            "delay" -> Tuple5("Delay", delay, "ms", -5000, 5000)
+            else -> return@let
+        }
+        NumericEntryDialog(
+            title = title,
+            initial = initial,
+            suffix = suffix,
+            min = min,
+            max = max,
+            onConfirm = { v ->
+                when (dialogKey) {
+                    "fontSize" -> prefs.subtitleFontSize().set(v)
+                    "fontScale" -> prefs.subtitleFontScale().set(v / 10f)
+                    "borderSize" -> prefs.subtitleBorderSize().set(v)
+                    "position" -> prefs.subtitlePosition().set(v)
+                    "shadow" -> prefs.subtitleShadowOffset().set(v)
+                    "delay" -> prefs.subtitlesDelay().set(v)
+                }
+                onSettingsChanged()
+                editingDialog = null
+            },
+            onDismiss = { editingDialog = null },
+        )
+    }
+
+    // ---- Color dialogs ----
+    colorDialog?.let { dialogKey ->
+        val (title, initial, setter) = when (dialogKey) {
+            "text" -> Triple("Text color", textColor) { v: Int -> prefs.textColorSubtitles().set(v) }
+            "border" -> Triple("Border color", borderColor) { v: Int -> prefs.borderColorSubtitles().set(v) }
+            "bg" -> Triple("Background color", bgColor) { v: Int -> prefs.backgroundColorSubtitles().set(v) }
+            else -> return@let
+        }
+        ColorPickerDialog(
+            title = title,
+            initialColor = initial,
+            onConfirm = { v ->
+                setter(v)
+                onSettingsChanged()
+                colorDialog = null
+            },
+            onDismiss = { colorDialog = null },
         )
     }
 }
+
+// ---- Helpers ----
+
+private data class Tuple5(val a: String, val b: Int, val c: String, val d: Int, val e: Int)
 
 @Composable
 private fun SectionHeader(title: String) {
@@ -193,23 +258,37 @@ private fun SectionHeader(title: String) {
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(bottom = 4.dp, top = 4.dp),
+        modifier = Modifier.padding(bottom = 8.dp, top = 4.dp),
     )
 }
 
+@Composable
+private fun SectionDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 6.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+    )
+}
+
+@Composable
+private fun SectionSpacer() {
+    Spacer(modifier = Modifier.height(20.dp))
+}
+
 /**
- * Compact slider row: label on the left, value on the right, slider below.
- * Uses a thinner track and smaller thumb for a cleaner look.
+ * Slider row with a tappable value label. Tapping the value opens a numeric
+ * entry dialog (custom keypad or device keyboard, per preference).
  */
 @Composable
-private fun CompactSliderRow(
+private fun TappableSliderRow(
     label: String,
     valueText: String,
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     onChange: (Float) -> Unit,
+    onTapValue: () -> Unit,
 ) {
-    Column(modifier = Modifier.padding(vertical = 2.dp)) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -220,12 +299,20 @@ private fun CompactSliderRow(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Text(
-                text = valueText,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // Tappable value chip
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier.clickable(onClick = onTapValue),
+            ) {
+                Text(
+                    text = valueText,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
         }
         Slider(
             value = value,
@@ -244,7 +331,7 @@ private fun CompactSliderRow(
 @Composable
 private fun CompactSwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -258,49 +345,48 @@ private fun CompactSwitchRow(label: String, checked: Boolean, onChange: (Boolean
 }
 
 /**
- * Compact dropdown row: label on the left, dropdown selector on the right.
- * Used for font family selection.
+ * Font selector — full-width dropdown with styled surface.
  */
 @Composable
-private fun CompactDropdownRow(
-    label: String,
+private fun FontSelectorRow(
     value: String,
-    options: List<String>,
     onChange: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    val options = listOf("Sans Serif", "Serif", "Monospace", "Roboto")
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
         Text(
-            text = label,
+            text = "Font",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 4.dp),
         )
         Box {
-            Row(
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { expanded = true }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .fillMaxWidth()
+                    .clickable { expanded = true },
             ) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
             DropdownMenu(
                 expanded = expanded,
@@ -308,7 +394,7 @@ private fun CompactDropdownRow(
             ) {
                 options.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(option) },
+                        text = { Text(option, fontWeight = if (option == value) FontWeight.Bold else FontWeight.Normal) },
                         onClick = {
                             onChange(option)
                             expanded = false
@@ -321,23 +407,21 @@ private fun CompactDropdownRow(
 }
 
 /**
- * Color picker row: label on the left, color swatch + hex value on the right.
- * Tapping opens a simple color palette popup with common subtitle colors.
+ * Color picker row — swatch + hex, tappable to open the full color dialog.
  */
 @Composable
 private fun ColorPickerRow(
     label: String,
     color: Int,
-    onChange: (Int) -> Unit,
+    onTap: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     val colorObj = Color(color)
     val hex = String.format("#%08X", color)
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .clickable(onClick = onTap)
+            .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -346,65 +430,83 @@ private fun ColorPickerRow(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Box {
-            Row(
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { expanded = true }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(colorObj)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)),
+            )
+            Text(
+                text = hex,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * Delay stepper — −/value/+ buttons instead of a slider. Tapping the value
+ * opens the numeric keypad for precise input. Step = 100ms.
+ */
+@Composable
+private fun DelayStepperRow(
+    delay: Int,
+    onChange: (Int) -> Unit,
+    onTapValue: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Delay",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            // − button
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(32.dp).clickable { onChange((delay - 100).coerceIn(-5000, 5000)) },
             ) {
-                // Color swatch
-                Box(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clip(CircleShape)
-                        .background(colorObj)
-                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Remove, contentDescription = "−100ms", modifier = Modifier.size(18.dp))
+                }
+            }
+            // Value (tappable)
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier.clickable(onClick = onTapValue),
+            ) {
                 Text(
-                    text = hex,
+                    text = "${delay}ms",
                     style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                 )
             }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
+            // + button
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(32.dp).clickable { onChange((delay + 100).coerceIn(-5000, 5000)) },
             ) {
-                // Common subtitle colors
-                val presetColors = listOf(
-                    "White" to 0xFFFFFFFF.toInt(),
-                    "Black" to 0xFF000000.toInt(),
-                    "Yellow" to 0xFFFFFF00.toInt(),
-                    "Cyan" to 0xFF00FFFF.toInt(),
-                    "Red" to 0xFFFF0000.toInt(),
-                    "Green" to 0xFF00FF00.toInt(),
-                    "Blue" to 0xFF0000FF.toInt(),
-                    "Transparent" to 0x00000000,
-                )
-                presetColors.forEach { (name, colorValue) ->
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(colorValue))
-                                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
-                                )
-                                Spacer(modifier = Modifier.size(8.dp))
-                                Text(name)
-                            }
-                        },
-                        onClick = {
-                            onChange(colorValue)
-                            expanded = false
-                        },
-                    )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Add, contentDescription = "+100ms", modifier = Modifier.size(18.dp))
                 }
             }
         }
