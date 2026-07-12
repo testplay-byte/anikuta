@@ -1,7 +1,7 @@
 # Player Development Rules
 
 > **Read this before working on the video player.** This file survives sandbox resets (backed up to GitHub).
-> Last updated: Session 28 (Phase 1 complete, starting Phase 2)
+> Last updated: Session 30 (subtitles fixed, folder selection, settings reorganized)
 
 ---
 
@@ -87,9 +87,43 @@ app/anikuta/player/
 ---
 
 ## Notification Rule
-- Send ntfy after EACH step (not just each phase)
-- Topic: `ntfy.sh/THEANIMEAPPTASKISDONE`
-- When ALL phases complete: send 3 consecutive notifications (1 per second)
+- Send ntfy after EACH build completion (GitHub Actions workflow does this automatically).
+- Topic: `ntfy.sh/TASKISDONE` (changed from `THEANIMEAPPTASKISDONE` in session 30).
+- The workflow's `Notify ntfy.sh` step fires on both success and failure.
+
+---
+
+## Subtitle Rules (Session 30 — CRITICAL)
+
+### Font file
+- `app/src/main/assets/subfont.ttf` MUST be a valid TrueType font (valid signature: `\x00\x01\x00\x00`). It was once a GitHub HTML 404 page — that broke all subtitle rendering for 6+ builds.
+- It's copied to `<configDir>/subfont.ttf` (config root, NOT `fonts/` subdir) by `PlayerActivity.copyAssets()`.
+- The mpv-lib native `ass_set_fonts()` looks for `<configDir>/subfont.ttf` as the default fallback font.
+
+### Property API
+- **Init-time options** (before `MPVLib.init()`): use `MPVLib.setOptionString()` inside `AnikutaMPVView.initOptions()`.
+- **Runtime properties**: use `MPVLib.setPropertyString()` for string values, `MPVLib.setPropertyInt()` for integers, `MPVLib.setPropertyDouble()` for floats.
+- **CRITICAL:** `setPropertyString("sub-font-size", "55")` does NOT reliably work for numeric properties. Use `setPropertyInt("sub-font-size", 55)` instead. This was the root cause of "font size change not reflected on video."
+- `sid`/`aid` are node/string properties — read with `getPropertyString()`, not `getPropertyInt()`.
+
+### Subtitle default mode
+- `PlayerPreferences.defaultSubtitleMode()`: "off" / "on" / "auto".
+- "on" = always auto-select the best track (language-matched first, else first).
+- "auto" = only select if a track matches `preferredSubtitleLanguage`.
+- `userDisabledSubtitles` flag: set when user explicitly taps "Off" in the sheet. Respected by `autoSelectSubtitleTrack` in ALL modes. Reset on new episode load.
+
+### Settings UI design language
+- Use `SelectableOptionCard` (card-style selector with primary border) for 2-4 options with descriptions.
+- Use `StyledSegmentedRow` (pill-style segmented row) for short-label 2-3 options.
+- Both are in `app/src/main/java/app/anikuta/ui/settings/SelectableOptionCard.kt`.
+- Do NOT use `primaryContainer` for selected state (it's too dark/blue). Use `primary` border + `primary` text.
+- Player settings is a HUB (links only) → subpages (General, Playback, Subtitles, Display & Behavior, Episode list).
+
+### Custom keypad
+- `NumericEntrySheet` (bottom sheet, not popup) — always uses `CustomKeypadSheet` (not experimental).
+- 4×3 grid: [1][2][3][DEL] / [4][5][6][0] / [7][8][9][OK]. DEL and OK are 112dp tall (2 rows).
+- Value display on top with +/- stepper buttons.
+- No "Done" button (OK in the grid handles confirmation).
 
 ---
 
@@ -97,5 +131,6 @@ app/anikuta/player/
 - **No Palette API** — dynamic theming uses AniList `coverImage.color` + HSL variant generation
 - **Blur stays** — the banner blur on the detail page is a user-requested feature, do NOT remove it
 - **Modular** — each component in its own file, easy to find and edit
-- **Episode list has separate settings** from the detail page (future: PlayerEpisodePreferences)
+- **Episode list has separate settings** from the detail page (PlayerEpisodePreferences)
 - **Server dropdown** drops down from where tapped (not a bottom sheet)
+- **Storage** is NOT in player settings — it's in the top-level "Data & Storage" category

@@ -55,19 +55,23 @@
 
 ## Current status
 
-- **Phase:** Repo setup complete. Structure created and pushed to GitHub.
-- **Next:** Begin development — copy aniyomi into `REFERENCE/`, analyze it,
-  set up the working `app/` source.
+- **Phase:** Player complete (subtitles working), folder selection implemented, settings reorganized. All on `main`.
+- **Build:** GitHub Actions (`.github/workflows/build-apk.yml`). JDK 17 + Android SDK. ntfy.sh notifications on completion (topic: `TASKISDONE`).
+- **Branch:** `main` is stable (commit `52ed14b`). `player-experiment` preserved for reference.
+- **Subtitles:** ✅ Working. Root cause was a fake HTML `subfont.ttf` — replaced with real DejaVu Sans TTF. See `SUBTITLES_FIX.md`.
+- **Storage:** ✅ SAF folder selection implemented. `StorageManager` creates `downloads/`, `data/`, `backups/`, `cache/` subdirs. See `STORAGE.md`.
+- **Settings:** ✅ Reorganized into hub + subpages. `SelectableOptionCard` + `StyledSegmentedRow` for consistent design language.
+- **Next:** Downloads migration (File → UniFile), offline playback (mpv file-path limitation), backup creation/restore.
 
 ## Open questions (to confirm with user when relevant)
 
-- [ ] Target Android min SDK / compile SDK? (will follow aniyomi's defaults initially)
-- [ ] Languages: Kotlin only? (aniyomi is Kotlin — likely yes)
-- [ ] Build system: Gradle KTS? (likely yes)
-- [ ] Design language preference for the app UI?
+- [x] Target Android min SDK / compile SDK? → minSdk 26, compileSdk 35
+- [x] Languages: Kotlin only? → Yes
+- [x] Build system: Gradle KTS? → Yes
+- [x] Design language preference for the app UI? → Material 3, matches details-page LayoutSettingsScreen style
 - [ ] Release target (Play Store? F-Droid? sideload only)?
 - [ ] When to migrate off the test account?
 
 ---
 
-_Last updated: Session 1 (repo setup)._
+_Last updated: Session 30 (2026-07-12). Subtitles fixed, folder selection implemented, settings reorganized, merged to main._
