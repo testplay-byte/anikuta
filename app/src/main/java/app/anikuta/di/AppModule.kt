@@ -25,8 +25,10 @@ import app.anikuta.ui.library.LibraryStore
 import app.anikuta.data.tracker.AniListTracker
 import app.anikuta.source.bridge.AniyomiSourceBridge
 import app.anikuta.download.DownloadPreferences
+import app.anikuta.download.DownloadProvider
 import app.anikuta.download.DownloadStore
 import app.anikuta.download.DownloadManager
+import app.anikuta.download.DownloadVideoResolver
 import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.DeleteAnimeExtensionRepo
@@ -124,7 +126,9 @@ class AppModule(val app: Application) : InjektModule {
 
         // Download manager (Phase 6 Section 5)
         addSingletonFactory { DownloadPreferences(get<PreferenceStore>()) }
-        addSingletonFactory { DownloadStore(get<PreferenceStore>(), get<Context>()) }
+        addSingletonFactory { DownloadStore(get<PreferenceStore>()) }
+        addSingletonFactory { DownloadProvider(get<Context>(), get<app.anikuta.storage.StorageManager>()) }
+        addSingletonFactory { DownloadVideoResolver(get<app.anikuta.source.AndroidAnimeSourceManager>(), get<DownloadPreferences>()) }
         addSingletonFactory { DownloadManager(get<Context>(), get(), get()) }
 
         // AniList client

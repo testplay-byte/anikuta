@@ -4,10 +4,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.anikuta.download.AudioFallback
-import app.anikuta.download.DownloadEntry
+import app.anikuta.download.Download
 import app.anikuta.download.DownloadManager
 import app.anikuta.download.DownloadPreferences
-import app.anikuta.download.DownloadStatus
 import app.anikuta.download.PriorityMode
 import app.anikuta.download.DownloadStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,8 +31,8 @@ class DownloadsViewModel : ViewModel() {
     private val manager: DownloadManager? = try { Injekt.get() } catch (e: Exception) { null }
     private val prefs: DownloadPreferences? = try { Injekt.get() } catch (e: Exception) { null }
 
-    private val _queue = MutableStateFlow<List<DownloadEntry>>(emptyList())
-    val queue: StateFlow<List<DownloadEntry>> = _queue.asStateFlow()
+    private val _queue = MutableStateFlow<List<Download>>(emptyList())
+    val queue: StateFlow<List<Download>> = _queue.asStateFlow()
 
     // ---- Ordered priority lists (drag-and-drop) ----
     private val _qualityOrder = MutableStateFlow<List<String>>(emptyList())

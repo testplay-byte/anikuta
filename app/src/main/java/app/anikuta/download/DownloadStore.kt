@@ -1,71 +1,93 @@
 package app.anikuta.download
 
-import android.content.Context
 import android.util.Log
 import app.anikuta.core.preference.PreferenceStore
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import java.io.File
 
 /**
- * Phase 6 task 6.12 — Persistent download store.
+ * Persistent download queue store. Survives app restart.
  *
- * Tracks the download queue + completed downloads. PreferenceStore-backed
- * (survives app restart). Each download entry has: id, animeId, episodeUrl,
- * videoUrl, title, status, progress, localPath.
+ * Stores a list of [DownloadStoreEntry] (serializable snapshot of a Download)
+ * in PreferenceStore. On app start, the DownloadManager restores these into
+ * live [Download] objects (with StateFlows) via [restore].
  *
- * The actual download is performed by [DownloadWorker] (WorkManager).
- * This store tracks the metadata + state.
+ * The actual video resolution + download is handled by [DownloadDownloader].
+ * This store only tracks the metadata + queue state.
  */
 class DownloadStore(
     private val preferenceStore: PreferenceStore,
-    private val context: Context,
 ) {
     companion object {
         private const val TAG = "DownloadStore"
-        private const val KEY = "download_queue"
+        private const val KEY = "active_anime_downloads"
     }
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    @Serializable
+    data class DownloadStoreEntry(
+        val id: String,
+        val anilistId: Int,
+        val sourceId: Long,
+        val sourceName: String,
+        val animeTitle: String,
+        val episodeUrl: String,
+        val episodeName: String,
+        val episodeNumber: Float,
+        val order: Int = 0,
+        val status: Int = 1, // Download.State.QUEUE.value
+        val progress: Int = 0,
+        val totalSize: Long = -1L,
+        val downloadedBytes: Long = 0L,
+        val error: String? = null,
+    )
 
     private val queuePref = preferenceStore.getObject(
         key = KEY,
         defaultValue = emptyList(),
         serializer = { list ->
-            json.encodeToString(ListSerializer(DownloadEntry.serializer()), list)
+            json.encodeToString(ListSerializer(DownloadStoreEntry.serializer()), list)
         },
         deserializer = { str ->
-            try { json.decodeFromString(ListSerializer(DownloadEntry.serializer()), str) }
+            try { json.decodeFromString(ListSerializer(DownloadStoreEntry.serializer()), str) }
             catch (e: Exception) { emptyList() }
         },
     )
 
-    val queue: Flow<List<DownloadEntry>> = queuePref.changes().map { it }
+    val queue: Flow<List<DownloadStoreEntry>> = queuePref.changes()
 
-    fun getAll(): List<DownloadEntry> = queuePref.get()
+    fun getAll(): List<DownloadStoreEntry> = queuePref.get()
 
-    fun add(entry: DownloadEntry) {
+    fun add(entry: DownloadStoreEntry) {
         val list = queuePref.get().toMutableList()
-        // Don't add duplicates (same episodeUrl)
         if (list.none { it.episodeUrl == entry.episodeUrl }) {
             list.add(entry)
             queuePref.set(list)
-            Log.d(TAG, "Added download: ${entry.title}")
+            Log.d(TAG, "Added download: ${entry.episodeName}")
         }
     }
 
-    fun update(id: String, status: DownloadStatus, progress: Int = 0, localPath: String? = null, error: String? = null) {
+    fun addAll(entries: List<DownloadStoreEntry>) {
+        val list = queuePref.get().toMutableList()
+        val existingUrls = list.map { it.episodeUrl }.toSet()
+        entries.filter { it.episodeUrl !in existingUrls }.forEach { list.add(it) }
+        queuePref.set(list)
+        Log.d(TAG, "Added ${entries.size} downloads (${list.size} total in queue)")
+    }
+
+    fun update(id: String, status: Int? = null, progress: Int? = null, error: String? = null) {
         val list = queuePref.get().toMutableList()
         val idx = list.indexOfFirst { it.id == id }
         if (idx >= 0) {
             val existing = list[idx]
             list[idx] = existing.copy(
-                status = status,
-                progress = progress,
-                localPath = localPath ?: existing.localPath,
+                status = status ?: existing.status,
+                progress = progress ?: existing.progress,
                 error = error ?: existing.error,
             )
             queuePref.set(list)
@@ -74,52 +96,27 @@ class DownloadStore(
 
     fun remove(id: String) {
         val list = queuePref.get().toMutableList()
-        val entry = list.find { it.id == id }
-        // Delete the local file if it exists
-        entry?.localPath?.let { path ->
-            try { File(path).delete() } catch (_: Exception) {}
-        }
         list.removeAll { it.id == id }
         queuePref.set(list)
         Log.d(TAG, "Removed download: $id")
     }
 
-    fun clearCompleted() {
-        val list = queuePref.get().filter { it.status != DownloadStatus.COMPLETED }
+    fun removeByEpisodeUrl(episodeUrl: String) {
+        val list = queuePref.get().toMutableList()
+        list.removeAll { it.episodeUrl == episodeUrl }
         queuePref.set(list)
     }
 
-    /** Get the local file path for a downloaded episode (for offline playback). */
-    fun getDownloadedFile(episodeUrl: String): String? {
-        return getAll().find { it.episodeUrl == episodeUrl && it.status == DownloadStatus.COMPLETED }?.localPath
+    fun clearCompleted() {
+        val list = queuePref.get().filter { it.status != Download.State.DOWNLOADED.value }
+        queuePref.set(list)
     }
 
-    /** Directory for downloaded episodes. */
-    fun getDownloadDir(): File {
-        return File(context.getExternalFilesDir(null) ?: context.filesDir, "downloads").apply { mkdirs() }
+    fun clearAll() {
+        queuePref.set(emptyList())
     }
-}
 
-@Serializable
-data class DownloadEntry(
-    val id: String,
-    val anilistId: Int,
-    val episodeUrl: String,
-    val videoUrl: String,
-    val title: String,
-    val episodeNumber: Float,
-    val status: DownloadStatus = DownloadStatus.QUEUED,
-    val progress: Int = 0,
-    val localPath: String? = null,
-    val error: String? = null,
-    val createdAt: Long = System.currentTimeMillis(),
-)
-
-@Serializable
-enum class DownloadStatus {
-    QUEUED,
-    DOWNLOADING,
-    COMPLETED,
-    FAILED,
-    PAUSED,
+    fun findByEpisodeUrl(episodeUrl: String): DownloadStoreEntry? {
+        return getAll().find { it.episodeUrl == episodeUrl }
+    }
 }
