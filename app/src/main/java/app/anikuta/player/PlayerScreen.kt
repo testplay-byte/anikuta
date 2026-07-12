@@ -351,23 +351,12 @@ internal fun PlayerScreen(
                                         .inflate(R.layout.mpv_view, null) as AnikutaMPVView
                                     mpvView = view
                                     onViewCreated(view)
-                                    val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
-                                    // Copy cacert.pem from assets to mpv dir for TLS verification
-                                    // DIAGNOSTIC: Use "v" (verbose) log level so MPV forwards ALL log
-                                    // messages to the LogObserver — including demuxer, stream, and sub
-                                    // module messages needed for subtitle debugging.
-                                    // Normally this would be "warn", but we need verbose to diagnose
-                                    // why subtitles aren't downloading/rendering.
-                                    PlayerActivity.copyAssets(ctx, mpvDir)
-                                    view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "v")
-                                    Log.d("PlayerActivity", "MPV initialized")
-                                    MPVLib.addLogObserver(observer)
-                                    MPVLib.addObserver(observer)
-                                    if (videoHeaders.isNotBlank()) {
-                                        MPVLib.setOptionString("http-header-fields", videoHeaders)
-                                    } else {
-                                        MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
-                                    }
+                                    // Player redo: centralized MPV init (mirrors aniyomi
+                                    // setupPlayerMPV). Handles config files, asset copy to
+                                    // config root (subfont.ttf fix), sub-ass margins,
+                                    // initialize, observers, http headers, and runtime
+                                    // sub-fonts-dir/osd-fonts-dir. See PLAYER_REDO_PLAN.md.
+                                    PlayerActivity.initMpvView(view, ctx, observer, videoHeaders, "warn")
                                     if (!shouldDelayVideoLoad) {
                                         // FIX: Don't load localhost proxy URLs directly — they may be
                                         // stale after app restart. loadVideoIfPending() handles re-resolution.
@@ -616,16 +605,9 @@ internal fun PlayerScreen(
                                 .inflate(R.layout.mpv_view, null) as AnikutaMPVView
                             mpvView = view
                             onViewCreated(view)
-                            val mpvDir = ctx.filesDir.resolve(PlayerActivity.MPV_DIR).apply { mkdirs() }
-                            view.initialize(mpvDir.absolutePath, ctx.cacheDir.absolutePath, "warn")
-                            Log.d("PlayerActivity", "MPV initialized (fullscreen)")
-                            MPVLib.addLogObserver(observer)
-                            MPVLib.addObserver(observer)
-                            if (videoHeaders.isNotBlank()) {
-                                MPVLib.setOptionString("http-header-fields", videoHeaders)
-                            } else {
-                                MPVLib.setOptionString("http-header-fields", "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
-                            }
+                            // Player redo: centralized MPV init (mirrors aniyomi
+                            // setupPlayerMPV). See PLAYER_REDO_PLAN.md.
+                            PlayerActivity.initMpvView(view, ctx, observer, videoHeaders, "warn")
                             if (!shouldDelayVideoLoad) {
                                 // FIX (C3): Don't load localhost proxy URLs directly —
                                 // they may be stale after app restart.

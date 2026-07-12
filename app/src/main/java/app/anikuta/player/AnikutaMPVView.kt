@@ -179,6 +179,32 @@ class AnikutaMPVView(
 
     // ---- MPV lifecycle hooks ----
 
+    /**
+     * MPV init-time options. Mirrors aniyomi's `AniyomiMPVView.initOptions()`
+     * exactly (REFERENCE/app/.../ui/player/AniyomiMPVView.kt:114).
+     *
+     * Player redo (PLAYER_REDO_PLAN.md §3.1): removed every option aniyomi
+     * does NOT set, because they were either dead (overwritten by the
+     * library) or actively breaking the font provider:
+     *
+     *  - `force-window`  → REMOVED. The library's `BaseMPVView.initialize()`
+     *    sets `force-window=no` AFTER `MPVLib.init()` and toggles it in
+     *    surface callbacks. Setting `yes` here was dead code.
+     *  - `vid=1`         → REMOVED. mpv auto-selects the first video track.
+     *  - `cache`/`cache-secs` → REMOVED. aniyomi relies on demuxer cache only.
+     *  - `slang`         → REMOVED. ANI-KUTA has its own post-load
+     *    autoSelectSubtitleTrack(); setting slang bypassed/competed with it.
+     *  - `sub-fonts-dir` / `font-dir` (init API) → REMOVED. `sub-fonts-dir`
+     *    is a RUNTIME option and must use `setPropertyString` after init
+     *    (done in `PlayerActivity.initMpvView()`). Setting it via
+     *    `setOptionString` at init is silently ignored. `font-dir` is not
+     *    an option aniyomi uses at all.
+     *  - verbose `msg-level` → reverted to `all=warn` (matches aniyomi).
+     *
+     * The actual subtitle-rendering fix lives in `PlayerActivity.copyAssets()`
+     * (subfont.ttf now copied to the config-dir ROOT, not fonts/) — see
+     * PLAYER_REDO_PLAN.md §1 for the full root-cause analysis.
+     */
     override fun initOptions(vo: String) {
         setVo(if (playerPreferences.gpuNext().get()) "gpu-next" else "gpu")
         MPVLib.setPropertyBoolean("pause", true)
@@ -187,79 +213,36 @@ class AnikutaMPVView(
             "hwdec",
             if (playerPreferences.tryHWDecoding().get()) "auto" else "no",
         )
-        // DIAGNOSTIC: Enable verbose logging for subtitle-related MPV modules.
-        // This will show: HTTP requests for .vtt files, TLS handshake details,
-        // VTT parser output, cue counts, and any errors.
-        // Filter in logcat with: tag:mpv/demux tag:mpv/sub tag:mpv/stream tag:mpv/cplayer
-        MPVLib.setOptionString("msg-level", "all=warn,demuxer=v,sub=v,stream=v,cplayer=v,file=v")
-
-        // Restore force-window=yes — required for the GPU VO surface on Android.
-        // force-window=immediate causes SIGABRT (assertion: WinID != 0 && WinID != -1).
-        // force-window=none causes "Both surface and native_window are NULL" (no rendering).
-        // force-window=yes is the only value that works with this MPV Android build.
-        // The original subtitle rendering issue was NOT caused by force-window —
-        // it was caused by sub-ass-override=no (now fixed: we leave MPV default "auto")
-        // and setPropertyString at init time (now fixed: we use setOptionString).
-        MPVLib.setOptionString("force-window", "yes")
-
-        // Restore vid=1 — some HLS streams don't auto-select the video track,
-        // causing audio-only playback. This was removed as a "subtitle fix" but
-        // the real subtitle issue was sub-ass-override and setPropertyString.
-        MPVLib.setOptionString("vid", "1")
-
-        // Enable demuxer cache so the stream can buffer ahead. Without this,
-        // HLS streams from extension proxies (localhost:PORT/variant/...) can
-        // stutter or fail to render the first frame.
-        // FIX: Increased from 10s to 120s (2 minutes) for better buffering.
-        // User requested 2-10 minute buffer range. cache-secs is a target —
-        // MPV will buffer up to this many seconds of the stream ahead.
-        MPVLib.setOptionString("cache", "yes")
-        MPVLib.setOptionString("cache-secs", "120")
+        // Clean log level — matches aniyomi (verbose would be `all=v`).
+        MPVLib.setOptionString("msg-level", "all=warn")
 
         // Keep the file loaded so seeking works after EOF.
         MPVLib.setPropertyBoolean("keep-open", true)
         MPVLib.setPropertyBoolean("input-default-bindings", true)
 
         MPVLib.setOptionString("ytdl", "no")
-        // aniyomi uses tls-verify=yes + tls-ca-file=cacert.pem (copied from
-        // assets). We don't have cacert.pem, so we disable TLS verification.
-        // Many streaming servers use self-signed or untrusted certificates.
-        // Without this, MPV rejects the connection: "The certificate is not
-        // correctly signed by the trusted CA" → loading failed.
-        // TLS: Use cacert.pem (Mozilla CA bundle) for proper TLS verification.
-        // This is critical for external subtitle downloads — MPV's subtitle
-        // demuxer uses lavf which needs a CA bundle for HTTPS handshakes.
-        // Without it, the TLS handshake fails silently and the .vtt file
-        // is never downloaded, resulting in tracks that appear in the
-        // track-list but have no content (no cues rendered).
-        // Mirrors aniyomi's approach: tls-verify=yes + tls-ca-file=cacert.pem.
+        // TLS: cacert.pem (Mozilla CA bundle) is copied to the mpv config dir
+        // root by PlayerActivity.copyAssets(). Required for HTTPS subtitle
+        // downloads — without it the .vtt TLS handshake fails silently.
         MPVLib.setOptionString("tls-verify", "yes")
         MPVLib.setOptionString("tls-ca-file", "${context.filesDir.path}/${PlayerActivity.MPV_DIR}/cacert.pem")
 
-        // Limit demuxer cache for mobile.
-        // FIX: Increased from 64MB to 256MB to support 2+ minutes of buffering
-        // (user requested 2-10 min buffer range). 256MB allows ~2-3 min of 1080p.
+        // Demuxer cache — ANI-KUTA intentional divergence from aniyomi (which
+        // uses 64 MB). 256 MB allows ~2-3 min of 1080p buffering (user
+        // requested 2-10 min buffer range). Does NOT affect subtitles.
         val cacheMegs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) 256 else 128
         MPVLib.setOptionString("demuxer-max-bytes", "${cacheMegs * 1024 * 1024}")
         MPVLib.setOptionString("demuxer-max-back-bytes", "${cacheMegs * 1024 * 1024}")
 
         MPVLib.setOptionString("speed", playerPreferences.playerSpeed().get().toString())
         MPVLib.setOptionString("alang", playerPreferences.preferredAudioLanguages().get())
-        MPVLib.setOptionString("slang", "en,eng")
-        // CRITICAL FIX: Set font directories to a SEPARATE subdirectory that
-        // ONLY contains font files. Previously, font-dir pointed to the MPV
-        // config directory which also contained cacert.pem — MPV tried to
-        // load cacert.pem as a font, got "Error opening memory font", and
-        // the font provider was corrupted.
-        // Now: subfont.ttf is in mpv/fonts/ (no other files there).
-        val fontsDir = "${context.filesDir.path}/${PlayerActivity.MPV_DIR}/fonts"
-        MPVLib.setOptionString("sub-fonts-dir", fontsDir)
-        MPVLib.setOptionString("font-dir", fontsDir)
         MPVLib.setOptionString("volume-max", (playerPreferences.volumeBoostCap().get() + 100).toString())
         // Workaround for https://github.com/mpv-player/mpv/issues/14651
         MPVLib.setOptionString("vd-lavc-film-grain", "cpu")
 
-        // ---- Phase 5.2: Subtitle preferences → MPV properties (init API) ----
+        // Subtitle style — all init-time setOptionString (matches aniyomi
+        // setupSubtitlesOptions). sub-fonts-dir is NOT set here; it is a
+        // runtime option set in PlayerActivity.initMpvView().
         applySubtitlePreferencesInit()
     }
 

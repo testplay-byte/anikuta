@@ -112,46 +112,124 @@ class PlayerActivity : ComponentActivity() {
         const val MPV_DIR = "mpv"
 
         /**
-         * Copy cacert.pem from APK assets to the MPV config directory.
-         * This is needed for TLS verification when MPV downloads external
-         * subtitles (.vtt files) over HTTPS. Without the CA bundle, the
-         * TLS handshake fails silently and subtitles never load.
-         * Mirrors aniyomi's copyAssets() function.
+         * Copy MPV assets from APK assets to the MPV config directory ROOT.
+         *
+         * Player redo (PLAYER_REDO_PLAN.md §1, §3.2): this is THE subtitle fix.
+         * Both `cacert.pem` and `subfont.ttf` are copied to `mpvDir` (the
+         * config-dir root), NOT to a `fonts/` subdirectory. This mirrors
+         * aniyomi's `copyAssets()` exactly (REFERENCE PlayerActivity.kt:477).
+         *
+         * Why subfont.ttf MUST be at the config root: the mpv-lib native
+         * `BaseMPVView.initialize()` calls `ass_set_fonts(tracker,
+         * "<configDir>/subfont.ttf", "sans-serif", …)` to register the
+         * default fallback font + initialise the libass font provider. If
+         * `<configDir>/subfont.ttf` does not exist, libass logs:
+         *   "Error opening memory font 'subfont.ttf'"
+         *   "can't find selected font provider"
+         * and NO subtitle text can ever render (video/audio still work).
+         * This was ANI-KUTA's subtitle bug for ~15 builds: subfont.ttf was
+         * copied to `mpv/fonts/` while the native code looked for it at
+         * `mpv/subfont.ttf`.
+         *
+         * cacert.pem (Mozilla CA bundle) is also at the root for TLS
+         * verification of HTTPS subtitle (.vtt) downloads.
          */
         fun copyAssets(context: android.content.Context, mpvDir: java.io.File) {
             val assetManager = context.assets
-            // Copy cacert.pem to the MPV config directory (for TLS).
-            // Copy subfont.ttf to a SEPARATE fonts subdirectory (for libass).
-            // They must NOT be in the same directory — if cacert.pem is in the
-            // font directory, MPV tries to load it as a font and corrupts the
-            // font provider.
+            val files = arrayOf("cacert.pem", "subfont.ttf")
+            for (filename in files) {
+                try {
+                    val ins = assetManager.open(filename, android.content.res.AssetManager.ACCESS_STREAMING)
+                    val outFile = java.io.File(mpvDir, filename)
+                    if (!outFile.exists() || outFile.length() != ins.available().toLong()) {
+                        java.io.FileOutputStream(outFile).use { out -> ins.copyTo(out) }
+                        Log.d("PlayerActivity", "Copied asset: $filename (${outFile.length()} bytes) -> mpv/")
+                    }
+                    ins.close()
+                } catch (e: java.io.IOException) {
+                    Log.w("PlayerActivity", "Failed to copy asset: $filename", e)
+                }
+            }
+        }
+
+        /**
+         * Centralized MPV initialization — mirrors aniyomi's
+         * `setupPlayerMPV()` (REFERENCE PlayerActivity.kt:411) adapted to
+         * ANI-KUTA's Compose `AndroidView` architecture (the view is inflated
+         * in PlayerScreen, then handed here to be initialised).
+         *
+         * Sequence (must match aniyomi):
+         *  1. Ensure `mpvDir` exists.
+         *  2. Write clean `mpv.conf` + `input.conf` (prevents stale
+         *     `force-window=yes` from old builds interfering with the
+         *     library's own `force-window=no`).
+         *  3. `copyAssets()` → `cacert.pem` + `subfont.ttf` to mpvDir ROOT.
+         *  4. `sub-ass-force-margins=yes` + `sub-use-margins=yes` (init API).
+         *  5. `view.initialize(configDir, cacheDir, logLvl)` — `vo` defaults
+         *     to `"gpu"` inside `BaseMPVView.initialize`. Inside it,
+         *     `initOptions()` (our override) runs, then `MPVLib.init()`,
+         *     then the library sets `force-window=no` + `idle=once`.
+         *  6. `addLogObserver` + `addObserver`.
+         *  7. HTTP headers for extension proxy URLs (runtime, before loadfile).
+         *  8. `sub-fonts-dir` + `osd-fonts-dir` via `setPropertyString`
+         *     (RUNTIME — these are NOT init options). Points at `mpv/fonts/`
+         *     which is empty by default; the default fallback font
+         *     (`subfont.ttf`) already lives at the config root from step 3.
+         *
+         * See PLAYER_REDO_PLAN.md §3.3 for the full rationale.
+         */
+        fun initMpvView(
+            view: AnikutaMPVView,
+            context: android.content.Context,
+            observer: PlayerObserver,
+            videoHeaders: String,
+            logLevel: String = "warn",
+        ) {
+            val mpvDir = context.filesDir.resolve(MPV_DIR).apply { mkdirs() }
+
+            // 2. Write clean config files (default minimal; user can override
+            //    via the advanced settings UI). Overwrites any stale mpv.conf.
+            try {
+                java.io.File(mpvDir, "mpv.conf").writeText(MpvConfigManager.readMpvConf(context))
+                java.io.File(mpvDir, "input.conf").writeText(MpvConfigManager.readInputConf(context))
+            } catch (e: Exception) {
+                Log.w("PlayerActivity", "Could not write mpv.conf/input.conf", e)
+            }
+
+            // 3. Copy assets to mpvDir ROOT (subfont.ttf MUST be at config root).
+            copyAssets(context, mpvDir)
+
+            // 4. Subtitle margin options — set BEFORE initialize (matches aniyomi
+            //    setupPlayerMPV L425-426). BaseMPVView.initialize calls
+            //    MPVLib.create() first, so these apply to the created context.
+            MPVLib.setOptionString("sub-ass-force-margins", "yes")
+            MPVLib.setOptionString("sub-use-margins", "yes")
+
+            // 5. Initialize MPV. vo defaults to "gpu" inside BaseMPVView.
+            view.initialize(mpvDir.absolutePath, context.cacheDir.absolutePath, logLevel)
+            Log.d("PlayerActivity", "MPV initialized (configDir=${mpvDir.absolutePath})")
+
+            // 6. Register observers (matches aniyomi).
+            MPVLib.addLogObserver(observer)
+            MPVLib.addObserver(observer)
+
+            // 7. HTTP headers for extension proxy URLs (runtime, before loadfile).
+            val headers = if (videoHeaders.isNotBlank()) videoHeaders
+                else "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
+            MPVLib.setOptionString("http-header-fields", headers)
+
+            // 8. Font directory for USER fonts — runtime setPropertyString
+            //    (matches aniyomi copyFontsDirectory L517-518). Points at
+            //    mpv/fonts/ (empty by default). The default fallback font
+            //    (subfont.ttf) is already at the config root from step 3.
             val fontsDir = java.io.File(mpvDir, "fonts").apply { mkdirs() }
+            MPVLib.setPropertyString("sub-fonts-dir", fontsDir.absolutePath)
+            MPVLib.setPropertyString("osd-fonts-dir", fontsDir.absolutePath)
 
-            // Copy cacert.pem to mpvDir
-            try {
-                val ins = assetManager.open("cacert.pem", android.content.res.AssetManager.ACCESS_STREAMING)
-                val outFile = java.io.File(mpvDir, "cacert.pem")
-                if (!outFile.exists() || outFile.length() != ins.available().toLong()) {
-                    java.io.FileOutputStream(outFile).use { out -> ins.copyTo(out) }
-                    Log.d("PlayerActivity", "Copied asset: cacert.pem (${outFile.length()} bytes)")
-                }
-                ins.close()
-            } catch (e: java.io.IOException) {
-                Log.w("PlayerActivity", "Failed to copy cacert.pem", e)
-            }
-
-            // Copy subfont.ttf to mpvDir/fonts/ (separate directory!)
-            try {
-                val ins = assetManager.open("subfont.ttf", android.content.res.AssetManager.ACCESS_STREAMING)
-                val outFile = java.io.File(fontsDir, "subfont.ttf")
-                if (!outFile.exists() || outFile.length() != ins.available().toLong()) {
-                    java.io.FileOutputStream(outFile).use { out -> ins.copyTo(out) }
-                    Log.d("PlayerActivity", "Copied asset: subfont.ttf (${outFile.length()} bytes) to fonts/")
-                }
-                ins.close()
-            } catch (e: java.io.IOException) {
-                Log.w("PlayerActivity", "Failed to copy subfont.ttf", e)
-            }
+            // Diagnostic: confirm the font setup that libass needs.
+            val subfont = java.io.File(mpvDir, "subfont.ttf")
+            Log.d("PlayerActivity", "SUBTITLE_FONTCHECK: subfont.ttf at config root = ${subfont.exists()} (${subfont.length()} bytes)")
+            Log.d("PlayerActivity", "SUBTITLE_FONTCHECK: sub-fonts-dir = ${fontsDir.absolutePath}")
         }
 
         /**

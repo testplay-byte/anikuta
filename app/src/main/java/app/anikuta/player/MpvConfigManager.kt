@@ -87,33 +87,34 @@ object MpvConfigManager {
         Log.d(TAG, "input.conf updated")
     }
 
-    // Default mpv.conf — sane defaults for anime streaming
+    // Default mpv.conf — minimal, safe defaults for anime streaming.
+    //
+    // Player redo (PLAYER_REDO_PLAN.md §3.5): `force-window` is intentionally
+    // NOT set here. The mpv-lib `BaseMPVView.initialize()` forces
+    // `force-window=no` after init and toggles it in surface callbacks, so a
+    // `force-window=yes` in this file would be overridden anyway — and on some
+    // builds it caused "Both surface and native_window are NULL" races. Leaving
+    // it out matches aniyomi (whose mpv.conf default is empty).
+    //
+    // `cache` / `cache-secs` are also NOT set here — buffering is controlled by
+    // `demuxer-max-bytes` (set at runtime in AnikutaMPVView.initOptions).
+    //
+    // Most real config is applied programmatically via setOptionString /
+    // setPropertyString; this file is a user-editable override surface only.
     private val DEFAULT_MPV_CONF = """
         # ANI-KUTA MPV Configuration
         # Edit this file for advanced MPV settings.
         # Changes apply on next player launch.
-
-        # Video
-        profile=fast
-        hwdec=auto
-        force-window=yes
-        keep-open=yes
-
-        # Cache
-        cache=yes
-        # NOTE: These values are overridden at runtime by AnikutaMPVView.initOptions().
-        # Runtime values: cache-secs=120, demuxer-max-bytes=256MB (API 27+) / 128MB (API 26).
-        # Edit initOptions() to change buffering behavior, not this file.
-        # The 256MB below is the API 27+ value; API 26 devices get 128MB at runtime.
-        cache-secs=120
-        demuxer-max-bytes=268435456
-        demuxer-max-back-bytes=268435456
+        #
+        # NOTE: Most options are set programmatically at runtime. Only add
+        # overrides here that you want to take precedence. Do NOT add
+        # `force-window` (managed by the player library) or `cache-secs`
+        # (use demuxer-max-bytes instead).
 
         # Audio
         alang=jpn,eng
-        volume-max=100
 
-        # Subtitles
+        # Subtitles (defaults; also set programmatically)
         sub-font=Sans Serif
         sub-font-size=55
         sub-border-size=3
