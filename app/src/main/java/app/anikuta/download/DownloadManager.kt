@@ -421,6 +421,10 @@ class DownloadManager(
     /**
      * Update a download's state in both the live queue and persistent store.
      * Called by the worker when status/progress changes.
+     *
+     * When status changes to DOWNLOADED, starts the 20-second auto-remove countdown
+     * (Issue 4). The download stays visible in the downloads page with a countdown
+     * bar, then is automatically removed from the queue (file is kept on disk).
      */
     fun updateDownloadState(
         downloadId: String,
@@ -436,6 +440,11 @@ class DownloadManager(
             if (totalSize != null) download.totalSize = totalSize
             if (downloadedBytes != null) download.downloadedBytes = downloadedBytes
             if (error != null) download.error = error
+
+            // Issue 4: Start auto-remove countdown when download completes
+            if (status == Download.State.DOWNLOADED) {
+                startAutoRemoveCountdown(download)
+            }
         }
         store.update(
             downloadId,
@@ -443,5 +452,37 @@ class DownloadManager(
             progress = progress,
             error = error,
         )
+    }
+
+    /**
+     * Start the 20-second auto-remove countdown for a completed download (Issue 4).
+     * When the countdown reaches 0, the download is removed from the queue
+     * (the file is kept on disk — this is NOT a delete, just a queue removal).
+     */
+    private fun startAutoRemoveCountdown(download: Download) {
+        download.autoRemoveProgress = 1.0f // start at 100%
+        Log.d(TAG, "startAutoRemoveCountdown: ${download.episodeName} — 20s countdown started")
+
+        GlobalScope.launch {
+            val totalDurationMs = 20_000L // 20 seconds
+            val updateIntervalMs = 100L // update every 100ms for smooth bar
+            val steps = (totalDurationMs / updateIntervalMs).toInt()
+            for (step in steps downTo 0) {
+                // Check if the download was removed from the queue (e.g., user cancelled)
+                val stillInQueue = _queue.value.any { it.id == download.id }
+                if (!stillInQueue) {
+                    Log.d(TAG, "startAutoRemoveCountdown: ${download.episodeName} removed from queue — stopping countdown")
+                    return@launch
+                }
+                download.autoRemoveProgress = step.toFloat() / steps
+                delay(updateIntervalMs)
+            }
+
+            // Countdown finished — remove from queue (keep the file)
+            Log.d(TAG, "startAutoRemoveCountdown: ${download.episodeName} — countdown finished, removing from queue")
+            _queue.value = _queue.value.filter { it.id != download.id }
+            store.remove(download.id)
+            refreshStatusMap()
+        }
     }
 }

@@ -241,6 +241,7 @@ private fun DownloadQueueItem(
     val status by download.statusFlow.collectAsState()
     val progress by download.progressFlow.collectAsState()
     val speed by download.speedFlow.collectAsState()
+    val autoRemoveProgress by download.autoRemoveCountdown.collectAsState()
 
     val isActive = status == Download.State.DOWNLOADING ||
         status == Download.State.QUEUE ||
@@ -295,6 +296,24 @@ private fun DownloadQueueItem(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) // indeterminate
                 }
                 else -> {}
+            }
+
+            // Issue 4: Auto-remove countdown bar for completed downloads
+            if (status == Download.State.DOWNLOADED && autoRemoveProgress >= 0f) {
+                Spacer(Modifier.height(6.dp))
+                val secondsLeft = (autoRemoveProgress * 20f).toInt()
+                Text(
+                    "Removing from list in ${secondsLeft}s",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(2.dp))
+                LinearProgressIndicator(
+                    progress = { autoRemoveProgress },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
             }
 
             // Size + speed info (only during DOWNLOADING)

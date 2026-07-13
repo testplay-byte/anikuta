@@ -59,6 +59,22 @@ data class Download(
         get() = _speedFlow.value
         set(value) { _speedFlow.value = value }
 
+    /**
+     * Countdown for auto-removal from the downloads page (Issue 4).
+     *
+     * When a download completes, it stays in the downloads page for 20 seconds
+     * so the user can see it finished. A countdown bar shows the remaining time.
+     * When the countdown reaches 0, the download is removed from the queue
+     * (the file is kept on disk).
+     *
+     * Values: 1.0 (just completed) → 0.0 (time to remove). -1 = not counting down.
+     */
+    private val _autoRemoveCountdown = MutableStateFlow(-1f)
+    val autoRemoveCountdown = _autoRemoveCountdown.asStateFlow()
+    var autoRemoveProgress: Float
+        get() = _autoRemoveCountdown.value
+        set(value) { _autoRemoveCountdown.value = value }
+
     /** Error message if status is ERROR. */
     var error: String? = null
 
