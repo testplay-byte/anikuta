@@ -114,70 +114,50 @@ class DownloadManifest(
      * Read the manifest for a download. Returns null if no manifest exists.
      */
     suspend fun read(download: app.anikuta.download.Download): Manifest? = withContext(Dispatchers.IO) {
-        val manifestFile = getManifestFile(download) ?: run {
-            Log.d(TAG, "read: no manifest file for ${download.episodeName}")
-            return@withContext null
-        }
+        val manifestFile = getManifestFile(download) ?: return@withContext null
         try {
             val content = manifestFile.openInputStream().bufferedReader().use { it.readText() }
-            Log.v(TAG, "read: manifest content length=${content.length} for ${download.episodeName}")
             val manifest = json.decodeFromString(Manifest.serializer(), content)
-            Log.d(TAG, "read: ✓ manifest loaded for ${download.episodeName} — ${manifest.totalSegments} segments, " +
-                "${manifest.segments.count { it.status == SegmentStatus.DONE }} done, " +
-                "${manifest.segments.count { it.status == SegmentStatus.PENDING }} pending, " +
-                "${manifest.segments.count { it.status == SegmentStatus.PARTIAL }} partial, " +
-                "${manifest.segments.count { it.status == SegmentStatus.ERROR }} error")
+            Log.d(TAG, "read: ✓ ${download.episodeName} — ${manifest.totalSegments} segments, " +
+                "${manifest.segments.count { it.status == SegmentStatus.DONE }} done")
             manifest
         } catch (e: Exception) {
-            Log.e(TAG, "read: ❌ failed to parse manifest for ${download.episodeName}: ${e.message}", e)
+            Log.e(TAG, "read: ❌ ${download.episodeName}: ${e.message}")
             null
         }
     }
 
     /**
      * Write the manifest atomically (write to .tmp, then rename).
+     * Logging is suppressed (called for every segment — too noisy).
      */
     suspend fun write(download: app.anikuta.download.Download, manifest: Manifest) = withContext(Dispatchers.IO) {
         val episodeDir = provider.getEpisodeDir(download.episodeName, download.animeTitle, download.sourceName)
-            ?: run {
-                Log.e(TAG, "write: ❌ could not get episode dir for ${download.episodeName}")
-                return@withContext
-            }
+            ?: return@withContext
 
         val updatedAt = manifest.copy(updatedAt = System.currentTimeMillis())
         val content = json.encodeToString(Manifest.serializer(), updatedAt)
 
         try {
-            // Write to tmp file first
-            val tmpFile = episodeDir.createFile(MANIFEST_TMP) ?: run {
-                Log.e(TAG, "write: ❌ could not create tmp manifest file")
-                return@withContext
-            }
+            val tmpFile = episodeDir.createFile(MANIFEST_TMP) ?: return@withContext
             tmpFile.openOutputStream(false).bufferedWriter().use { it.write(content) }
-            Log.v(TAG, "write: tmp file written, length=${content.length}")
 
-            // Rename tmp → final (atomic on most filesystems)
-            // UniFile doesn't have rename for files within a dir easily,
-            // so we delete the old manifest and rename the tmp.
             val existingManifest = episodeDir.findFile(MANIFEST_FILE)
             existingManifest?.delete()
             tmpFile.renameTo(MANIFEST_FILE)
-
-            Log.d(TAG, "write: ✓ manifest saved for ${download.episodeName} — " +
-                "${manifest.segments.count { it.status == SegmentStatus.DONE }}/${manifest.totalSegments} segments done, " +
-                "${manifest.downloadedBytes}/${manifest.totalSizeBytes} bytes")
+            // No log here — called for every segment, would be too noisy
         } catch (e: Exception) {
-            Log.e(TAG, "write: ❌ failed to write manifest for ${download.episodeName}: ${e.message}", e)
+            Log.e(TAG, "write: ❌ ${download.episodeName}: ${e.message}")
         }
     }
 
     /**
-     * Delete the manifest file. Called after successful mux (final .mkv is the source of truth).
+     * Delete the manifest file. Called after successful mux.
      */
     suspend fun delete(download: app.anikuta.download.Download) = withContext(Dispatchers.IO) {
         val manifestFile = getManifestFile(download)
         manifestFile?.delete()
-        Log.d(TAG, "delete: manifest deleted for ${download.episodeName}")
+        Log.d(TAG, "delete: ✓ ${download.episodeName}")
     }
 
     /**

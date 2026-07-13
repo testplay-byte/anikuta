@@ -90,6 +90,18 @@ class DownloadWorker(
             }.awaitAll()
         }
 
+        // FIX (E2): After processing all downloads, check if any NEW downloads were
+        // enqueued during processing. If so, re-run the worker to pick them up.
+        // Without this, a download enqueued while the worker is running would sit
+        // in QUEUE status forever until the user manually pauses+resumes.
+        val remainingPending = downloadManager.queue.value.filter {
+            it.status == Download.State.QUEUE || it.status == Download.State.ERROR
+        }
+        if (remainingPending.isNotEmpty()) {
+            Log.d(TAG, "doWork: ${remainingPending.size} downloads still pending — returning retry")
+            return Result.retry()
+        }
+
         // Update notification after all downloads
         val finalQueue = downloadManager.queue.value
         val activeDownloads = finalQueue.filter {
@@ -179,12 +191,17 @@ class DownloadWorker(
                 }
             } catch (e: Exception) {
                 lastError = e.message ?: "Unknown error"
-                Log.e(TAG, "processDownload: ❌ ${download.episodeName} attempt $attempt failed: $lastError", e)
+                Log.e(TAG, "processDownload: ❌ ${download.episodeName} attempt $attempt failed: $lastError")
 
-                // Clean up partial files on failure
-                try {
-                    engine.cancel(download)
-                } catch (_: Exception) {}
+                // FIX (E4): Do NOT call engine.cancel() on failure.
+                // engine.cancel() deletes the cache dir (segments) which destroys
+                // resume state. The manifest is in SAF and survives, but on retry
+                // verifySegmentFiles() finds no cache files → marks all "done"
+                // segments as "pending" → re-downloads from scratch.
+                // Instead: leave the cache intact. The engine's downloadSegment()
+                // already deletes the failed segment's partial file. On retry,
+                // the engine reads the manifest, finds completed segments in cache,
+                // and resumes from the first pending/partial one.
 
                 if (attempt < maxRetries) {
                     val backoff = when (attempt) {

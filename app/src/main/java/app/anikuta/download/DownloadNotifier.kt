@@ -136,33 +136,21 @@ class DownloadNotifier(
     }
 
     /**
-     * Update the progress notification.
+     * Update the progress notification. No logging (called every second).
      */
     fun updateProgress(activeDownloads: List<Download>) {
         if (activeDownloads.isEmpty()) return
-
         val notification = buildProgressNotification(activeDownloads).build()
         notificationManager.notify(Notifications.ID_DOWNLOAD_PROGRESS, notification)
-        Log.v(TAG, "updateProgress: ${activeDownloads.size} downloads, " +
-            "overall=${activeDownloads.sumOf { it.progress } / activeDownloads.size}%")
     }
 
-    /**
-     * Cancel the progress notification (when all downloads finish).
-     */
     fun cancelProgress() {
         notificationManager.cancel(Notifications.ID_DOWNLOAD_PROGRESS)
-        Log.d(TAG, "cancelProgress: ✓")
     }
 
-    /**
-     * Post an error notification for a failed download.
-     */
     fun postError(download: Download) {
         createChannels()
-
         val notificationId = Notifications.ID_DOWNLOAD_ERROR_BASE + download.id.hashCode()
-
         val notification = NotificationCompat.Builder(context, Notifications.CHANNEL_DOWNLOADER_ERROR)
             .setSmallIcon(android.R.drawable.stat_notify_error)
             .setContentTitle("Download failed: ${download.episodeName}")
@@ -172,19 +160,13 @@ class DownloadNotifier(
             ))
             .setAutoCancel(true)
             .build()
-
         notificationManager.notify(notificationId, notification)
-        Log.d(TAG, "postError: ✓ ${download.episodeName} — ${download.error}")
+        Log.d(TAG, "postError: ${download.episodeName}")
     }
 
-    /**
-     * Post a completion notification.
-     */
     fun postComplete(download: Download) {
         createChannels()
-
         val notificationId = Notifications.ID_DOWNLOAD_COMPLETE_BASE + download.id.hashCode()
-
         val tapIntent = PendingIntent.getActivity(
             context,
             download.id.hashCode(),
@@ -193,7 +175,6 @@ class DownloadNotifier(
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-
         val notification = NotificationCompat.Builder(context, Notifications.CHANNEL_DOWNLOADER_COMPLETE)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle("Download complete")
@@ -201,8 +182,7 @@ class DownloadNotifier(
             .setAutoCancel(true)
             .setContentIntent(tapIntent)
             .build()
-
         notificationManager.notify(notificationId, notification)
-        Log.d(TAG, "postComplete: ✓ ${download.episodeName}")
+        Log.d(TAG, "postComplete: ${download.episodeName}")
     }
 }

@@ -11,9 +11,7 @@ import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.FFmpegKitConfig
 import com.arthenica.ffmpegkit.FFprobeKit
 import com.arthenica.ffmpegkit.ReturnCode
-import com.arthenica.ffmpegkit.Statistics
 import com.arthenica.ffmpegkit.StatisticsCallback
-import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.animesource.model.Video
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -29,20 +27,12 @@ import java.io.File
  * 2. DOWNLOADING: Download in 10-second segments to CACHE DIR (real file paths)
  * 3. MUXING: Concatenate segments + mux subtitles into final .mkv in cache, then copy to SAF
  *
- * CRITICAL: Segments, subtitles, concat list, and the muxed .mkv are all stored in
- * the app-private CACHE DIR (real file paths) — NOT in SAF. This is because FFmpeg's
- * concat demuxer crashes with a SIGSEGV (null deref in saf_close) when the concat
- * list contains saf: URIs. Using real file paths avoids the SAF protocol bridge
- * entirely for the muxing phase.
+ * Segments/subtitles/concat/mux all use cache dir (real file paths) to avoid
+ * the FFmpeg concat demuxer SIGSEGV with saf: URIs. The manifest lives in SAF
+ * (survives app kills). After muxing, the final .mkv is copied from cache to SAF.
  *
- * The manifest is stored in SAF (the episode dir) so it survives app kills.
- * On resume:
- * - "done" segments are checked — if the cache file is missing (cache cleared),
- *   they're marked "pending" and re-downloaded
- * - "partial" segments are deleted and re-downloaded
- * - "pending" segments are downloaded
- *
- * After successful mux, the cache dir is deleted and the manifest is removed.
+ * Logging policy: Only key milestones at Log.d. Errors at Log.e. Warnings at Log.w.
+ * Per-segment logs are suppressed except every 10th segment (to show progress without spam).
  */
 class SegmentDownloadEngine(
     private val context: Context,
@@ -55,7 +45,6 @@ class SegmentDownloadEngine(
     companion object {
         private const val TAG = "SegmentDownloadEngine"
         private const val SEGMENT_DURATION_SEC = 10
-        private const val MAX_SEGMENT_RETRIES = 3
         private const val MIN_DISK_SPACE_MB = 200L
         private const val FINAL_VIDEO_NAME = "video.mkv"
         private const val CACHE_BASE_DIR = "anikuta_dl"
@@ -71,7 +60,7 @@ class SegmentDownloadEngine(
     private var cancelled = false
 
     override suspend fun resolve(download: Download): Boolean {
-        Log.d(TAG, "resolve: → resolving video for ${download.episodeName}")
+        Log.d(TAG, "resolve: → ${download.episodeName}")
         download.status = Download.State.RESOLVING
 
         return try {
@@ -82,17 +71,17 @@ class SegmentDownloadEngine(
                 return false
             }
             download.video = video
-            Log.d(TAG, "resolve: ✓ resolved — ${video.videoTitle ?: "untitled"} → ${video.videoUrl.take(80)}...")
+            Log.d(TAG, "resolve: ✓ ${video.videoTitle ?: "untitled"}")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "resolve: ❌ exception for ${download.episodeName}: ${e.message}", e)
+            Log.e(TAG, "resolve: ❌ ${download.episodeName}: ${e.message}")
             download.error = "Resolve failed: ${e.message}"
             false
         }
     }
 
     override suspend fun download(download: Download): Boolean {
-        Log.d(TAG, "download: → starting for ${download.episodeName}")
+        Log.d(TAG, "download: → ${download.episodeName}")
         download.status = Download.State.DOWNLOADING
         progressTracker.resetSpeed()
 
@@ -103,7 +92,6 @@ class SegmentDownloadEngine(
         }
 
         val video = download.video ?: run {
-            Log.e(TAG, "download: ❌ no video resolved, calling resolve first")
             if (!resolve(download)) return false
             download.video ?: return false
         }
@@ -115,26 +103,22 @@ class SegmentDownloadEngine(
             Log.e(TAG, "download: ❌ ${download.error}")
             return false
         }
-        Log.d(TAG, "download: video duration = ${durationMs}ms (${durationMs / 1000 / 60} min ${(durationMs / 1000) % 60} sec)")
 
-        // Size estimation
+        // Size estimation — ALWAYS set this, even on resume, to fix E1/E3
+        // (stale totalSize from previous download causing wrong display).
+        // The manifest's totalSizeBytes may be -1 (unknown), so we re-estimate.
         val contentLength = getContentLength(video)
-        if (contentLength > 0) {
-            progressTracker.setTotalSize(download, contentLength)
-            Log.d(TAG, "download: Content-Length = ${formatBytes(contentLength)}")
-        } else {
-            val estimated = durationMs * 250
-            progressTracker.setTotalSize(download, estimated)
-            Log.d(TAG, "download: no Content-Length, estimated = ${formatBytes(estimated)}")
-        }
+        val estimatedSize = if (contentLength > 0) contentLength else durationMs * 250
+        progressTracker.setTotalSize(download, estimatedSize)
+        Log.d(TAG, "download: duration=${durationMs / 1000 / 60}m${(durationMs / 1000) % 60}s, " +
+            "size=${formatBytes(estimatedSize)}, segments=${(durationMs / 10000 + 1).toInt()}")
 
-        // Set up cache directory for this download
+        // Set up cache directory
         val cacheDir = getCacheDir(download)
         val segmentsDir = File(cacheDir, SEGMENTS_DIR).apply { mkdirs() }
         val subtitlesDir = File(cacheDir, SUBTITLES_DIR).apply { mkdirs() }
-        Log.d(TAG, "download: cache dir = ${cacheDir.absolutePath}")
 
-        // Load or create manifest (stored in SAF — survives app kills)
+        // Load or create manifest
         var manifest: DownloadManifest.Manifest = manifestManager.read(download) ?: run {
             val subtitleStates = video.subtitleTracks.mapIndexed { i, track ->
                 DownloadManifest.SubtitleState(
@@ -156,27 +140,24 @@ class SegmentDownloadEngine(
             fresh
         }
 
-        // Verify cache files exist for "done" segments (cache may have been cleared)
+        // Verify cache files exist for "done" segments
         manifest = verifySegmentFiles(download, manifest, segmentsDir)
 
-        Log.d(TAG, "download: manifest loaded — ${manifest.totalSegments} segments, " +
-            "${manifestManager.getCompletedSegmentCount(manifest)} done, resuming from segment " +
-            "${manifest.segments.indexOfFirst { it.status != DownloadManifest.SegmentStatus.DONE }.let { if (it < 0) -1 else it }}")
+        val doneCount = manifestManager.getCompletedSegmentCount(manifest)
+        Log.d(TAG, "download: ${manifest.totalSegments} segments, $doneCount done, " +
+            "resuming from segment ${manifest.segments.indexOfFirst { it.status != DownloadManifest.SegmentStatus.DONE }.let { if (it < 0) -1 else it }}")
 
         progressTracker.updateFromManifest(download, manifest)
 
-        // Download subtitle tracks (to cache dir — real file paths)
+        // Download subtitles
         manifest = downloadSubtitles(download, video, manifest, subtitlesDir)
 
-        // Download segments (to cache dir — real file paths)
+        // Download segments
+        var segmentIndex = 0
         while (true) {
-            // FIX (D2): Check download.status for pause/cancel instead of the engine's
-            // own flags. DownloadManager.pauseDownload() sets download.status = PAUSED,
-            // which the engine can read here. The engine's `paused`/`cancelled` flags
-            // are only set when engine.pause()/cancel() is called directly (rarely used).
-            // The download.status is the source of truth for user-initiated actions.
+            // Check pause/cancel via download.status (fixes D2)
             if (download.status == Download.State.PAUSED) {
-                Log.d(TAG, "download: ⏸ paused by user — saving manifest and returning")
+                Log.d(TAG, "download: ⏸ paused by user — saving manifest")
                 manifestManager.write(download, manifest)
                 return false
             }
@@ -198,15 +179,14 @@ class SegmentDownloadEngine(
             val segmentFile = File(segmentsDir, segment.fileName)
             val segmentResult = downloadSegment(download, video, segment, manifest, segmentFile)
 
-            // Check pause/cancel again after the segment finishes (the segment download
-            // is blocking — FFmpegKit.execute can take several seconds).
+            // Check pause/cancel again after segment finishes
             if (download.status == Download.State.PAUSED) {
-                Log.d(TAG, "download: ⏸ paused by user (after segment ${segment.index}) — saving manifest and returning")
+                Log.d(TAG, "download: ⏸ paused (after segment ${segment.index}) — saving manifest")
                 manifestManager.write(download, manifest)
                 return false
             }
             if (download.status == Download.State.NOT_DOWNLOADED || cancelled) {
-                Log.d(TAG, "download: ✕ cancelled by user (after segment ${segment.index}) — cleaning up")
+                Log.d(TAG, "download: ✕ cancelled (after segment ${segment.index}) — cleaning up")
                 cleanupCache(download)
                 return false
             }
@@ -215,8 +195,12 @@ class SegmentDownloadEngine(
                 manifest = manifestManager.markSegmentDone(manifest, segment.index, segmentResult.sizeBytes)
                 manifestManager.write(download, manifest)
                 progressTracker.updateFromManifest(download, manifest)
-                Log.d(TAG, "download: ✓ segment ${segment.index}/${manifest.totalSegments} done " +
-                    "(${formatBytes(segmentResult.sizeBytes)})")
+                // Log every 10th segment to show progress without spam
+                segmentIndex++
+                if (segmentIndex % 10 == 0 || segmentIndex == manifest.totalSegments) {
+                    Log.d(TAG, "download: progress ${doneCount + segmentIndex}/${manifest.totalSegments} " +
+                        "(${(doneCount + segmentIndex) * 100 / manifest.totalSegments}%)")
+                }
             } else {
                 manifest = manifestManager.markSegmentPartial(manifest, segment.index)
                 manifestManager.write(download, manifest)
@@ -228,22 +212,22 @@ class SegmentDownloadEngine(
 
         if (!manifestManager.allSegmentsDone(manifest)) {
             download.error = "Some segments failed to download"
-            Log.e(TAG, "download: ❌ not all segments done — ${download.error}")
+            Log.e(TAG, "download: ❌ ${download.error}")
             return false
         }
 
-        // MUXING phase — concatenate segments + mux subtitles (all in cache dir — real file paths)
+        // MUXING phase
         download.status = Download.State.MUXING
-        Log.d(TAG, "download: → muxing phase — concatenating ${manifest.totalSegments} segments")
+        Log.d(TAG, "download: → muxing ${manifest.totalSegments} segments")
 
         val muxSuccess = muxSegments(download, video, manifest, cacheDir, segmentsDir, subtitlesDir)
         if (!muxSuccess) {
             download.error = "Muxing failed"
-            Log.e(TAG, "download: ❌ muxing failed for ${download.episodeName}")
+            Log.e(TAG, "download: ❌ ${download.error}")
             return false
         }
 
-        // Copy the final .mkv from cache to SAF (episode dir)
+        // Copy final .mkv from cache to SAF
         val cacheMkv = File(cacheDir, FINAL_VIDEO_NAME)
         val copySuccess = copyMkvToSaf(cacheMkv, download)
         if (!copySuccess) {
@@ -252,37 +236,35 @@ class SegmentDownloadEngine(
             return false
         }
 
-        // Clean up cache + manifest
+        // Clean up
         cleanupCache(download)
         manifestManager.delete(download)
         progressTracker.markComplete(download)
         download.status = Download.State.DOWNLOADED
-        Log.d(TAG, "download: ✓ COMPLETE — ${download.episodeName}")
+        Log.d(TAG, "download: ✓ COMPLETE — ${download.episodeName} (${formatBytes(cacheMkv.length())})")
         return true
     }
 
     override suspend fun pause(download: Download) {
-        Log.d(TAG, "pause: → pausing ${download.episodeName}")
+        Log.d(TAG, "pause: → ${download.episodeName}")
         paused = true
         delay(500)
         download.status = Download.State.PAUSED
-        Log.d(TAG, "pause: ✓ ${download.episodeName} paused")
     }
 
     override suspend fun cancel(download: Download) {
-        Log.d(TAG, "cancel: → cancelling ${download.episodeName}")
+        Log.d(TAG, "cancel: → ${download.episodeName}")
         cancelled = true
         delay(300)
         cleanupCache(download)
         download.status = Download.State.NOT_DOWNLOADED
-        Log.d(TAG, "cancel: ✓ ${download.episodeName} cancelled")
     }
 
     override fun isCompleted(download: Download): Boolean {
         return provider.getDownloadedVideoFile(download.episodeName, download.animeTitle, download.sourceName) != null
     }
 
-    // ---- Segment download (to cache dir — real file paths) ----
+    // ---- Segment download (to cache dir) ----
 
     private data class SegmentResult(val success: Boolean, val sizeBytes: Long)
 
@@ -294,8 +276,6 @@ class SegmentDownloadEngine(
         segmentFile: File,
     ): SegmentResult = withContext(Dispatchers.IO) {
         val startTimeSec = segment.index * SEGMENT_DURATION_SEC
-
-        // Build FFmpeg command — output to real file path (NOT saf:)
         val headerOptions = buildHeaderOptions(video)
         val outputPath = segmentFile.absolutePath
 
@@ -314,8 +294,6 @@ class SegmentDownloadEngine(
             append("\"").append(outputPath).append("\" -y")
         }.toString()
 
-        Log.v(TAG, "downloadSegment: cmd for seg ${segment.index}: $cmd")
-
         val contentLength = try { getContentLength(video) } catch (_: Exception) { 0L }
 
         val statsCallback = StatisticsCallback { stats ->
@@ -331,7 +309,6 @@ class SegmentDownloadEngine(
         }
 
         FFmpegKitConfig.enableStatisticsCallback(statsCallback)
-
         val session = FFmpegKit.execute(cmd)
         FFmpegKitConfig.enableStatisticsCallback(null)
 
@@ -339,18 +316,15 @@ class SegmentDownloadEngine(
         val segSize = segmentFile.length()
 
         if (ReturnCode.isSuccess(returnCode) && segSize > 0) {
-            Log.v(TAG, "downloadSegment: ✓ seg ${segment.index} rc=0 size=${segSize}")
             SegmentResult(true, segSize)
         } else {
-            val logs = session.allLogsAsString?.take(500) ?: "no logs"
-            Log.w(TAG, "downloadSegment: ⚠ seg ${segment.index} rc=${returnCode.value} size=${segSize}")
-            Log.w(TAG, "downloadSegment: logs: $logs")
+            Log.w(TAG, "downloadSegment: ⚠ seg ${segment.index} rc=${returnCode.value}")
             segmentFile.delete()
             SegmentResult(false, 0)
         }
     }
 
-    // ---- Subtitle download (to cache dir — real file paths) ----
+    // ---- Subtitle download (to cache dir) ----
 
     private suspend fun downloadSubtitles(
         download: Download,
@@ -358,21 +332,14 @@ class SegmentDownloadEngine(
         manifest: DownloadManifest.Manifest,
         subtitlesDir: File,
     ): DownloadManifest.Manifest = withContext(Dispatchers.IO) {
-        if (video.subtitleTracks.isEmpty()) {
-            Log.d(TAG, "downloadSubtitles: no subtitle tracks")
-            return@withContext manifest
-        }
+        if (video.subtitleTracks.isEmpty()) return@withContext manifest
 
         var updatedManifest = manifest
         video.subtitleTracks.forEachIndexed { i, track ->
             val subState = manifest.subtitles.getOrNull(i)
             if (subState?.downloaded == true) {
-                // Check if file exists in cache
                 val subFile = File(subtitlesDir, subState.fileName)
-                if (subFile.exists() && subFile.length() > 0) {
-                    Log.d(TAG, "downloadSubtitles: ✓ already downloaded: ${track.lang}")
-                    return@forEachIndexed
-                }
+                if (subFile.exists() && subFile.length() > 0) return@forEachIndexed
             }
 
             val subFileName = "sub_${i}_${track.lang.ifBlank { "und" }}.vtt"
@@ -387,7 +354,7 @@ class SegmentDownloadEngine(
                 append("\"").append(subFile.absolutePath).append("\" -y")
             }.toString()
 
-            Log.d(TAG, "downloadSubtitles: downloading ${track.lang} → $subFileName")
+            Log.d(TAG, "downloadSubtitles: ${track.lang}")
             val session = FFmpegKit.execute(cmd)
             if (ReturnCode.isSuccess(session.returnCode) && subFile.length() > 0) {
                 val updatedSubs = updatedManifest.subtitles.toMutableList()
@@ -395,9 +362,8 @@ class SegmentDownloadEngine(
                     updatedSubs[i] = updatedSubs[i].copy(downloaded = true)
                 }
                 updatedManifest = updatedManifest.copy(subtitles = updatedSubs)
-                Log.d(TAG, "downloadSubtitles: ✓ downloaded: ${track.lang}")
             } else {
-                Log.w(TAG, "downloadSubtitles: ⚠ failed: ${track.lang} rc=${session.returnCode.value}")
+                Log.w(TAG, "downloadSubtitles: ⚠ ${track.lang} failed")
             }
         }
 
@@ -405,7 +371,7 @@ class SegmentDownloadEngine(
         updatedManifest
     }
 
-    // ---- Muxing (all in cache dir — real file paths, NO saf: protocol) ----
+    // ---- Muxing (all in cache dir) ----
 
     private suspend fun muxSegments(
         download: Download,
@@ -415,31 +381,24 @@ class SegmentDownloadEngine(
         segmentsDir: File,
         subtitlesDir: File,
     ): Boolean = withContext(Dispatchers.IO) {
-        Log.d(TAG, "muxSegments: → concatenating ${manifest.totalSegments} segments")
-
-        // Build concat list with REAL FILE PATHS (not saf: URIs)
-        // This is the critical fix for C1 — the concat demuxer crashes with saf: URIs
+        // Build concat list with REAL FILE PATHS
         val concatFile = File(cacheDir, CONCAT_FILE)
         val concatBuilder = StringBuilder()
         manifest.segments.forEach { seg ->
             val segFile = File(segmentsDir, seg.fileName)
             if (!segFile.exists() || segFile.length() == 0L) {
-                Log.e(TAG, "muxSegments: ❌ segment file missing or empty: ${seg.fileName}")
+                Log.e(TAG, "muxSegments: ❌ segment file missing: ${seg.fileName}")
                 return@withContext false
             }
             concatBuilder.append("file '").append(segFile.absolutePath).append("'\n")
         }
         concatFile.writeText(concatBuilder.toString())
-        Log.v(TAG, "muxSegments: concat list written (${manifest.totalSegments} entries)")
 
-        // Output file in cache dir (real file path)
         val outputFile = File(cacheDir, FINAL_VIDEO_NAME)
 
-        // Build mux command — all real file paths, NO saf: protocol
         val cmd = StringBuilder().apply {
             append("-f concat -safe 0 -i \"").append(concatFile.absolutePath).append("\"")
 
-            // Subtitle inputs (from cache dir — real file paths)
             video.subtitleTracks.forEachIndexed { i, _ ->
                 val subState = manifest.subtitles.getOrNull(i)
                 if (subState?.downloaded == true) {
@@ -450,7 +409,6 @@ class SegmentDownloadEngine(
                 }
             }
 
-            // Mapping
             append(" -map 0:v -map 0:a?")
             video.subtitleTracks.forEachIndexed { i, _ ->
                 val subState = manifest.subtitles.getOrNull(i)
@@ -459,10 +417,8 @@ class SegmentDownloadEngine(
                 }
             }
 
-            // Codec: copy all streams
             append(" -c copy -f matroska")
 
-            // Subtitle metadata
             video.subtitleTracks.forEachIndexed { i, track ->
                 val subState = manifest.subtitles.getOrNull(i)
                 if (subState?.downloaded == true) {
@@ -473,17 +429,14 @@ class SegmentDownloadEngine(
             append(" \"").append(outputFile.absolutePath).append("\" -y")
         }.toString()
 
-        Log.d(TAG, "muxSegments: mux command length=${cmd.length}")
-        Log.v(TAG, "muxSegments: cmd: $cmd")
-
+        Log.d(TAG, "muxSegments: executing (cmd length=${cmd.length})")
         val session = FFmpegKit.execute(cmd)
         val success = ReturnCode.isSuccess(session.returnCode)
 
         if (success && outputFile.length() > 0) {
-            Log.d(TAG, "muxSegments: ✓ mux succeeded, output size=${formatBytes(outputFile.length())}")
+            Log.d(TAG, "muxSegments: ✓ ${formatBytes(outputFile.length())}")
         } else {
-            Log.e(TAG, "muxSegments: ❌ mux failed rc=${session.returnCode.value}")
-            Log.e(TAG, "muxSegments: logs: ${session.allLogsAsString?.take(1000)}")
+            Log.e(TAG, "muxSegments: ❌ rc=${session.returnCode.value}")
             outputFile.delete()
         }
 
@@ -491,24 +444,18 @@ class SegmentDownloadEngine(
     }
 
     /**
-     * Copy the muxed .mkv from cache dir to SAF (the user-selected downloads folder).
+     * Copy the muxed .mkv from cache dir to SAF.
      */
     private suspend fun copyMkvToSaf(cacheMkv: File, download: Download): Boolean = withContext(Dispatchers.IO) {
         if (!cacheMkv.exists() || cacheMkv.length() == 0L) {
-            Log.e(TAG, "copyMkvToSaf: ❌ cache mkv doesn't exist or is empty")
+            Log.e(TAG, "copyMkvToSaf: ❌ cache mkv empty")
             return@withContext false
         }
 
         val episodeDir = provider.getEpisodeDir(download.episodeName, download.animeTitle, download.sourceName)
-            ?: run {
-                Log.e(TAG, "copyMkvToSaf: ❌ could not get episode dir")
-                return@withContext false
-            }
+            ?: return@withContext false
 
-        val safFile = episodeDir.createFile(FINAL_VIDEO_NAME) ?: run {
-            Log.e(TAG, "copyMkvToSaf: ❌ could not create file in SAF")
-            return@withContext false
-        }
+        val safFile = episodeDir.createFile(FINAL_VIDEO_NAME) ?: return@withContext false
 
         try {
             cacheMkv.inputStream().use { input ->
@@ -516,17 +463,16 @@ class SegmentDownloadEngine(
                     input.copyTo(output)
                 }
             }
-            Log.d(TAG, "copyMkvToSaf: ✓ copied ${formatBytes(cacheMkv.length())} to SAF")
+            Log.d(TAG, "copyMkvToSaf: ✓ ${formatBytes(cacheMkv.length())} → SAF")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "copyMkvToSaf: ❌ copy failed: ${e.message}", e)
+            Log.e(TAG, "copyMkvToSaf: ❌ ${e.message}")
             false
         }
     }
 
     /**
      * Verify that "done" segments still have their cache files.
-     * If a file is missing (cache cleared), mark the segment as "pending".
      */
     private suspend fun verifySegmentFiles(
         download: Download,
@@ -534,8 +480,7 @@ class SegmentDownloadEngine(
         segmentsDir: File,
     ): DownloadManifest.Manifest {
         if (!segmentsDir.exists()) {
-            // Cache dir doesn't exist — all segments need re-downloading
-            Log.d(TAG, "verifySegmentFiles: cache dir doesn't exist, marking all segments as pending")
+            // Cache dir doesn't exist — all "done" segments need re-downloading
             val resetSegments = manifest.segments.map { seg ->
                 if (seg.status == DownloadManifest.SegmentStatus.DONE) {
                     seg.copy(status = DownloadManifest.SegmentStatus.PENDING)
@@ -551,7 +496,7 @@ class SegmentDownloadEngine(
             if (seg.status == DownloadManifest.SegmentStatus.DONE) {
                 val file = File(segmentsDir, seg.fileName)
                 if (!file.exists() || file.length() == 0L) {
-                    Log.w(TAG, "verifySegmentFiles: ⚠ segment ${seg.index} marked done but file missing — resetting to pending")
+                    Log.w(TAG, "verifySegmentFiles: ⚠ seg ${seg.index} cache missing — resetting")
                     changed = true
                     seg.copy(status = DownloadManifest.SegmentStatus.PENDING, sizeBytes = 0L)
                 } else seg
@@ -575,24 +520,18 @@ class SegmentDownloadEngine(
             "-i \"${video.videoUrl}\" -show_entries format=duration -v quiet -of csv=\"p=0\""
         }
 
-        Log.d(TAG, "getVideoDurationMs: probing with FFprobe")
         val session = FFprobeKit.execute(cmd)
         val output = session.output?.trim()
 
         if (ReturnCode.isSuccess(session.returnCode) && !output.isNullOrEmpty()) {
             val durationSec = output.toDoubleOrNull() ?: 0.0
-            val durationMs = (durationSec * 1000).toLong()
-            Log.d(TAG, "getVideoDurationMs: ✓ duration=${durationMs}ms")
-            durationMs
+            (durationSec * 1000).toLong()
         } else {
-            Log.w(TAG, "getVideoDurationMs: ⚠ FFprobe returned no duration, output='$output'")
-            24 * 60 * 1000L
+            24 * 60 * 1000L // fallback
         }
     }
 
-    private fun getContentLength(video: Video): Long {
-        return try { 0L } catch (e: Exception) { 0L }
-    }
+    private fun getContentLength(video: Video): Long = 0L
 
     // ---- Helpers ----
 
@@ -612,11 +551,8 @@ class SegmentDownloadEngine(
         return try {
             val stat = android.os.StatFs(context.filesDir.path)
             val freeBytes = stat.availableBlocksLong * stat.blockSizeLong
-            val hasSpace = freeBytes > MIN_DISK_SPACE_MB * 1024 * 1024
-            Log.v(TAG, "hasMinDiskSpace: free=${formatBytes(freeBytes)}, min=${MIN_DISK_SPACE_MB}MB → $hasSpace")
-            hasSpace
+            freeBytes > MIN_DISK_SPACE_MB * 1024 * 1024
         } catch (e: Exception) {
-            Log.w(TAG, "hasMinDiskSpace: ⚠ could not check: ${e.message}")
             true
         }
     }
@@ -626,7 +562,6 @@ class SegmentDownloadEngine(
             val cacheDir = File(context.cacheDir, "$CACHE_BASE_DIR/${download.id}")
             if (cacheDir.exists()) {
                 cacheDir.deleteRecursively()
-                Log.d(TAG, "cleanupCache: ✓ deleted ${cacheDir.absolutePath}")
             }
         } catch (e: Exception) {
             Log.w(TAG, "cleanupCache: ⚠ ${e.message}")
@@ -636,6 +571,5 @@ class SegmentDownloadEngine(
     fun resetFlags() {
         paused = false
         cancelled = false
-        Log.d(TAG, "resetFlags: ✓ pause/cancel flags cleared")
     }
 }

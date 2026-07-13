@@ -1,6 +1,5 @@
 package app.anikuta.download.progress
 
-import android.util.Log
 import app.anikuta.download.Download
 import app.anikuta.download.engine.DownloadManifest
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,22 +38,20 @@ class ProgressTracker {
     /**
      * Update progress from manifest state.
      * Called by the engine after each segment download.
+     * No logging here — called for every segment, would be too noisy.
      */
     fun updateFromManifest(download: Download, manifest: DownloadManifest.Manifest) {
         val completed = manifest.segments.count { it.status == DownloadManifest.SegmentStatus.DONE }
         val total = manifest.totalSegments
 
         val progress = if (total > 0) {
-            (completed * 100 / total).coerceIn(0, 99) // cap at 99 during download; 100 = DOWNLOADED
+            (completed * 100 / total).coerceIn(0, 99)
         } else {
             0
         }
 
         if (progress != download.progress) {
             download.progress = progress
-            Log.v(TAG, "updateFromManifest: ${download.episodeName} — " +
-                "$completed/$total segments (${progress}%), " +
-                "${manifest.downloadedBytes}/${manifest.totalSizeBytes} bytes")
         }
 
         download.downloadedBytes = manifest.downloadedBytes
@@ -66,23 +63,18 @@ class ProgressTracker {
     /**
      * Update byte count and calculate speed.
      * Called by the engine periodically during a segment download.
+     * No logging here — called very frequently.
      */
     fun updateBytes(download: Download, downloadedBytes: Long, timestamp: Long = System.currentTimeMillis()) {
         download.downloadedBytes = downloadedBytes
 
-        // Speed calculation (rolling average)
         if (lastTimestamp > 0 && lastBytes > 0) {
             val timeDiff = timestamp - lastTimestamp
             val byteDiff = downloadedBytes - lastBytes
 
             if (timeDiff > 0 && byteDiff > 0) {
-                val instantSpeed = byteDiff * 1000 / timeDiff // bytes/sec
                 addSpeedSample(timestamp, downloadedBytes)
-                val avgSpeed = calculateAverageSpeed()
-                download.speed = avgSpeed
-                Log.v(TAG, "updateBytes: ${download.episodeName} — " +
-                    "instant=${formatSpeed(instantSpeed)}, avg=${formatSpeed(avgSpeed)}, " +
-                    "total=${formatBytes(downloadedBytes)}")
+                download.speed = calculateAverageSpeed()
             }
         }
 
@@ -90,21 +82,13 @@ class ProgressTracker {
         lastTimestamp = timestamp
     }
 
-    /**
-     * Set total size estimate (from Content-Length header or segment calculation).
-     */
     fun setTotalSize(download: Download, totalSize: Long) {
         download.totalSize = totalSize
-        Log.d(TAG, "setTotalSize: ${download.episodeName} — ${formatBytes(totalSize)}")
     }
 
-    /**
-     * Mark download as complete (100%).
-     */
     fun markComplete(download: Download) {
         download.progress = 100
         download.speed = 0
-        Log.d(TAG, "markComplete: ✓ ${download.episodeName} — 100%")
     }
 
     /**
