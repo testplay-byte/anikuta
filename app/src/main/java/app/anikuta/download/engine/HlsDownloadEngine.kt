@@ -142,12 +142,11 @@ class HlsDownloadEngine(
             "User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
         )
 
-        // 1. Fetch + parse m3u8
+        // 1. Fetch + parse m3u8 (fetcher extracts real URL from proxy if needed)
         val qualityPref = downloadPrefs.preferredQualityOrder().get()
         val media = try {
             fetcher.fetchMediaPlaylist(url, headers, qualityPref)
         } catch (e: IllegalArgumentException) {
-            // Unsupported features (EXT-X-MAP, SAMPLE-AES) → fall back
             Log.w(TAG, "tryHlsDownload: ${e.message} → falling back")
             return HlsResult.UNSUPPORTED
         }
@@ -156,10 +155,25 @@ class HlsDownloadEngine(
             return HlsResult.UNSUPPORTED
         }
 
+        // Extract proxy base URL for segment routing.
+        // The CDN requires authentication (Cloudflare cookies, headers) that only the
+        // proxy provides. When we fetch the m3u8 directly from the CDN, the segment URLs
+        // are CDN URLs — we need to route them through the proxy for authentication.
+        val proxyBaseUrl = extractProxyBaseUrl(url)
+        val segmentsWithProxyUrls = if (proxyBaseUrl != null) {
+            Log.d(TAG, "tryHlsDownload: routing segments through proxy: $proxyBaseUrl")
+            media.segments.map { seg ->
+                seg.copy(url = "$proxyBaseUrl/seg?url=${java.net.URLEncoder.encode(seg.url, "UTF-8")}")
+            }
+        } else {
+            media.segments
+        }
+        val mediaWithProxyUrls = media.copy(segments = segmentsWithProxyUrls)
+
         val totalDurationMs = (media.segments.sumOf { it.durationSec } * 1000).toLong()
         Log.d(TAG, "tryHlsDownload: ${media.segments.size} segments, " +
             "duration=${totalDurationMs / 1000 / 60}m${(totalDurationMs / 1000) % 60}s, " +
-            "vod=${media.isVod}")
+            "vod=${media.isVod}, proxy=${proxyBaseUrl != null}")
 
         if (media.segments.isEmpty()) {
             download.error = "No segments in playlist"
@@ -185,8 +199,8 @@ class HlsDownloadEngine(
                 download = download,
                 videoUrl = url,
                 totalDurationMs = totalDurationMs,
-                segmentUrls = media.segments.map { it.url },
-                segmentDurationsMs = media.segments.map { (it.durationSec * 1000).toLong() },
+                segmentUrls = mediaWithProxyUrls.segments.map { it.url },
+                segmentDurationsMs = mediaWithProxyUrls.segments.map { (it.durationSec * 1000).toLong() },
                 subtitles = subtitleStates,
             )
             manifestManager.write(download, fresh)
@@ -198,10 +212,10 @@ class HlsDownloadEngine(
         }
 
         // On resume: refresh segment URLs from the fresh m3u8 (localhost proxy port changes)
-        if (manifest.playlistType == "hls" && manifest.segments.size == media.segments.size) {
+        if (manifest.playlistType == "hls" && manifest.segments.size == mediaWithProxyUrls.segments.size) {
             manifest = manifest.copy(
                 segments = manifest.segments.mapIndexed { i, seg ->
-                    seg.copy(url = media.segments[i].url)
+                    seg.copy(url = mediaWithProxyUrls.segments[i].url)
                 }
             )
             manifestManager.write(download, manifest)
@@ -244,7 +258,7 @@ class HlsDownloadEngine(
             }
 
             val segState = manifestManager.getNextPendingSegment(manifest) ?: break
-            val hlsSeg = media.segments.getOrNull(segState.index) ?: break
+            val hlsSeg = mediaWithProxyUrls.segments.getOrNull(segState.index) ?: break
 
             manifest = manifestManager.markSegmentDownloading(manifest, segState.index)
             manifestManager.write(download, manifest)
@@ -330,6 +344,24 @@ class HlsDownloadEngine(
         Log.d(TAG, "download: ✓ COMPLETE — ${download.episodeName} " +
             "(${formatBytes(actualSize)}, ${mediaInfo.resolution}, ${download.serverName}/${download.audioVersion}/${download.qualityLabel})")
         return HlsResult.SUCCESS
+    }
+
+    /**
+     * Extract the proxy base URL (e.g., "http://localhost:PORT") from a proxy URL.
+     * Returns null if the URL is not a proxy URL.
+     *
+     * Example: "http://localhost:42263/m3u8?url=https://..." → "http://localhost:42263"
+     */
+    private fun extractProxyBaseUrl(url: String): String? {
+        if (!url.contains("localhost") && !url.contains("127.0.0.1")) return null
+        return try {
+            val uri = android.net.Uri.parse(url)
+            val port = uri.port
+            if (port > 0) "${uri.scheme}://${uri.host}:$port"
+            else null
+        } catch (e: Exception) {
+            null
+        }
     }
 
     // ---- Per-download cancellation ----
