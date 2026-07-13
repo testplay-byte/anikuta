@@ -42,7 +42,17 @@ class HlsPlaylistFetcher(
         headers: Headers,
         qualityPreference: List<String> = emptyList(),
     ): HlsPlaylist.Media? {
-        val playlist = fetchAndParse(m3u8Url, headers) ?: return null
+        // If the URL is a proxy URL (http://localhost:PORT/m3u8?url=<realUrl>),
+        // extract the real m3u8 URL and fetch it directly from the CDN.
+        // The proxy doesn't return m3u8 content to OkHttp — it works differently
+        // with MPV (native code). By fetching the real URL directly, we bypass
+        // the proxy entirely and get the actual m3u8 playlist.
+        val fetchUrl = extractRealUrlFromProxy(m3u8Url) ?: m3u8Url
+        if (fetchUrl != m3u8Url) {
+            Log.d(TAG, "proxy URL detected → fetching real m3u8 directly: $fetchUrl")
+        }
+
+        val playlist = fetchAndParse(fetchUrl, headers) ?: return null
         return when (playlist) {
             is HlsPlaylist.Media -> playlist
             is HlsPlaylist.Master -> {
@@ -55,6 +65,19 @@ class HlsPlaylistFetcher(
                 fetchAndParse(variantUrl, headers) as? HlsPlaylist.Media
             }
         }
+    }
+
+    /**
+     * Extract the real m3u8 URL from a proxy URL like:
+     *   http://localhost:PORT/m3u8?url=https%3A%2F%2Fcdn.example.com%2Fvideo.m3u8
+     * Returns the decoded URL from the ?url= parameter, or null if not a proxy URL.
+     */
+    private fun extractRealUrlFromProxy(url: String): String? {
+        if (!url.contains("localhost") && !url.contains("127.0.0.1")) return null
+        // Look for ?url= or &url= parameter
+        val urlParam = android.net.Uri.parse(url).getQueryParameter("url") ?: return null
+        Log.d(TAG, "extracted real URL from proxy: $urlParam")
+        return urlParam
     }
 
     /**
