@@ -34,6 +34,9 @@ import app.anikuta.download.engine.DownloadEngine
 import app.anikuta.download.engine.DownloadManifest
 import app.anikuta.download.engine.HlsDownloadEngine
 import app.anikuta.download.engine.SegmentDownloadEngine
+import app.anikuta.download.engine.hls.HlsPlaylistFetcher
+import app.anikuta.download.engine.hls.HlsPlaylistParser
+import app.anikuta.download.engine.hls.HlsSegmentDownloader
 import app.anikuta.download.progress.ProgressTracker
 import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo
@@ -150,15 +153,15 @@ class AppModule(val app: Application) : InjektModule {
             )
         }
         // HLS direct-download engine (primary — downloads .ts segments via HTTP)
-        addSingletonFactory { app.anikuta.download.engine.hls.HlsPlaylistParser() }
+        addSingletonFactory { HlsPlaylistParser() }
         addSingletonFactory {
-            app.anikuta.download.engine.hls.HlsPlaylistFetcher(
+            HlsPlaylistFetcher(
                 client = get<NetworkHelper>().client,
                 parser = get(),
             )
         }
         addSingletonFactory {
-            app.anikuta.download.engine.hls.HlsSegmentDownloader(
+            HlsSegmentDownloader(
                 client = get<NetworkHelper>().client,
             )
         }
