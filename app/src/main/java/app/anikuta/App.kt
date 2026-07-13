@@ -2,9 +2,11 @@ package app.anikuta
 
 import android.app.Application
 import android.util.Log
+import androidx.work.WorkManager
 import app.anikuta.core.preference.AndroidPreferenceStore
 import app.anikuta.di.AppModule
 import app.anikuta.di.PreferenceModule
+import app.anikuta.download.DownloadManager
 import app.anikuta.download.DownloadNotifier
 import app.anikuta.error.AnikutaCrashHandler
 import uy.kohesive.injekt.Injekt
@@ -19,6 +21,10 @@ import uy.kohesive.injekt.api.get
  *
  * Notification channels are created after DI is ready (DownloadNotifier
  * needs to be resolvable via Injekt).
+ *
+ * Crash loop prevention: if the last crash was a foregroundServiceType
+ * error (from WorkManager trying to start the download foreground service),
+ * all download WorkManager jobs are cancelled on startup to break the loop.
  */
 class App : Application() {
     override fun onCreate() {
@@ -28,6 +34,13 @@ class App : Application() {
         Thread.setDefaultUncaughtExceptionHandler(AnikutaCrashHandler(this))
 
         Log.d("AnikutaApp", "=== App.onCreate started ===")
+
+        // ---- Crash loop prevention ----
+        // Check if the previous crash was a foregroundServiceType error.
+        // If so, cancel all download WorkManager jobs BEFORE DI restores
+        // the queue (which would trigger the worker to restart → crash again).
+        checkForForegroundServiceCrashLoop()
+
         try {
             val preferenceStore = AndroidPreferenceStore(this)
             Log.d("AnikutaApp", "PreferenceStore created")
@@ -50,5 +63,35 @@ class App : Application() {
             throw e
         }
         Log.d("AnikutaApp", "=== App.onCreate finished ===")
+    }
+
+    /**
+     * Check if the last crash was a foregroundServiceType mismatch error.
+     * If so, cancel all WorkManager download jobs to prevent a crash loop.
+     *
+     * The crash happens when DownloadWorker calls setForeground() with
+     * FOREGROUND_SERVICE_TYPE_DATA_SYNC but the manifest doesn't declare
+     * the service with that type. WorkManager keeps retrying the worker,
+     * causing the app to crash repeatedly.
+     *
+     * This is a safety net — the manifest fix (declaring SystemForegroundService
+     * with foregroundServiceType="dataSync") is the primary fix. This check
+     * handles edge cases where the manifest fix regresses or doesn't apply.
+     */
+    private fun checkForForegroundServiceCrashLoop() {
+        try {
+            val lastCrash = AnikutaCrashHandler.getLastCrash(this) ?: return
+            if (lastCrash.contains("foregroundServiceType") ||
+                lastCrash.contains("SystemForegroundService")) {
+                Log.w("AnikutaApp", "⚠ Detected foregroundServiceType crash loop — cancelling all download work")
+                val workManager = WorkManager.getInstance(this)
+                workManager.cancelAllWorkByTag("AnikutaDownloader")
+                workManager.cancelUniqueWork("AnikutaDownloader")
+                Log.d("AnikutaApp", "✓ Download work cancelled to break crash loop")
+                AnikutaCrashHandler.clearLastCrash(this)
+            }
+        } catch (e: Exception) {
+            Log.w("AnikutaApp", "⚠ Could not check for crash loop: ${e.message}")
+        }
     }
 }

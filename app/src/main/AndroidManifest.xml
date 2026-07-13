@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -93,6 +94,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- WorkManager's foreground service — merged with the library's own
+             declaration to add the foregroundServiceType attribute. Without this,
+             calling setForeground() with FOREGROUND_SERVICE_TYPE_DATA_SYNC on
+             Android 14+ (API 34+) crashes with:
+             "foregroundServiceType 0x00000001 is not a subset of foregroundServiceType
+              attribute 0x00000000 in service element of manifest file"
+             The library declares the service without a type because it doesn't
+             know what type the app will use. We override it here. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 
 </manifest>
