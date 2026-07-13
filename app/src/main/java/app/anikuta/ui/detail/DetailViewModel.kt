@@ -903,10 +903,10 @@ class DetailViewModel(
                 if (dl != null) downloadManager?.retryDownload(dl.id)
             }
 
-            // Downloaded (queue or disk) → play
+            // Downloaded (queue or disk) → no action on single tap.
+            // User must long-press to see options (Play / Delete).
             status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
-                Log.d(TAG, "onDownloadButtonClick: ${episode.name} playing downloaded")
-                playEpisode(episode)
+                Log.d(TAG, "onDownloadButtonClick: ${episode.name} already downloaded — no action (use long-press for options)")
             }
 
             // Not downloaded → enqueue

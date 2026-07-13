@@ -338,38 +338,6 @@ fun DetailScreen(
                                         }
                                     }
                                 }
-                                // Downloaded count badge (Q3) + Download all button (Q5)
-                                Spacer(modifier = Modifier.weight(1f))
-                                val eps = (episodeState as? EpisodeState.Loaded)?.episodeList ?: emptyList()
-                                if (eps.isNotEmpty()) {
-                                    val downloadedCount = eps.count { downloadedOnDisk.contains(it.url) }
-                                    if (downloadedCount > 0) {
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                        ) {
-                                            Text(
-                                                "$downloadedCount/${eps.size}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                    // Download all button — only downloads episodes not already on disk
-                                    val undownloadedEps = eps.filter { !downloadedOnDisk.contains(it.url) }
-                                    if (undownloadedEps.isNotEmpty()) {
-                                        IconButton(onClick = { viewModel.downloadAllEpisodes(undownloadedEps) }) {
-                                            Icon(
-                                                Icons.Default.Download,
-                                                contentDescription = "Download all",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(20.dp),
-                                            )
-                                        }
-                                    }
-                                }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
@@ -467,37 +435,6 @@ fun DetailScreen(
                                                 "Fetching metadata…",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
-                                }
-                                // Downloaded count badge (Q3) + Download all button (Q5)
-                                Spacer(modifier = Modifier.weight(1f))
-                                val eps = (episodeState as? EpisodeState.Loaded)?.episodeList ?: emptyList()
-                                if (eps.isNotEmpty()) {
-                                    val downloadedCount = eps.count { downloadedOnDisk.contains(it.url) }
-                                    if (downloadedCount > 0) {
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                        ) {
-                                            Text(
-                                                "$downloadedCount/${eps.size}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                    val undownloadedEps = eps.filter { !downloadedOnDisk.contains(it.url) }
-                                    if (undownloadedEps.isNotEmpty()) {
-                                        IconButton(onClick = { viewModel.downloadAllEpisodes(undownloadedEps) }) {
-                                            Icon(
-                                                Icons.Default.Download,
-                                                contentDescription = "Download all",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(20.dp),
                                             )
                                         }
                                     }
@@ -662,12 +599,6 @@ fun DetailScreen(
                                 DownloadMenuOption("Delete download", Icons.Default.Delete, isDestructive = true) {
                                     longPressEpisode = null
                                     viewModel.deleteDownloadedEpisode(episode)
-                                }
-                                if (status == app.anikuta.download.Download.State.DOWNLOADED) {
-                                    DownloadMenuOption("Remove from list", Icons.Default.Close) {
-                                        longPressEpisode = null
-                                        viewModel.removeDownloadFromQueue(episode)
-                                    }
                                 }
                             }
                             // Downloading/Queued/Resolving/Muxing → Cancel
