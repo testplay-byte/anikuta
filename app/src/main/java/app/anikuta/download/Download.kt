@@ -103,7 +103,8 @@ data class Download(
         MUXING(4),
         DOWNLOADED(5),
         ERROR(6),
-        PAUSED(7);
+        PAUSED(7),
+        RECONNECTING(8);  // Issue 6: network lost, trying to reconnect (10s timeout → ERROR)
 
         companion object {
             fun fromValue(v: Int): State = entries.find { it.value == v } ?: QUEUE

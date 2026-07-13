@@ -51,18 +51,19 @@ class DownloadWorker(
     override suspend fun doWork(): Result {
         Log.d(TAG, "doWork: → worker started")
 
-        // FIX (Issue 5): Pick up downloads stuck in DOWNLOADING/RESOLVING/MUXING state.
+        // FIX (Issue 5 + Issue 6): Pick up downloads stuck in DOWNLOADING/RESOLVING/MUXING state.
         // These are downloads that were interrupted by WorkManager cancellation
-        // (e.g., Wi-Fi dropped mid-download). WorkManager cancels the worker, but
-        // the download status stays DOWNLOADING. Without this fix, the worker
-        // only picks up QUEUE and ERROR — stuck downloads are orphaned forever.
+        // (e.g., Wi-Fi dropped mid-download). Reset them to QUEUE for reprocessing.
+        // RECONNECTING downloads (Issue 6) are also picked up — they were set to
+        // RECONNECTING by the worker when it caught a cancellation.
         val queue = downloadManager.queue.value
         queue.filter {
             it.status == Download.State.DOWNLOADING ||
             it.status == Download.State.RESOLVING ||
-            it.status == Download.State.MUXING
+            it.status == Download.State.MUXING ||
+            it.status == Download.State.RECONNECTING
         }.forEach { stuck ->
-            Log.w(TAG, "doWork: ⚠ ${stuck.episodeName} stuck in ${stuck.status} — resetting to QUEUE")
+            Log.w(TAG, "doWork: ⚠ ${stuck.episodeName} was in ${stuck.status} — resetting to QUEUE")
             downloadManager.updateDownloadState(stuck.id, status = Download.State.QUEUE)
         }
 
@@ -227,6 +228,19 @@ class DownloadWorker(
             } catch (e: Exception) {
                 lastError = e.message ?: "Unknown error"
                 Log.e(TAG, "processDownload: ❌ ${download.episodeName} attempt $attempt failed: $lastError")
+
+                // FIX (Issue 6): If the job was cancelled (network drop), set RECONNECTING
+                // instead of leaving it in DOWNLOADING. The RECONNECTING state shows
+                // a red/yellow pulsing indicator. After 10s, it transitions to ERROR.
+                val isCancellation = e is kotlinx.coroutines.CancellationException ||
+                    e.message?.contains("cancelled", ignoreCase = true) == true ||
+                    e.message?.contains("Job was cancelled", ignoreCase = true) == true
+                if (isCancellation) {
+                    Log.w(TAG, "processDownload: ⚠ ${download.episodeName} job cancelled — setting RECONNECTING")
+                    downloadManager.updateDownloadState(download.id, status = Download.State.RECONNECTING)
+                    downloadManager.startReconnectTimeout(download.id)
+                    return // Don't retry — WorkManager will restart when network returns
+                }
 
                 if (attempt < maxRetries) {
                     val backoff = when (attempt) {

@@ -1,5 +1,10 @@
 package app.anikuta.ui.download
 
+import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -278,6 +283,22 @@ private fun DownloadQueueItem(
                     Download.State.DOWNLOADED -> Text("Done", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     Download.State.ERROR -> Text("Failed", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                     Download.State.PAUSED -> Text("Paused ($progress%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                    Download.State.RECONNECTING -> {
+                        // Issue 6: Pulsing red/yellow "Reconnecting..." text
+                        val reconnectColor = rememberInfiniteTransition(label = "reconnect").let { transition ->
+                            val color by transition.animateColor(
+                                initialValue = MaterialTheme.colorScheme.error,
+                                targetValue = androidx.compose.ui.graphics.Color(0xFFFFA000), // amber/yellow
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(500),
+                                    repeatMode = RepeatMode.Reverse,
+                                ),
+                                label = "reconnectColor",
+                            )
+                            color
+                        }
+                        Text("Reconnecting...", style = MaterialTheme.typography.labelSmall, color = reconnectColor, fontWeight = FontWeight.Bold)
+                    }
                     else -> {}
                 }
             }
@@ -344,6 +365,14 @@ private fun DownloadQueueItem(
                             Spacer(Modifier.width(4.dp))
                             Text("Pause")
                         }
+                        TextButton(onClick = onCancel) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Cancel")
+                        }
+                    }
+                    Download.State.RECONNECTING -> {
+                        // Issue 6: Only Cancel available during reconnection
                         TextButton(onClick = onCancel) {
                             Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))

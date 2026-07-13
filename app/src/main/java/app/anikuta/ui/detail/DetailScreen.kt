@@ -863,6 +863,24 @@ private fun DownloadButton(
                     modifier = Modifier.size(20.dp),
                 )
             }
+            // Issue 6: Pulsing red/yellow spinner for RECONNECTING state
+            status == app.anikuta.download.Download.State.RECONNECTING -> {
+                val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "reconnect_spinner")
+                val spinnerColor by transition.animateColor(
+                    initialValue = MaterialTheme.colorScheme.error,
+                    targetValue = androidx.compose.ui.graphics.Color(0xFFFFA000), // amber/yellow
+                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                        animation = androidx.compose.animation.core.tween(500),
+                        repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+                    ),
+                    label = "reconnect_spinner_color",
+                )
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = spinnerColor,
+                )
+            }
             status == app.anikuta.download.Download.State.PAUSED -> {
                 Icon(
                     Icons.Default.Download,

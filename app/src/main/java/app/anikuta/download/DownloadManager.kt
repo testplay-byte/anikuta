@@ -485,4 +485,31 @@ class DownloadManager(
             refreshStatusMap()
         }
     }
+
+    /**
+     * Start the 10-second reconnect timeout for a download in RECONNECTING state (Issue 6).
+     *
+     * When the network drops, the download is set to RECONNECTING. If the network
+     * doesn't come back within 10 seconds, the download is set to ERROR.
+     * If the network comes back (worker restarts, picks up RECONNECTING → QUEUE),
+     * the timeout is cancelled because the download is no longer RECONNECTING.
+     */
+    fun startReconnectTimeout(downloadId: String) {
+        Log.d(TAG, "startReconnectTimeout: $downloadId — 10s timeout started")
+        GlobalScope.launch {
+            delay(10_000L) // 10 seconds
+
+            // Check if the download is still in RECONNECTING state
+            val download = _queue.value.find { it.id == downloadId }
+            if (download != null && download.status == Download.State.RECONNECTING) {
+                Log.w(TAG, "startReconnectTimeout: $downloadId — 10s elapsed, setting to ERROR")
+                download.error = "Network connection lost"
+                updateDownloadState(
+                    downloadId,
+                    status = Download.State.ERROR,
+                    error = "Network connection lost",
+                )
+            }
+        }
+    }
 }
