@@ -1333,3 +1333,44 @@ Stage Summary:
 - Reactive status propagation (B3 fix — status changes show in UI immediately)
 - Stationary spinner fix (B1 — indeterminate spinner during QUEUE/RESOLVING/MUXING)
 - Verbose logging throughout (per-module tags for easy logcat filtering)
+
+---
+Task ID: DL-FIXES-C1-C6
+Agent: Z.ai Code (orchestrator)
+Task: Fix 6 issues found during user testing of download system
+
+Work Log:
+- Analyzed two user-provided log files (first download + end-of-download crash)
+- Found 6 distinct issues with root cause analysis:
+  C1 (CRITICAL): FFmpeg concat SIGSEGV at 99% — saf_close null deref
+  C2 (HIGH): Duplicate downloads allowed — store.add unconditional addToLiveQueue
+  C3 (HIGH): Stuck spinner after cancel — missing refreshStatusMap()
+  C4 (HIGH): Pause button actually cancels — no separate pause/resume UI
+  C5 (MEDIUM): Progress not shown on detail page — indeterminate spinner
+  C6 (LOW): Notification channels created repeatedly
+
+Fixes applied:
+- C1: SegmentDownloadEngine rewritten to use cache dir for segments/subtitles/concat/mux
+  (real file paths instead of saf: URIs). Final .mkv copied from cache to SAF after mux.
+  Added verifySegmentFiles() for cache-cleared resume handling.
+- C2: DownloadStore.add() returns Boolean. DownloadManager.enqueueDownload checks return
+  before calling addToLiveQueue.
+- C3: cancelDownload/removeDownload/clearCompleted now call refreshStatusMap().
+  cancelDownload sets status to NOT_DOWNLOADED before removing (triggers statusFlow emit).
+- C4: DownloadQueueScreen rewritten with separate Pause/Resume and Cancel buttons.
+  Added Pause All / Resume All in top bar. Proper empty state with large icon.
+- C5: Added downloadProgressMap to DownloadManager (reactive). DetailViewModel exposes
+  downloadProgress. DownloadButton shows determinate CircularProgressIndicator.
+- C6: Added @Volatile channelsCreated flag in DownloadNotifier — createChannels() runs once.
+
+Build: run #318 (SUCCESS) on player-experiment @ 7acaa67
+ntfy.sh notification sent to TASKISDONE.
+
+Stage Summary:
+- All 6 issues fixed and build verified
+- Download engine now uses cache dir for all FFmpeg I/O (avoids SAF protocol crash)
+- Proper pause/resume/cancel UI in downloads page
+- Progress shown on both detail page and downloads page
+- Duplicate downloads prevented
+- Stuck spinner after cancel fixed
+- Ready for user testing
