@@ -335,7 +335,7 @@ fun DetailScreen(
                                 }
                                 // Downloaded count badge (Q3) + Download all button (Q5)
                                 Spacer(modifier = Modifier.weight(1f))
-                                val eps = (episodeState as? EpisodeState.Loaded)?.episodes ?: emptyList()
+                                val eps = (episodeState as? EpisodeState.Loaded)?.episodeList ?: emptyList()
                                 if (eps.isNotEmpty()) {
                                     val downloadedCount = eps.count { downloadedOnDisk.contains(it.url) }
                                     if (downloadedCount > 0) {
@@ -468,7 +468,7 @@ fun DetailScreen(
                                 }
                                 // Downloaded count badge (Q3) + Download all button (Q5)
                                 Spacer(modifier = Modifier.weight(1f))
-                                val eps = (episodeState as? EpisodeState.Loaded)?.episodes ?: emptyList()
+                                val eps = (episodeState as? EpisodeState.Loaded)?.episodeList ?: emptyList()
                                 if (eps.isNotEmpty()) {
                                     val downloadedCount = eps.count { downloadedOnDisk.contains(it.url) }
                                     if (downloadedCount > 0) {
