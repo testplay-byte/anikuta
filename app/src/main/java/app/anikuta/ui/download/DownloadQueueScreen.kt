@@ -317,6 +317,14 @@ private fun DownloadQueueItem(
                         }
                     }
                     Download.State.QUEUE -> {
+                        // FIX (D3): Show Pause + Cancel for QUEUE state (same as DOWNLOADING).
+                        // Previously only Cancel was shown, which was confusing after resuming
+                        // a paused download — the user couldn't re-pause while it was queued.
+                        TextButton(onClick = onPause) {
+                            Icon(Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Pause")
+                        }
                         TextButton(onClick = onCancel) {
                             Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))

@@ -359,7 +359,19 @@ internal fun PlayerScreen(
                                         } else {
                                             Log.d("PlayerActivity", "Loading video (direct URL): ${url.take(80)}...")
                                             val resolvedUrl = app.anikuta.player.resolveUrlForMpv(url, ctx)
-                                            MPVLib.command(arrayOf("loadfile", resolvedUrl, "replace"))
+                                            // FIX (D1): For offline playback (fd:// or content://), delay loadfile
+                                            // until the SurfaceView has a surface. MPV's vo_android_init crashes
+                                            // with "assertion WinID != 0 && WinID != -1 failed" if loadfile is
+                                            // called before surfaceCreated fires. For HTTP URLs, MPV can buffer
+                                            // without a surface, so no delay is needed.
+                                            if (resolvedUrl.startsWith("fd://") || resolvedUrl.startsWith("content://")) {
+                                                Log.d("PlayerActivity", "Offline playback — delaying loadfile 500ms for surface creation: $resolvedUrl")
+                                                view.postDelayed({
+                                                    MPVLib.command(arrayOf("loadfile", resolvedUrl, "replace"))
+                                                }, 500)
+                                            } else {
+                                                MPVLib.command(arrayOf("loadfile", resolvedUrl, "replace"))
+                                            }
                                         }
                                     } else {
                                         Log.d("PlayerActivity", "Video load delayed (prompt showing)")
@@ -611,7 +623,15 @@ internal fun PlayerScreen(
                                 } else {
                                     Log.d("PlayerActivity", "Loading video (direct URL): ${url.take(80)}...")
                                     val resolvedUrlFs = app.anikuta.player.resolveUrlForMpv(url, ctx)
-                                    MPVLib.command(arrayOf("loadfile", resolvedUrlFs, "replace"))
+                                    // FIX (D1): For offline playback, delay loadfile until surface is created.
+                                    if (resolvedUrlFs.startsWith("fd://") || resolvedUrlFs.startsWith("content://")) {
+                                        Log.d("PlayerActivity", "Offline playback (fullscreen) — delaying loadfile 500ms for surface creation: $resolvedUrlFs")
+                                        view.postDelayed({
+                                            MPVLib.command(arrayOf("loadfile", resolvedUrlFs, "replace"))
+                                        }, 500)
+                                    } else {
+                                        MPVLib.command(arrayOf("loadfile", resolvedUrlFs, "replace"))
+                                    }
                                 }
                             }
                             view

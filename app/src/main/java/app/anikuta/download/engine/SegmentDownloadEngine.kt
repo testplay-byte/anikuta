@@ -170,14 +170,18 @@ class SegmentDownloadEngine(
 
         // Download segments (to cache dir — real file paths)
         while (true) {
-            if (paused) {
-                Log.d(TAG, "download: ⏸ paused — saving manifest and returning")
-                download.status = Download.State.PAUSED
+            // FIX (D2): Check download.status for pause/cancel instead of the engine's
+            // own flags. DownloadManager.pauseDownload() sets download.status = PAUSED,
+            // which the engine can read here. The engine's `paused`/`cancelled` flags
+            // are only set when engine.pause()/cancel() is called directly (rarely used).
+            // The download.status is the source of truth for user-initiated actions.
+            if (download.status == Download.State.PAUSED) {
+                Log.d(TAG, "download: ⏸ paused by user — saving manifest and returning")
                 manifestManager.write(download, manifest)
                 return false
             }
-            if (cancelled) {
-                Log.d(TAG, "download: ✕ cancelled — cleaning up")
+            if (download.status == Download.State.NOT_DOWNLOADED || cancelled) {
+                Log.d(TAG, "download: ✕ cancelled by user — cleaning up")
                 cleanupCache(download)
                 return false
             }
@@ -194,7 +198,18 @@ class SegmentDownloadEngine(
             val segmentFile = File(segmentsDir, segment.fileName)
             val segmentResult = downloadSegment(download, video, segment, manifest, segmentFile)
 
-            if (cancelled || paused) continue
+            // Check pause/cancel again after the segment finishes (the segment download
+            // is blocking — FFmpegKit.execute can take several seconds).
+            if (download.status == Download.State.PAUSED) {
+                Log.d(TAG, "download: ⏸ paused by user (after segment ${segment.index}) — saving manifest and returning")
+                manifestManager.write(download, manifest)
+                return false
+            }
+            if (download.status == Download.State.NOT_DOWNLOADED || cancelled) {
+                Log.d(TAG, "download: ✕ cancelled by user (after segment ${segment.index}) — cleaning up")
+                cleanupCache(download)
+                return false
+            }
 
             if (segmentResult.success) {
                 manifest = manifestManager.markSegmentDone(manifest, segment.index, segmentResult.sizeBytes)
