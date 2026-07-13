@@ -9,6 +9,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import app.anikuta.data.notification.Notifications
 import app.anikuta.download.engine.DownloadEngine
+import app.anikuta.download.engine.HlsDownloadEngine
 import app.anikuta.download.engine.SegmentDownloadEngine
 import app.anikuta.download.progress.ProgressTracker
 import kotlinx.coroutines.async
@@ -163,11 +164,13 @@ class DownloadWorker(
     private suspend fun processDownload(download: Download) {
         Log.d(TAG, "processDownload: → ${download.episodeName} (id=${download.id})")
 
-        val engine: DownloadEngine = Injekt.get<SegmentDownloadEngine>()
+        val engine: DownloadEngine = Injekt.get()
         val progressTracker: ProgressTracker = Injekt.get()
 
-        if (engine is SegmentDownloadEngine) {
-            engine.resetFlags()
+        // Reset pause/cancel flags for this download
+        when (engine) {
+            is HlsDownloadEngine -> engine.resetFlags(download.id)
+            is SegmentDownloadEngine -> engine.resetFlags()
         }
 
         var lastError: String? = null

@@ -32,6 +32,7 @@ import app.anikuta.download.DownloadVideoResolver
 import app.anikuta.download.DownloadNotifier
 import app.anikuta.download.engine.DownloadEngine
 import app.anikuta.download.engine.DownloadManifest
+import app.anikuta.download.engine.HlsDownloadEngine
 import app.anikuta.download.engine.SegmentDownloadEngine
 import app.anikuta.download.progress.ProgressTracker
 import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
@@ -138,8 +139,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { DownloadManifest(get<Context>(), get<DownloadProvider>()) }
         addSingletonFactory { ProgressTracker() }
         addSingletonFactory { DownloadNotifier(get<Context>()) }
-        // Segment-based download engine (resume-capable)
-        addSingletonFactory<DownloadEngine> {
+        // Legacy FFmpeg-based engine (fallback for non-HLS / fMP4 / SAMPLE-AES)
+        addSingletonFactory {
             SegmentDownloadEngine(
                 get<Context>(),
                 get<DownloadProvider>(),
@@ -148,13 +149,35 @@ class AppModule(val app: Application) : InjektModule {
                 get<ProgressTracker>(),
             )
         }
-        addSingletonFactory { SegmentDownloadEngine(
-            get<Context>(),
-            get<DownloadProvider>(),
-            get<DownloadVideoResolver>(),
-            get<DownloadManifest>(),
-            get<ProgressTracker>(),
-        ) }
+        // HLS direct-download engine (primary — downloads .ts segments via HTTP)
+        addSingletonFactory { app.anikuta.download.engine.hls.HlsPlaylistParser() }
+        addSingletonFactory {
+            app.anikuta.download.engine.hls.HlsPlaylistFetcher(
+                client = get<NetworkHelper>().client,
+                parser = get(),
+            )
+        }
+        addSingletonFactory {
+            app.anikuta.download.engine.hls.HlsSegmentDownloader(
+                client = get<NetworkHelper>().client,
+            )
+        }
+        addSingletonFactory {
+            HlsDownloadEngine(
+                context = get(),
+                provider = get(),
+                resolver = get(),
+                manifestManager = get(),
+                progressTracker = get(),
+                fetcher = get(),
+                segmentDownloader = get(),
+                networkHelper = get(),
+                fallbackEngine = get<SegmentDownloadEngine>(),
+                downloadPrefs = get(),
+            )
+        }
+        // Primary engine: HLS direct (falls back to SegmentDownloadEngine automatically)
+        addSingletonFactory<DownloadEngine> { get<HlsDownloadEngine>() }
         addSingletonFactory { DownloadManager(get<Context>(), get(), get()) }
 
         // AniList client

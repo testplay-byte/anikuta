@@ -72,6 +72,8 @@ class DownloadManifest(
         val totalSizeBytes: Long = -1L,
         /** Downloaded bytes so far. */
         val downloadedBytes: Long = 0L,
+        /** Which engine created this manifest: "hls" (direct HTTP) or "ffmpeg-ss" (legacy). Empty = old. */
+        val playlistType: String = "",
         /** Timestamps. */
         val createdAt: Long = System.currentTimeMillis(),
         val updatedAt: Long = System.currentTimeMillis(),
@@ -85,6 +87,10 @@ class DownloadManifest(
         val sizeBytes: Long = 0L,
         /** Start time in milliseconds. */
         val startTimeMs: Long = 0L,
+        /** HLS: absolute segment URL (for direct HTTP download). Empty for legacy engine. */
+        val url: String = "",
+        /** HLS: per-segment duration in milliseconds (from #EXTINF). */
+        val durationMs: Long = 0L,
     )
 
     @Serializable
@@ -216,6 +222,62 @@ class DownloadManifest(
         Log.d(TAG, "createFresh: ✓ created manifest for ${download.episodeName} — " +
             "$totalSegments segments, duration=${totalDurationMs}ms, " +
             "${subtitles.size} subtitle tracks, estimated size=${totalSizeBytes} bytes")
+        return manifest
+    }
+
+    /**
+     * Create a new manifest for an HLS direct download (per-segment URLs from m3u8).
+     *
+     * Unlike [createFresh] (which uses FFmpeg -ss with fixed segment durations),
+     * this uses the REAL segment URLs and durations from the m3u8 playlist.
+     * Each segment has its own URL and duration (they can vary).
+     */
+    fun createFreshHls(
+        download: app.anikuta.download.Download,
+        videoUrl: String,
+        totalDurationMs: Long,
+        segmentUrls: List<String>,
+        segmentDurationsMs: List<Long>,
+        subtitles: List<SubtitleState> = emptyList(),
+        totalSizeBytes: Long = -1L,
+    ): Manifest {
+        val totalSegments = segmentUrls.size
+
+        val segments = (0 until totalSegments).map { index ->
+            SegmentState(
+                index = index,
+                status = SegmentStatus.PENDING,
+                fileName = "seg_%04d.ts".format(index),
+                sizeBytes = 0L,
+                startTimeMs = segmentDurationsMs.take(index).sum(),
+                url = segmentUrls[index],
+                durationMs = segmentDurationsMs.getOrNull(index) ?: 0L,
+            )
+        }
+
+        val manifest = Manifest(
+            downloadId = download.id,
+            anilistId = download.anilistId,
+            sourceId = download.sourceId,
+            sourceName = download.sourceName,
+            animeTitle = download.animeTitle,
+            episodeUrl = download.episodeUrl,
+            episodeName = download.episodeName,
+            episodeNumber = download.episodeNumber,
+            videoUrl = videoUrl,
+            totalDurationMs = totalDurationMs,
+            segmentDurationSec = 0, // 0 = variable (HLS segments have different durations)
+            totalSegments = totalSegments,
+            segments = segments,
+            subtitles = subtitles,
+            totalSizeBytes = totalSizeBytes,
+            downloadedBytes = 0L,
+            playlistType = "hls",
+        )
+
+        Log.d(TAG, "createFreshHls: ✓ created HLS manifest for ${download.episodeName} — " +
+            "$totalSegments segments, duration=${totalDurationMs}ms, " +
+            "${subtitles.size} subtitle tracks")
         return manifest
     }
 
