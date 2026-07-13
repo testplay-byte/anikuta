@@ -44,7 +44,10 @@ class SegmentDownloadEngine(
 
     companion object {
         private const val TAG = "SegmentDownloadEngine"
-        private const val SEGMENT_DURATION_SEC = 10
+        // Segment duration: 60 seconds (1 minute). Larger segments mean fewer files,
+        // better timestamp alignment, and less chance of frame ordering issues.
+        // The last segment may be shorter (handled by FFmpeg's -t flag).
+        private const val SEGMENT_DURATION_SEC = 60
         private const val MIN_DISK_SPACE_MB = 200L
         private const val FINAL_VIDEO_NAME = "video.mkv"
         private const val CACHE_BASE_DIR = "anikuta_dl"
@@ -321,12 +324,25 @@ class SegmentDownloadEngine(
             download.downloadedBytes = actualFileSize
         }
 
-        // FIX (Issue B): FFprobe the final .mkv to get actual duration + resolution.
+        // FIX (Issue B + F): FFprobe the final .mkv to get actual duration + resolution.
         val mediaInfo = getMediaInfo(cacheMkv)
         download.actualDurationMs = mediaInfo.durationMs
         download.actualResolution = mediaInfo.resolution
         Log.d(TAG, "download: final mkv actual duration=${mediaInfo.durationMs}ms, " +
             "resolution=${mediaInfo.resolution}, size=${formatBytes(actualFileSize)}")
+
+        // FIX (Issue F): If the actual duration is significantly less than the estimated
+        // duration (e.g., 225s actual vs 1440s estimated), re-mux with -t to trim
+        // the padding. This fixes the wrong duration shown in the player.
+        if (mediaInfo.durationMs > 0 && mediaInfo.durationMs < durationMs * 0.8) {
+            Log.d(TAG, "download: trimming padding — actual=${mediaInfo.durationMs}ms < estimated=${durationMs}ms")
+            val trimSuccess = trimMkv(cacheMkv, mediaInfo.durationMs / 1000.0)
+            if (trimSuccess) {
+                Log.d(TAG, "download: ✓ trimmed to ${mediaInfo.durationMs}ms, new size=${formatBytes(cacheMkv.length())}")
+            } else {
+                Log.w(TAG, "download: ⚠ trim failed — keeping original muxed file")
+            }
+        }
 
         // Note: server/audio/quality info is already parsed in resolve() (Issue H)
 
@@ -644,19 +660,57 @@ class SegmentDownloadEngine(
     private data class MediaInfo(val durationMs: Long, val resolution: String)
 
     /**
+     * Trim the .mkv file to the actual content duration (remove padding).
+     * Uses FFmpeg with -t to cut the file at the specified duration.
+     * The trimmed file replaces the original.
+     *
+     * @param file the .mkv file to trim (modified in place)
+     * @param actualDurationSec the actual content duration in seconds
+     * @return true if trimming succeeded
+     */
+    private suspend fun trimMkv(file: File, actualDurationSec: Double): Boolean = withContext(Dispatchers.IO) {
+        val trimmedFile = File(file.parentFile, "trimmed_${file.name}")
+        val cmd = "-i \"${file.absolutePath}\" -t $actualDurationSec -c copy -avoid_negative_ts make_zero \"${trimmedFile.absolutePath}\" -y"
+
+        Log.d(TAG, "trimMkv: cmd=$cmd")
+        val session = FFmpegKit.execute(cmd)
+        val success = ReturnCode.isSuccess(session.returnCode) && trimmedFile.exists() && trimmedFile.length() > 0
+
+        if (success) {
+            // Replace the original with the trimmed version
+            file.delete()
+            trimmedFile.renameTo(file)
+        } else {
+            Log.w(TAG, "trimMkv: ❌ rc=${session.returnCode.value}")
+            trimmedFile.delete()
+        }
+        success
+    }
+
+    /**
      * Run FFprobe on a local .mkv file to get the actual duration and resolution.
      * This corrects the wrong duration from FFprobe on the HLS URL.
+     *
+     * FIX (Issue F): Re-enable FFmpegKit redirection before calling FFprobe.
+     * The download() method calls disableRedirection() to suppress FFmpeg logs,
+     * but this also suppresses FFprobe's output → output is empty → duration=0.
+     * We re-enable it here, run FFprobe, then disable it again.
      */
     private suspend fun getMediaInfo(file: File): MediaInfo = withContext(Dispatchers.IO) {
         if (!file.exists() || file.length() == 0L) return@withContext MediaInfo(0L, "")
 
-        // Get duration — FIX (Issue F): operator precedence bug. Was:
-        //   (durationStr.toDoubleOrNull() ?: 0.0 * 1000).toLong()
-        // `0.0 * 1000` evaluates first → always 0.0 when parsing fails.
-        // Fixed: (durationStr.toDoubleOrNull() ?: 0.0) * 1000
+        // Re-enable redirection so FFprobe output is captured
+        try {
+            FFmpegKitConfig.enableRedirection()
+        } catch (e: Exception) {
+            Log.w(TAG, "getMediaInfo: could not enable redirection: ${e.message}")
+        }
+
+        // Get duration
         val durationCmd = "-i \"${file.absolutePath}\" -show_entries format=duration -v quiet -of csv=\"p=0\""
         val durationSession = FFprobeKit.execute(durationCmd)
         val durationStr = durationSession.output?.trim()
+        Log.d(TAG, "getMediaInfo: FFprobe duration output='$durationStr' rc=${durationSession.returnCode.value}")
         val durationMs = if (ReturnCode.isSuccess(durationSession.returnCode) && !durationStr.isNullOrEmpty()) {
             val durationSec = durationStr.toDoubleOrNull() ?: 0.0
             (durationSec * 1000).toLong()
@@ -666,9 +720,17 @@ class SegmentDownloadEngine(
         val resCmd = "-i \"${file.absolutePath}\" -show_entries stream=width,height -select_streams v:0 -v quiet -of csv=\"p=0\""
         val resSession = FFprobeKit.execute(resCmd)
         val resStr = resSession.output?.trim()
+        Log.d(TAG, "getMediaInfo: FFprobe resolution output='$resStr' rc=${resSession.returnCode.value}")
         val resolution = if (ReturnCode.isSuccess(resSession.returnCode) && !resStr.isNullOrEmpty()) {
             resStr.replace(",", "x")
         } else ""
+
+        // Disable redirection again to suppress FFmpeg logs during subsequent operations
+        try {
+            FFmpegKitConfig.disableRedirection()
+        } catch (e: Exception) {
+            // ignore
+        }
 
         Log.d(TAG, "getMediaInfo: duration=${durationMs}ms, resolution=$resolution (from ${file.name})")
         MediaInfo(durationMs, resolution)

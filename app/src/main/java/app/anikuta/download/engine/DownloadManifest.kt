@@ -38,7 +38,7 @@ class DownloadManifest(
         private const val TAG = "DownloadManifest"
         const val MANIFEST_FILE = "manifest.json"
         private const val MANIFEST_TMP = "manifest.json.tmp"
-        const val SEGMENT_DURATION_SEC = 10
+        const val SEGMENT_DURATION_SEC = 60
     }
 
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
