@@ -356,10 +356,17 @@ private fun DownloadQueueItem(
                         }
                     }
                     Download.State.DOWNLOADED -> {
+                        // "Remove" = remove from queue, keep the file (for completed downloads)
                         TextButton(onClick = onRemove) {
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Remove")
+                        }
+                        // "Delete" = delete the file too (via cancelDownload which deletes everything)
+                        TextButton(onClick = onCancel) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Delete file")
                         }
                     }
                     else -> {}

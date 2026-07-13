@@ -63,6 +63,7 @@ fun DetailScreen(
     val isEnrichingMetadata by viewModel.isEnrichingMetadata.collectAsState()
     val downloadStatus by viewModel.downloadStatus.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
+    val downloadedOnDisk by viewModel.downloadedOnDisk.collectAsState()
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
 
@@ -389,6 +390,7 @@ fun DetailScreen(
                                     episodeName = episode.name,
                                     downloadStatus = downloadStatus,
                                     downloadProgress = downloadProgress,
+                                    downloadedOnDisk = downloadedOnDisk,
                                     onDownload = { viewModel.downloadEpisode(episode) },
                                 )
                             }
@@ -519,6 +521,7 @@ fun DetailScreen(
                                                     episodeName = episode.name,
                                                     downloadStatus = downloadStatus,
                                                     downloadProgress = downloadProgress,
+                                                    downloadedOnDisk = downloadedOnDisk,
                                                     onDownload = { viewModel.downloadEpisode(episode) },
                                                 )
                                             }
@@ -732,13 +735,17 @@ private fun DownloadButton(
     episodeName: String,
     downloadStatus: Map<String, app.anikuta.download.Download.State>,
     downloadProgress: Map<String, Int>,
+    downloadedOnDisk: Set<String>,
     onDownload: () -> Unit,
 ) {
     val status = downloadStatus[episodeName]
     val progress = downloadProgress[episodeName] ?: 0
-    when (status) {
-        app.anikuta.download.Download.State.DOWNLOADING -> {
-            // Determinate spinner showing actual progress % (fixes C5)
+    // Check if the episode is on disk (filesystem state) — shows green checkmark
+    // even if the download was removed from the queue (completed downloads are kept).
+    val isOnDisk = downloadedOnDisk.any { it == episodeName || it == episodeName.ifBlank { "Episode" } }
+    when {
+        // Queue states take priority over on-disk check
+        status == app.anikuta.download.Download.State.DOWNLOADING -> {
             IconButton(onClick = onDownload) {
                 CircularProgressIndicator(
                     progress = { progress / 100f },
@@ -747,10 +754,9 @@ private fun DownloadButton(
                 )
             }
         }
-        app.anikuta.download.Download.State.QUEUE,
-        app.anikuta.download.Download.State.RESOLVING,
-        app.anikuta.download.Download.State.MUXING -> {
-            // Indeterminate spinner — no progress = { ... } (fixes B1)
+        status == app.anikuta.download.Download.State.QUEUE ||
+        status == app.anikuta.download.Download.State.RESOLVING ||
+        status == app.anikuta.download.Download.State.MUXING -> {
             IconButton(onClick = onDownload) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
@@ -758,17 +764,7 @@ private fun DownloadButton(
                 )
             }
         }
-        app.anikuta.download.Download.State.DOWNLOADED -> {
-            IconButton(onClick = onDownload) {
-                Icon(
-                    Icons.Default.DownloadDone,
-                    contentDescription = "Downloaded",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-        app.anikuta.download.Download.State.ERROR -> {
+        status == app.anikuta.download.Download.State.ERROR -> {
             IconButton(onClick = onDownload) {
                 Icon(
                     Icons.Default.Error,
@@ -778,12 +774,23 @@ private fun DownloadButton(
                 )
             }
         }
-        app.anikuta.download.Download.State.PAUSED -> {
+        status == app.anikuta.download.Download.State.PAUSED -> {
             IconButton(onClick = onDownload) {
                 Icon(
                     Icons.Default.Download,
                     contentDescription = "Download paused",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        // Show green checkmark if: queue says DOWNLOADED OR the file is on disk
+        status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
+            IconButton(onClick = onDownload) {
+                Icon(
+                    Icons.Default.DownloadDone,
+                    contentDescription = "Downloaded",
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
                 )
             }

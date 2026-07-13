@@ -83,6 +83,35 @@ class DownloadProvider(
     }
 
     /**
+     * List all downloaded episode names for a given anime.
+     *
+     * Scans the anime directory and returns the names of all episode subdirectories
+     * that contain a .mkv or .mp4 file. Used by the detail page to show green
+     * checkmarks for episodes that are on disk but not in the download queue
+     * (e.g. after removing from the downloads page, or after app reinstall).
+     *
+     * @param animeTitle the anime title
+     * @param sourceName the source display name
+     * @return set of episode names that are downloaded on disk
+     */
+    fun listDownloadedEpisodes(animeTitle: String, sourceName: String): Set<String> {
+        val animeDir = getAnimeDir(animeTitle, sourceName) ?: return emptySet()
+        val result = mutableSetOf<String>()
+        animeDir.listFiles()?.forEach { episodeDir ->
+            if (episodeDir.isDirectory) {
+                val hasVideo = episodeDir.listFiles()?.any { file ->
+                    val name = file.name?.lowercase() ?: ""
+                    name.endsWith(".mkv") || name.endsWith(".mp4")
+                } ?: false
+                if (hasVideo) {
+                    episodeDir.name?.let { result.add(it) }
+                }
+            }
+        }
+        return result
+    }
+
+    /**
      * Get the downloaded video file for an episode.
      * @param episodeName the episode name
      * @param animeTitle the anime title

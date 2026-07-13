@@ -183,6 +183,7 @@ class DetailViewModel(
             Log.d(TAG, "Episode cache hit (in-memory): ${eps.size} episodes from $sourceName")
             _episodes.value = EpisodeState.Loaded(eps, sourceName)
             backgroundRefreshEpisodes(anime, sourceName)
+            refreshDownloadedOnDisk()
             return
         }
         // Check disk cache (survives app restart)
@@ -368,6 +369,9 @@ class DetailViewModel(
             // Cache episodes to disk (survives app restart — no re-fetch needed)
             episodeCacheStore?.save(anilistId, sourceName, eps)
             _episodes.value = EpisodeState.Loaded(eps, sourceName)
+
+            // Scan filesystem for already-downloaded episodes (show green checkmarks)
+            refreshDownloadedOnDisk()
 
             // Phase 7.5: In-app metadata enrichment for episodes missing thumbnails/titles/descriptions
             enrichEpisodesWithMetadata(eps, anime)
@@ -811,6 +815,52 @@ class DetailViewModel(
     val downloadProgress: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> =
         downloadManager?.downloadProgressMap
             ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
+
+    /**
+     * Set of episode names that are downloaded on disk (filesystem state).
+     *
+     * This is SEPARATE from the download queue. An episode can be on disk but
+     * not in the queue (e.g. after the user removes a completed download from
+     * the downloads page, or after app reinstall). The detail page uses this
+     * to show the green checkmark for episodes that exist on disk, regardless
+     * of queue state.
+     *
+     * Populated by scanning the current anime's directory via [refreshDownloadedOnDisk].
+     * Refreshed when the anime details load and when a download completes.
+     */
+    private val _downloadedOnDisk = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
+    val downloadedOnDisk: kotlinx.coroutines.flow.StateFlow<Set<String>> = _downloadedOnDisk
+
+    /**
+     * Scan the filesystem for downloaded episodes of the current anime.
+     * Called when anime details load and when a download completes.
+     */
+    fun refreshDownloadedOnDisk() {
+        val source = matchedSource ?: return
+        val title = getAnimeTitle().ifBlank { return }
+        val provider = try { uy.kohesive.injekt.Injekt.get<app.anikuta.download.DownloadProvider>() } catch (e: Exception) { return }
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val downloaded = provider.listDownloadedEpisodes(title, source.name)
+            _downloadedOnDisk.value = downloaded
+            Log.d(TAG, "refreshDownloadedOnDisk: ${downloaded.size} episodes on disk for $title")
+        }
+    }
+
+    /**
+     * Observe download status changes and refresh the on-disk set when a download
+     * completes. This ensures the green checkmark appears immediately when a
+     * download finishes, and stays even after the download is removed from the queue.
+     */
+    init {
+        viewModelScope.launch {
+            downloadStatus.collect { statusMap ->
+                // If any download just completed, refresh the on-disk set
+                if (statusMap.values.any { it == app.anikuta.download.Download.State.DOWNLOADED }) {
+                    refreshDownloadedOnDisk()
+                }
+            }
+        }
+    }
 
     /**
      * Enqueue a single episode for download. Resolves the source + anime title

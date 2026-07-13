@@ -154,13 +154,44 @@ class DownloadManager(
         Log.d(TAG, "enqueueDownloads: ✓ enqueued ${entries.size} downloads")
     }
 
-    /** Cancel a download + remove from queue. */
+    /**
+     * Cancel a download + delete ALL associated files.
+     *
+     * Per user decision: Cancel ALWAYS deletes everything — the episode folder
+     * from SAF (including the .mkv, manifest, etc.), the cache dir (segments,
+     * subtitles), and removes from queue + store. This applies to ALL states
+     * (downloading, paused, error, queued, even completed).
+     *
+     * Use [removeDownload] instead if you want to keep completed files.
+     */
     fun cancelDownload(downloadId: String) {
         Log.d(TAG, "cancelDownload: → $downloadId")
-        // Set status to NOT_DOWNLOADED so the statusFlow emits (fixes C3 — stuck spinner)
-        _queue.value.find { it.id == downloadId }?.let { download ->
+        val download = _queue.value.find { it.id == downloadId }
+        if (download != null) {
+            // 1. Delete the episode folder from SAF (includes .mkv, manifest, etc.)
+            try {
+                val provider = Injekt.get<DownloadProvider>()
+                provider.deleteEpisode(download.episodeName, download.animeTitle, download.sourceName)
+                Log.d(TAG, "cancelDownload: ✓ deleted SAF folder")
+            } catch (e: Exception) {
+                Log.w(TAG, "cancelDownload: ⚠ could not delete SAF folder: ${e.message}")
+            }
+
+            // 2. Delete the cache dir (segments, subtitles, concat, tmp .mkv)
+            try {
+                val cacheDir = java.io.File(context.cacheDir, "anikuta_dl/$downloadId")
+                if (cacheDir.exists()) {
+                    cacheDir.deleteRecursively()
+                    Log.d(TAG, "cancelDownload: ✓ deleted cache dir")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "cancelDownload: ⚠ could not delete cache dir: ${e.message}")
+            }
+
+            // 3. Set status to NOT_DOWNLOADED so the statusFlow emits (fixes C3)
             download.status = Download.State.NOT_DOWNLOADED
         }
+        // 4. Remove from queue + store
         _queue.value = _queue.value.filter { it.id != downloadId }
         store.remove(downloadId)
         refreshStatusMap()
@@ -227,17 +258,41 @@ class DownloadManager(
         Log.d(TAG, "retryDownload: ✓ $downloadId")
     }
 
-    /** Remove a completed download from the queue. */
+    /**
+     * Remove a download from the queue. Conditional based on status:
+     *
+     * - If status == DOWNLOADED: only remove from queue + store (KEEP the file).
+     *   The detail page will still show the green checkmark by checking the filesystem.
+     *
+     * - If status != DOWNLOADED (incomplete): delete EVERYTHING — the episode folder
+     *   from SAF, the cache dir, and remove from queue + store. Same as [cancelDownload].
+     *
+     * Per user decision: completed downloads are kept on disk when removed from the
+     * downloads page. Incomplete downloads are fully cleaned up.
+     */
     fun removeDownload(downloadId: String) {
-        Log.d(TAG, "removeDownload: → $downloadId")
-        _queue.value = _queue.value.filter { it.id != downloadId }
-        store.remove(downloadId)
-        refreshStatusMap()
+        val download = _queue.value.find { it.id == downloadId } ?: return
+        Log.d(TAG, "removeDownload: → $downloadId (status=${download.status})")
+
+        if (download.status == Download.State.DOWNLOADED) {
+            // Completed: keep the file, just remove from queue
+            Log.d(TAG, "removeDownload: completed — keeping file, removing from queue")
+            _queue.value = _queue.value.filter { it.id != downloadId }
+            store.remove(downloadId)
+            refreshStatusMap()
+        } else {
+            // Incomplete: delete everything (same as cancel)
+            Log.d(TAG, "removeDownload: incomplete — deleting all files")
+            cancelDownload(downloadId)
+        }
     }
 
-    /** Clear all completed downloads from the queue. */
+    /**
+     * Clear all completed downloads from the queue.
+     * Per user decision: this does NOT delete files (completed downloads are kept).
+     */
     fun clearCompleted() {
-        Log.d(TAG, "clearCompleted: → clearing completed downloads")
+        Log.d(TAG, "clearCompleted: → clearing completed downloads (keeping files)")
         _queue.value = _queue.value.filter { it.status != Download.State.DOWNLOADED }
         store.clearCompleted()
         refreshStatusMap()
