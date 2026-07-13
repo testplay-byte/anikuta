@@ -1655,3 +1655,23 @@ Issue H: Server/quality info not shown during download
 - Fix: Parse in resolve() instead of after completion
 
 Build: #331 SUCCESS on player-experiment @ 73b6264
+
+---
+Task ID: DL-FIXES-FFPROBE-SEGMENT-TRIM
+Agent: Z.ai Code (orchestrator)
+Task: Fix FFprobe returning 0 + change segment duration to 60s + trim muxed .mkv
+
+Issue F (FFprobe returning 0):
+- Root cause: disableRedirection() in download() also suppresses FFprobe output
+- Fix: Re-enable redirection before FFprobe, disable after
+
+Segment duration: 10s → 60s (user request):
+- Fewer files, better timestamp alignment, less frame ordering issues
+- Changed in SegmentDownloadEngine and DownloadManifest
+
+Duration trimming:
+- After muxing, if actual duration < 80% of estimated, re-mux with -t to trim
+- Fixes player showing 27min for 3:45 video
+- Fixes starts-at-5s / can't-seek-to-0s issue (padding)
+
+Build: #332 SUCCESS on player-experiment @ 54a7a5b
