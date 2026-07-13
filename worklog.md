@@ -1462,3 +1462,48 @@ Stage Summary:
 - Retry resumes from where it left off (not from beginning)
 - Size display correct after pause/resume and across multiple downloads
 - Ready for user testing
+
+---
+Task ID: DL-STATE-MGMT
+Agent: Z.ai Code (orchestrator)
+Task: Fix download state management — cancel/remove/clearCompleted + filesystem sync
+
+Work Log:
+- Analyzed 6 state management issues (G1-G6) in the download system
+- Got user confirmation on the desired behavior for each
+- Implemented fixes:
+
+G1+G2: cancelDownload() now deletes EVERYTHING
+- Deletes episode folder from SAF (.mkv, manifest, etc.)
+- Deletes cache dir (segments, subtitles, concat, tmp .mkv)
+- Removes from queue + store
+- Applies to ALL states
+
+G1: removeDownload() is conditional
+- DOWNLOADED: remove from queue only (KEEP file)
+- Incomplete: delete everything (same as cancel)
+
+G1: clearCompleted() does NOT delete files
+
+G3: Detail page shows green checkmark for on-disk episodes
+- Added DownloadProvider.listDownloadedEpisodes()
+- Added DetailViewModel.downloadedOnDisk StateFlow
+- DownloadButton checks BOTH queue status AND on-disk status
+- Queue states take priority over on-disk check
+
+G4: Downloads page shows "Remove" + "Delete file" for completed
+- Remove = keep file, remove from queue
+- Delete file = delete everything
+
+INIT OBSERVER: DetailViewModel observes downloadStatus and refreshes
+downloadedOnDisk when any download completes.
+
+Build: run #323 (SUCCESS) on player-experiment @ c63a858
+ntfy.sh notification sent to TASKISDONE.
+
+Stage Summary:
+- State management now properly synced between queue, filesystem, and UI
+- Cancel deletes everything; Remove keeps completed files
+- Detail page shows green checkmark for on-disk episodes even after queue removal
+- Downloads page has separate Remove/Delete file options for completed downloads
+- Ready for user testing
