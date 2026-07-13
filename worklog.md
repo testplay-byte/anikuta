@@ -1507,3 +1507,52 @@ Stage Summary:
 - Detail page shows green checkmark for on-disk episodes even after queue removal
 - Downloads page has separate Remove/Delete file options for completed downloads
 - Ready for user testing
+
+---
+Task ID: DL-QOL-H1-Q5
+Agent: Z.ai Code (orchestrator)
+Task: QoL improvements — H1-H4 bug fixes + Q1-Q5 features
+
+Work Log:
+- Analyzed codebase for quality-of-life improvements
+- Identified 4 bug fixes (H1-H4) and 5 quick wins (Q1-Q5)
+- Implemented ALL of them:
+
+BUG FIXES:
+H1: Tapping download on completed episode now plays it (was: re-enqueue)
+H2: Tapping download on error episode now retries (was: re-enqueue)
+H3: Tapping download on downloading/paused does nothing (was: re-enqueue)
+H4: Episode name mismatch — all state maps now keyed by episodeUrl (stable)
+    - .episode_url file written in each episode directory
+    - listDownloadedEpisodesWithUrls() reads .episode_url for matching
+    - Backward compatible: old dirs without .episode_url use dir name
+
+QUICK WINS:
+Q1: Cancel All button in downloads page top bar
+Q2: Retry All button (only shows when failures exist)
+Q3: Downloaded count badge on detail page ("5/12" next to episodes header)
+Q4: Long-press menu on download button (ModalBottomSheet):
+     - Downloaded: Play / Delete download / Remove from list
+     - Downloading: Cancel
+     - Paused: Resume / Cancel
+     - Error: Retry / Cancel
+     - Not downloaded: Download
+Q5: Download all button at top of episodes (only undownloaded episodes)
+
+NEW METHODS:
+- DownloadManager.cancelAll(), retryAll()
+- DetailViewModel.onDownloadButtonClick() — state-aware click handling
+- DetailViewModel.deleteDownloadedEpisode(), removeDownloadFromQueue(),
+  cancelDownloadForEpisode() — long-press menu actions
+- DownloadProvider.writeEpisodeUrlFile(), listDownloadedEpisodesWithUrls()
+
+Build: #324 FAILED (episodes→episodeList), #325 FAILED (missing imports),
+       #326 SUCCESS after adding Delete/Close/Refresh/combinedClickable imports
+
+Stage Summary:
+- All 9 improvements implemented and build verified
+- Download button is now state-aware (play/retry/resume/enqueue based on state)
+- Long-press menu provides full download management per episode
+- episodeUrl is the stable key — survives metadata enrichment name changes
+- Download all button + count badge improve bulk download UX
+- Cancel All + Retry All improve queue management
