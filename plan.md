@@ -160,13 +160,17 @@ coroutineScope {
 - **"Download all"** → deferred (will be in a 3-dots overflow menu at top-right of detail page, configured later)
 - **Configurable:** user can hide the button (use long-press only)
 
-### 2.2 Download button placement
-- **Default:** on the right side of the synopsis area in the detail page
-- **When synopsis is "below":** button moves to the left side
-- **Configurable** in detail settings
-- **Current placement (on episode rows) is incorrect** — user explicitly wants it changed
+### 2.2 Download button placement — **CLARIFIED**
 
-> **⚠️ Needs clarification:** Is this ONE download button in the synopsis area (for the current/next episode)? Or is it per-episode buttons that move to a different position? See Q1 in §6.
+**Per-episode download button** goes **inside each episode's description/synopsis area**, on the **right side**. NOT in the top anime synopsis — inside the **episode description**.
+
+- **When episode has a description/synopsis:** download button is placed inside the description area, on the right side, in a dedicated section
+- **When episode has NO description:** download button is placed inside the episode row at a consistent fallback position (top-right corner of the episode row) — this fallback is the SAME for all episodes without descriptions (constant, not dynamic)
+- **Configurable** in detail settings (user can choose placement / hide the button)
+- **Current placement (button rendered after the episode row) is incorrect** — must be moved INTO the episode row's description area
+- **This is temporary** — may be revisited in the future
+
+**Note:** The episode "synopsis" may be referred to as "episode description" — same thing. Each episode can optionally have a summary/description shown in its row.
 
 ### 2.3 FFmpeg muxing + subtitle handling
 - **v1 (now):** Mux video + audio + subtitles into one `.mkv` (current behavior)
@@ -539,85 +543,135 @@ Empty state:
 | `DownloadQueueItem` (rewrite) | Per-episode card with progress, size, speed, actions |
 | `DownloadEmptyState` (new) | Empty state with large icon + helpful text |
 
-### 5.5 Settings access
+### 5.5 Settings access — **redesigned per user feedback**
 
-Instead of a big `FilledTonalButton`, the settings should be accessible via:
-- A small **gear icon** in the top app bar (right side) — consistent with other settings subpages
-- This matches `SettingsSubpageScaffold`'s `actions` slot
+NOT a simple gear icon. The user wants a **prominent settings button** with:
+- **Rectangular shape** with **rounded edges**
+- **Background elements** (a tonal bar/container, not transparent)
+- **Depth effects** (shadow elevation + tonal elevation)
+- Visible "Settings" label + icon
 
----
-
-## 6. Open questions for user
-
-### Q1 — Download button placement (needs clarification)
-
-You said: "I wanted it to be on the right side of the synopsis."
-
-The synopsis area is at the top of the detail page (where anime info + cover art + synopsis are displayed). The episode list is below that. Currently, download buttons are on each episode row.
-
-Do you want:
-- **(a)** ONE download button in the synopsis area that downloads the current/next episode, PLUS per-episode buttons on the episode rows?
-- **(b)** Move the per-episode download buttons OFF the episode rows entirely, and have ONE download button in the synopsis area that opens a picker (which episode to download)?
-- **(c)** Keep per-episode download buttons on episode rows, but ALSO add a "Download all" button in the synopsis area?
-- **(d)** Something else?
-
-I need to understand exactly what "download button on the right side of the synopsis" means before I can design it.
-
-### Q2 — Segment duration
-
-For the resume-capable download (§3), I recommend **10-second segments**. This means:
-- A 24-minute episode = 144 segments
-- If interrupted, you re-download at most 10 seconds of video
-- Each segment file is ~2-3 MB
-
-Is 10 seconds OK, or would you prefer a different granularity (5s = more granular but more files, 30s = less granular but fewer files)?
-
-### Q3 — Console logging depth
-
-You mentioned "proper console logging for the current time being so we know what's happening." How detailed should the logs be?
-
-- **(a)** Minimal: just key milestones (download started, segment X done, download complete, errors)
-- **(b)** Moderate: milestones + FFmpeg command strings + progress every 10%
-- **(c)** Verbose: everything above + per-segment details + manifest reads/writes + timing info
-
-I recommend **(b)** for now — enough to debug issues without flooding logcat. We can switch to (a) once everything is stable.
-
-### Q4 — Phase sequencing
-
-Given the new requirements (resume architecture, modular redesign, UI redesign), the phases need re-sequencing. Here's my proposed order:
-
-1. **Phase 1 — Architecture restructure (no user-visible changes yet):** Split `DownloadWorker` into modular components (`DownloadEngine`, `DownloadManifest`, `ProgressTracker`, `DownloadNotifier`). Add `RESOLVING` + `PAUSED` states. Fix the reactive queue (B3). This is the foundation everything else builds on.
-
-2. **Phase 2 — Resume-capable download engine:** Implement `SegmentDownloadEngine` with manifest-based resume. Replace the current single-pass FFmpeg approach. Fix concurrency (B6). Add foreground service + notifications (B5, D2, D3).
-
-3. **Phase 3 — UI fixes:** Fix the stationary spinner (B1), add verification before download (B4), fix progress display (B2). Move download button to synopsis area. Add long-press menu.
-
-4. **Phase 4 — Downloads page UI redesign:** Rewrite `DownloadQueueScreen` with Material 3 Expressive design. Add pause/resume, file size, speed indicator.
-
-5. **Phase 5 — Polish:** Configurable button placement, DownloadCache, network-change handling, storage-revoked handling.
-
-6. **Phase 6 (v2):** Auto-download, delete-after-watching, subtitle handling options, three-dots overflow menu.
-
-Do you agree with this order? The key principle: **architecture first, then features, then polish.** We can't build a resume-capable UI on top of a broken foundation.
-
-### Q5 — Should I wait for console logs?
-
-You said "I will provide you the console logs." Should I wait for you to provide logs from the current broken build before I start Phase 1, or should I proceed with the architecture restructure (which doesn't need logs — it's new code)?
-
-The logs would be most useful for Phase 3 (debugging the existing bugs B1-B4). Phase 1-2 are new architecture/engine code that doesn't depend on the current buggy behavior.
+**Implementation approach:**
+- Use a `Surface` or `FilledTonalButton` with:
+  - `RoundedCornerShape(8-12dp)`
+  - `tonalElevation = 2-3dp` (depth)
+  - `shadowElevation = 1-2dp` (shadow)
+  - Tonal background color (e.g., `surfaceContainerHigh` or `primaryContainer` with low alpha)
+  - Settings icon + "Settings" text
+- Placed in the top bar's action area (right side)
+- This gives it a distinct, tactile, premium feel — not a flat icon button
 
 ---
 
-## 7. Rules & principles (unchanged)
+## 6. Confirmed decisions (all questions answered)
 
-### 7.1 Decision-making rules
+### Q1 — Download button placement ✅ ANSWERED
+
+**Clarified:** The download button goes **inside each episode's description/synopsis area**, on the right side — NOT in the top anime synopsis.
+
+- Each episode has its own description (sometimes called synopsis/summary)
+- Download button is placed inside that episode description area, right side, in a dedicated section
+- If an episode has NO description → fallback to a consistent position (top-right of the episode row) — same for all episodes without descriptions
+- This is temporary, may be revisited later
+- See §2.2 for full details
+
+### Q2 — Segment duration ✅ ANSWERED
+
+**Confirmed: 10-second segments.**
+- 24-minute episode = 144 segments
+- If interrupted, re-download at most 10 seconds
+- Each segment ~2-3 MB
+
+### Q3 — Console logging depth ✅ ANSWERED
+
+**Confirmed: Verbose (option c).**
+- Everything: key milestones + FFmpeg command strings + per-segment details + manifest reads/writes + timing info
+- Full detail for maximum error management and verification capability
+- Log tag: `DownloadEngine`, `DownloadManifest`, `DownloadWorker`, etc. (per-module tags for easy filtering)
+
+### Q4 — Phase sequencing ✅ CONFIRMED
+
+**User approved the proposed order:**
+1. Phase 1 — Architecture restructure (modular split, new states, reactive queue fix)
+2. Phase 2 — Resume-capable segment engine + foreground service + notifications
+3. Phase 3 — UI bug fixes (B1-B4) + download button move to episode description + long-press menu
+4. Phase 4 — Downloads page UI redesign (Material 3 Expressive)
+5. Phase 5 — Polish (configurable placement, DownloadCache, network handling, storage-revoked)
+6. Phase 6 (v2) — Auto-download, delete-after-watching, subtitle options, overflow menu
+
+**Principle: architecture first, then features, then polish.**
+
+### Q5 — Console logs ✅ DECIDED
+
+**Decision: Proceed with Phase 1 without waiting for current logs.**
+
+Reasoning:
+- The bugs (B1-B4) have already been root-caused from code analysis — current logs would mostly confirm symptoms we already understand
+- Phase 1 (architecture restructure) and Phase 2 (new segment engine) are new code that doesn't depend on the current buggy behavior
+- The most useful logs will come AFTER the new architecture is in place — to verify the new implementation works
+- User is welcome to share logs at any point if they want me to look at something specific
+- After Phase 2, I'll ask the user to test and share fresh logs from the new implementation
+
+---
+
+## 7. Segment-based progress (confirmed approach)
+
+The user suggested using segment count as a progress indicator. This aligns exactly with the plan in §3.3:
+
+**Progress = (completed segments / total segments) × 100**
+
+This is a good approach because:
+- **Accurate** — not time-estimated (fixes bug B2's hardcoded 24-minute issue)
+- **Granular** — 144 segments for a 24-min episode ≈ 0.7% per segment
+- **Naturally reflects resume state** — skipped (already-done) segments count as complete
+- **Doesn't depend on FFmpeg statistics callbacks** — which were unreliable (bug B2 root cause #2)
+
+**Phase-by-phase progress display:**
+| State | Progress display |
+|---|---|
+| RESOLVING | Indeterminate spinner ("Checking...") — total segments unknown |
+| DOWNLOADING | Determinate: completedSegments / totalSegments × 100 |
+| PAUSED | Last known progress %, greyed out |
+| MUXING | Indeterminate spinner ("Finalizing...") — segments done, muxing in progress |
+| DOWNLOADED | 100%, green checkmark |
+| ERROR | 0% or last known %, red error indicator |
+
+---
+
+## 8. Notifications (confirmed requirement)
+
+The user explicitly requested notification capability with progress display. This is already included in the plan:
+
+- **Foreground service notification** (Phase 2) — required for Android 12+ background downloads
+  - Shows download progress (segment-based %)
+  - Shows current episode + anime title
+  - Tap to open the downloads queue page
+- **Error notification** (Phase 2) — when a download fails after all retries
+  - Shows error message + episode name
+  - "Retry" action button
+- **Completion notification** (Phase 2) — optional, when a download finishes
+  - "Download complete: <episode name>"
+  - Tap to play the episode
+
+**Notification channels** (created in `App.onCreate()`):
+- `CHANNEL_DOWNLOADER_PROGRESS` — low importance (progress updates)
+- `CHANNEL_DOWNLOADER_ERROR` — high importance (errors)
+- `CHANNEL_DOWNLOADER_COMPLETE` — default importance (completions)
+
+**Implementation:** `DownloadNotifier.kt` (new file, Phase 2) wraps all notification logic. `DownloadWorker` calls it to update the foreground service notification during download.
+
+---
+
+## 9. Rules & principles (unchanged)
+
+### 9.1 Decision-making rules
 1. **No rash decisions** — analyze before acting
 2. **No decisions without proper understanding** — research first, confirm with user on big changes
 3. **No decisions without verification** — verify assumptions against the codebase
 4. **One issue at a time** — verify, fix, document, verify again
 5. **Build incrementally** — each phase should produce a testable APK
 
-### 7.2 Error-handling protocol (when something breaks)
+### 9.2 Error-handling protocol (when something breaks)
 1. **Determine what the error is** — reproduce, read logs, understand the symptom
 2. **Determine how it is affecting us** — what breaks for the user? Severity?
 3. **Determine the root cause** — not the symptom, the actual cause
@@ -625,29 +679,65 @@ The logs would be most useful for Phase 3 (debugging the existing bugs B1-B4). P
 5. **Plan the fix** — write down what files to change, what the change is, how to verify
 6. **Execute the fix** — implement, then verify (build + test)
 
-### 7.3 Branch strategy
+### 9.3 Branch strategy
 - All download work on `player-experiment` — **never push code to `main`**
 - `main` is for documentation only (KNOWN-ISSUES.md, etc.)
 - Merge to `main` only when user approves + build is verified
 
-### 7.4 Build & verification
+### 9.4 Build & verification
 - **Build:** GitHub Actions (triggered on push to `player-experiment`)
 - **Notification:** `ntfy.sh` topic `TASKISDONE` after build completes
 - **Verification:** After each phase, build must succeed + APK must install without crashing
 
-### 7.5 Documentation
+### 9.5 Documentation
 - Update `WORKLOG.md` / `worklog.md` after each completed task
 - Keep this `plan.md` updated as decisions change
 - New known issues → add to `KNOWN-ISSUES.md` (on `main`)
 
 ---
 
-## 8. What happens next
+## 10. What happens next
 
-1. **User reviews this plan** and answers Q1-Q5
-2. **User confirms** the phase sequencing
-3. **I begin Phase 1** (architecture restructure) — one module at a time, following the rules
-4. **After each task:** build → verify → `ntfy.sh` → update worklog → move to next task
-5. **After each phase:** user reviews → approve or adjust → move to next phase
+All questions are answered. The plan is complete.
 
-**I will NOT start implementing until the user confirms the plan and answers the open questions.**
+**Awaiting user's final go-ahead.** Once confirmed:
+
+1. **I begin Phase 1** (architecture restructure) — one module at a time, following the rules:
+   - Create `DownloadEngine` interface
+   - Create `DownloadManifest` (manifest read/write/validate)
+   - Create `ProgressTracker` (segment-based progress)
+   - Create `DownloadNotifier` (notification wrapper)
+   - Add `RESOLVING` + `PAUSED` + `MUXING` states to `Download.kt`
+   - Fix the reactive queue (B3) — make status/progress changes propagate to all observers
+   - Split `DownloadWorker` into a thin WorkManager wrapper that delegates to `DownloadEngine`
+   - Register new modules in DI
+   - Verbose logging throughout (per-module log tags)
+
+2. **After each task:** build → verify → `ntfy.sh` → update worklog → move to next task
+
+3. **After Phase 1 complete:** user reviews → approve or adjust → move to Phase 2
+
+4. **Phase 2** (segment engine + foreground service + notifications) → test → user shares fresh logs
+
+**I will NOT start implementing until the user gives the final go-ahead.**
+
+---
+
+## 11. Summary of confirmed decisions
+
+| Decision | Confirmed value |
+|---|---|
+| Download button placement | Inside each episode's description area, right side; fallback to top-right of episode row when no description |
+| Segment duration | 10 seconds |
+| Console logging | Verbose (everything, per-module tags) |
+| Phase sequencing | Architecture → Engine → UI fixes → UI redesign → Polish → v2 |
+| Resume capability | 100% required (segment-based with manifest) |
+| Modular architecture | Required (single-responsibility modules) |
+| Downloads page UI | Material 3 Expressive, grouped by anime, prominent settings button with depth |
+| Notifications | Foreground service progress + error + completion notifications |
+| Progress indicator | Segment-based (completed/total × 100) |
+| Concurrency | Default 2, configurable 1-4 |
+| Auto-download | Deferred to v2 |
+| Delete after watching | Deferred (no auto-delete, confirm dialog, 10-20s undo) |
+| Subtitle handling options | Deferred to v2 |
+| Console logs from user | Not needed now; will request fresh logs after Phase 2 |
