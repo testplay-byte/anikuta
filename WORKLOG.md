@@ -396,3 +396,23 @@ Stage Summary:
 - Downloads now: enqueue → resolve video URL → FFmpeg mux (video + subtitles → .mkv) → save to SAF folder.
 - Offline playback: content:// URI → ParcelFileDescriptor → fd:// → MPV.
 - All on player-experiment branch @ 8d118fe. Not yet merged to main.
+
+---
+Task ID: DOWNLOAD-FEEDBACK
+Agent: Z.ai Code
+Task: Fix download UI feedback — live progress + button states + offline playback
+
+Work Log:
+- FFmpeg statistics callback: enabled FFmpegKitConfig.enableStatisticsCallback before execute.
+  Uses statistics.time (microseconds) vs estimated 24-min duration to calculate %.
+  Updates download.progress + downloadStore in real-time. Downloads page now shows moving progress bar.
+- Download button live state: DetailViewModel exposes downloadStatus StateFlow<Map<String, Download.State>>.
+  New DownloadButton composable: spinner (downloading) / DownloadDone (green, done) / Error (red, failed) / Download (gray, default).
+  Both episode rendering paths use DownloadButton with live state.
+- Offline playback: playEpisode() checks if episode is downloaded FIRST. If yes, builds PlayRequest
+  with local content:// URI (skips source resolution entirely). PlayerActivity resolves via fd://.
+Stage Summary:
+- Downloads now show live progress (0% → 100%)
+- Download button animates: spinner while downloading, ✓ when done, ! on error
+- Downloaded episodes play instantly from local file (no source resolution)
+- All on player-experiment @ 07260df
