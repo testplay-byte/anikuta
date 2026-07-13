@@ -1316,3 +1316,20 @@ Stage Summary:
 - Features added: foreground service, notification channels, pause/resume, segment-based resume, verbose logging
 - Phase 1 (architecture) + Phase 2 (engine + foreground service) complete
 - Next: user tests + provides console logs → Phase 3 (UI fixes) + Phase 4 (UI redesign)
+
+### Build results
+- Build #314 (f232096): FAILED — 5 compile errors (formatBytes companion, launch import, Manifest nullability, FFprobeKit API, MANIFEST_FILE visibility)
+- Build #315 (fe9c97e): FAILED — 1 remaining error (MANIFEST_FILE private in companion)
+- Build #316 (f6d1665): ✓ SUCCESS — all compile errors fixed
+- ntfy.sh notification sent to TASKISDONE
+- APK available in GitHub Actions artifacts (anikuta-debug-arm64-v8a, 90-day retention)
+
+### What's ready for testing
+- Modular download architecture (DownloadEngine, DownloadManifest, ProgressTracker, DownloadNotifier, SegmentDownloadEngine)
+- Segment-based resume engine (10-second segments, manifest.json tracking)
+- Foreground service (downloads survive app backgrounding on Android 12+)
+- Notification channels (progress, error, complete)
+- Concurrency fix (downloads run in parallel coroutines)
+- Reactive status propagation (B3 fix — status changes show in UI immediately)
+- Stationary spinner fix (B1 — indeterminate spinner during QUEUE/RESOLVING/MUXING)
+- Verbose logging throughout (per-module tags for easy logcat filtering)
