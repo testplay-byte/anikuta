@@ -798,13 +798,18 @@ class DetailViewModel(
 
     /**
      * Download status per episode name. Observed by the UI to update download button icons.
-     *
-     * Uses [DownloadManager.downloadStatusMap] which is reactive — it re-emits
-     * whenever any download's statusFlow changes (fixes bug B3 where status
-     * changes didn't propagate to the UI without re-entering the page).
+     * Reactive — re-emits whenever any download's statusFlow changes (fixes B3).
      */
     val downloadStatus: kotlinx.coroutines.flow.StateFlow<Map<String, app.anikuta.download.Download.State>> =
         downloadManager?.downloadStatusMap
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
+
+    /**
+     * Download progress per episode name (0-100). Observed by the UI to show
+     * determinate progress on the download button (fixes C5).
+     */
+    val downloadProgress: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> =
+        downloadManager?.downloadProgressMap
             ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
 
     /**

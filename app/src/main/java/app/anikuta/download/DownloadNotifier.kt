@@ -32,12 +32,20 @@ class DownloadNotifier(
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
+    /** Tracks whether channels have been created (avoids repeated createNotificationChannel calls). */
+    @Volatile
+    private var channelsCreated = false
+
     /**
      * Create notification channels. Called from App.onCreate and lazily
-     * before posting any notification.
+     * before posting any notification. Only creates once — subsequent calls are no-ops.
      */
     fun createChannels() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (channelsCreated) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            channelsCreated = true
+            return
+        }
 
         val channels = listOf(
             NotificationChannel(
@@ -66,8 +74,9 @@ class DownloadNotifier(
 
         channels.forEach { channel ->
             notificationManager.createNotificationChannel(channel)
-            Log.d(TAG, "createChannels: ✓ created channel '${channel.id}'")
         }
+        channelsCreated = true
+        Log.d(TAG, "createChannels: ✓ created ${channels.size} channels")
     }
 
     /**

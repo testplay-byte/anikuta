@@ -63,12 +63,20 @@ class DownloadStore(
 
     fun getAll(): List<DownloadStoreEntry> = queuePref.get()
 
-    fun add(entry: DownloadStoreEntry) {
+    /**
+     * Add an entry to the store. Deduplicates by episodeUrl.
+     * @return true if the entry was added, false if it was a duplicate.
+     */
+    fun add(entry: DownloadStoreEntry): Boolean {
         val list = queuePref.get().toMutableList()
-        if (list.none { it.episodeUrl == entry.episodeUrl }) {
+        return if (list.none { it.episodeUrl == entry.episodeUrl }) {
             list.add(entry)
             queuePref.set(list)
             Log.d(TAG, "Added download: ${entry.episodeName}")
+            true
+        } else {
+            Log.d(TAG, "Skipped duplicate download: ${entry.episodeName}")
+            false
         }
     }
 

@@ -58,22 +58,24 @@ class DownloadManager(
      * Reactive map of episodeName → download status.
      * Re-emits whenever any download's status changes (fixes bug B3).
      * Used by DetailViewModel for the download button state.
-     *
-     * Implementation: a MutableStateFlow that's updated by [onStatusChanged]
-     * whenever a download's status changes. This avoids the complexity of
-     * combining per-download flows (which requires flatMapLatest +
-     * ExperimentalCoroutinesApi).
      */
     private val _downloadStatusMap = MutableStateFlow<Map<String, Download.State>>(emptyMap())
     val downloadStatusMap: StateFlow<Map<String, Download.State>> = _downloadStatusMap.asStateFlow()
 
     /**
-     * Called internally when a download's status changes to refresh the
-     * downloadStatusMap. The Download objects' statusFlow is observed
-     * in [addToLiveQueue].
+     * Reactive map of episodeName → download progress (0-100).
+     * Re-emits whenever any download's progress changes.
+     * Used by DetailViewModel to show determinate progress on the download button (fixes C5).
+     */
+    private val _downloadProgressMap = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val downloadProgressMap: StateFlow<Map<String, Int>> = _downloadProgressMap.asStateFlow()
+
+    /**
+     * Refresh both status and progress maps from the current queue state.
      */
     private fun refreshStatusMap() {
         _downloadStatusMap.value = _queue.value.associate { it.episodeName to it.status }
+        _downloadProgressMap.value = _queue.value.associate { it.episodeName to it.progress }
     }
 
     init {
@@ -107,11 +109,16 @@ class DownloadManager(
             episodeNumber = episode.episode_number,
         )
 
-        store.add(entry)
-        addToLiveQueue(entry)
-        startWork()
-
-        Log.d(TAG, "enqueueDownload: ✓ enqueued ${episode.name} (id=$downloadId)")
+        // Dedup check: only add to live queue if the store actually added it
+        // (fixes C2 — duplicate downloads when tapping the spinning circle)
+        val wasAdded = store.add(entry)
+        if (wasAdded) {
+            addToLiveQueue(entry)
+            startWork()
+            Log.d(TAG, "enqueueDownload: ✓ enqueued ${episode.name} (id=$downloadId)")
+        } else {
+            Log.d(TAG, "enqueueDownload: ⏭ skipped duplicate — ${episode.name} already in queue")
+        }
         return downloadId
     }
 
@@ -150,12 +157,13 @@ class DownloadManager(
     /** Cancel a download + remove from queue. */
     fun cancelDownload(downloadId: String) {
         Log.d(TAG, "cancelDownload: → $downloadId")
+        // Set status to NOT_DOWNLOADED so the statusFlow emits (fixes C3 — stuck spinner)
         _queue.value.find { it.id == downloadId }?.let { download ->
-            // The engine's cancel will be handled by the worker
-            // For now, just remove from queue + store
+            download.status = Download.State.NOT_DOWNLOADED
         }
         _queue.value = _queue.value.filter { it.id != downloadId }
         store.remove(downloadId)
+        refreshStatusMap()
         Log.d(TAG, "cancelDownload: ✓ $downloadId")
     }
 
@@ -224,6 +232,7 @@ class DownloadManager(
         Log.d(TAG, "removeDownload: → $downloadId")
         _queue.value = _queue.value.filter { it.id != downloadId }
         store.remove(downloadId)
+        refreshStatusMap()
     }
 
     /** Clear all completed downloads from the queue. */
@@ -231,6 +240,7 @@ class DownloadManager(
         Log.d(TAG, "clearCompleted: → clearing completed downloads")
         _queue.value = _queue.value.filter { it.status != Download.State.DOWNLOADED }
         store.clearCompleted()
+        refreshStatusMap()
     }
 
     /** Check if an episode is downloaded (for offline playback). */
@@ -302,12 +312,14 @@ class DownloadManager(
         _queue.value = _queue.value + download
         refreshStatusMap()
 
-        // Observe this download's statusFlow and update the status map when it changes.
+        // Observe this download's statusFlow AND progressFlow and update the maps when they change.
         // This is the fix for bug B3 — status changes now propagate to the UI reactively.
+        // Also fixes C5 — progress changes propagate for determinate progress display.
         GlobalScope.launch {
-            download.statusFlow.collect { _ ->
-                refreshStatusMap()
-            }
+            download.statusFlow.collect { _ -> refreshStatusMap() }
+        }
+        GlobalScope.launch {
+            download.progressFlow.collect { _ -> refreshStatusMap() }
         }
     }
 

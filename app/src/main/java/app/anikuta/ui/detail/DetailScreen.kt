@@ -62,6 +62,7 @@ fun DetailScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val isEnrichingMetadata by viewModel.isEnrichingMetadata.collectAsState()
     val downloadStatus by viewModel.downloadStatus.collectAsState()
+    val downloadProgress by viewModel.downloadProgress.collectAsState()
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
 
@@ -387,6 +388,7 @@ fun DetailScreen(
                                 DownloadButton(
                                     episodeName = episode.name,
                                     downloadStatus = downloadStatus,
+                                    downloadProgress = downloadProgress,
                                     onDownload = { viewModel.downloadEpisode(episode) },
                                 )
                             }
@@ -516,6 +518,7 @@ fun DetailScreen(
                                                 DownloadButton(
                                                     episodeName = episode.name,
                                                     downloadStatus = downloadStatus,
+                                                    downloadProgress = downloadProgress,
                                                     onDownload = { viewModel.downloadEpisode(episode) },
                                                 )
                                             }
@@ -728,16 +731,17 @@ private fun InfoCard(title: String, body: String) {
 private fun DownloadButton(
     episodeName: String,
     downloadStatus: Map<String, app.anikuta.download.Download.State>,
+    downloadProgress: Map<String, Int>,
     onDownload: () -> Unit,
 ) {
     val status = downloadStatus[episodeName]
+    val progress = downloadProgress[episodeName] ?: 0
     when (status) {
         app.anikuta.download.Download.State.DOWNLOADING -> {
-            // Determinate spinner — shows actual progress
-            // For now, use indeterminate since per-download progress flow
-            // isn't wired to this composable yet (Phase 3 will add it)
+            // Determinate spinner showing actual progress % (fixes C5)
             IconButton(onClick = onDownload) {
                 CircularProgressIndicator(
+                    progress = { progress / 100f },
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
                 )
@@ -751,7 +755,6 @@ private fun DownloadButton(
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
-                    // NO progress parameter = indeterminate (spinning)
                 )
             }
         }
