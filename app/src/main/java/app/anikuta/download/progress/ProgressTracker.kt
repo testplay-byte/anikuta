@@ -133,19 +133,19 @@ class ProgressTracker {
         val byteDiff = last.bytes - first.bytes
         return if (timeDiff > 0) byteDiff * 1000 / timeDiff else 0
     }
+}
 
-    companion object {
-        fun formatBytes(bytes: Long): String {
-            return when {
-                bytes < 1024 -> "${bytes} B"
-                bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
-                bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
-                else -> "%.2f GB".format(bytes / (1024.0 * 1024 * 1024))
-            }
-        }
-
-        fun formatSpeed(bytesPerSec: Long): String {
-            return formatBytes(bytesPerSec) + "/s"
-        }
+// Top-level utility functions for formatting bytes/speed.
+// Used by ProgressTracker, DownloadNotifier, SegmentDownloadEngine, and the UI.
+fun formatBytes(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "${bytes} B"
+        bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
+        bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
+        else -> "%.2f GB".format(bytes / (1024.0 * 1024 * 1024))
     }
+}
+
+fun formatSpeed(bytesPerSec: Long): String {
+    return formatBytes(bytesPerSec) + "/s"
 }

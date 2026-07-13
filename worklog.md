@@ -1270,3 +1270,49 @@ Plus supporting files (PlayerObserver, PlayerEnums, VideoTitleParser)
 
 ### Build
 - Build #241 (8450876): SUCCESS
+
+---
+Task ID: DL-PHASE1-2
+Agent: Z.ai Code (orchestrator)
+Task: Download system modular architecture + segment-based resume engine + foreground service + notifications
+
+Work Log:
+- Read all existing download files on player-experiment branch to understand current state
+- Analyzed 6 bugs (B1-B6) with root causes from code analysis
+- Created new modular architecture:
+  1. DownloadEngine.kt — interface for download strategies (start/pause/resume/cancel)
+  2. DownloadManifest.kt — manifest JSON read/write/validate for segment-level resume tracking
+  3. ProgressTracker.kt — segment-based progress (completed/total × 100) + speed tracking
+  4. DownloadNotifier.kt — notification wrapper (progress/error/complete)
+  5. SegmentDownloadEngine.kt — 10-second segment download with manifest-based resume
+- Added new states to Download.kt: RESOLVING, PAUSED, MUXING (plus speedFlow)
+- Fixed B1 (stationary spinner): removed progress={0.3f} from QUEUE state, added new state handling
+- Fixed B3 (reactive queue): DownloadManager.downloadStatusMap observes per-download statusFlow
+- Fixed B6 (concurrency): DownloadWorker uses coroutineScope + async + Semaphore.withPermit
+- Added foreground service: setForeground() with FOREGROUND_SERVICE_TYPE_DATA_SYNC
+- Added permissions: FOREGROUND_SERVICE + FOREGROUND_SERVICE_DATA_SYNC in AndroidManifest.xml
+- Created notification channels in App.kt (progress/error/complete)
+- Added pause/resume to DownloadManager (pauseDownload, resumeDownload, pauseAll, resumeAll)
+- Registered all new modules in AppModule.kt DI
+- Verbose logging throughout (per-module tags)
+- Updated DetailViewModel to use downloadStatusMap (reactive)
+- Updated DetailScreen DownloadButton with all new states
+
+Segment-based resume architecture:
+- Videos split into 10-second segments (144 segments for 24-min episode)
+- Each segment downloaded via FFmpeg: -ss <startTime> -t 10 -i <url> -c copy -f mpegts
+- Manifest.json tracks per-segment state (pending/downloading/done/partial/error)
+- On resume: skip "done" segments, delete "partial" segments, download "pending" ones
+- After all segments done: FFmpeg concat + mux subtitles into final .mkv
+- Manifest written atomically (write to .tmp, then rename)
+
+Build: run #314 triggered on player-experiment @ f232096
+Waiting for build result...
+
+Stage Summary:
+- 5 new files created (DownloadEngine, DownloadManifest, ProgressTracker, DownloadNotifier, SegmentDownloadEngine)
+- 8 existing files modified (Download.kt, DownloadManager.kt, DownloadWorker.kt, App.kt, AndroidManifest.xml, Notifications.kt, AppModule.kt, DetailViewModel.kt, DetailScreen.kt)
+- Bugs fixed: B1 (stationary spinner), B3 (reactive queue), B6 (concurrency)
+- Features added: foreground service, notification channels, pause/resume, segment-based resume, verbose logging
+- Phase 1 (architecture) + Phase 2 (engine + foreground service) complete
+- Next: user tests + provides console logs → Phase 3 (UI fixes) + Phase 4 (UI redesign)

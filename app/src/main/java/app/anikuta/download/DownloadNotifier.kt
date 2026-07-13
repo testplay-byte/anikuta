@@ -10,7 +10,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import app.anikuta.MainActivity
 import app.anikuta.data.notification.Notifications
-import app.anikuta.download.progress.ProgressTracker
+import app.anikuta.download.progress.formatSpeed
 
 /**
  * Manages download notifications: progress (foreground service),
@@ -103,7 +103,7 @@ class DownloadNotifier(
 
         // Speed display
         val speedText = if (activeDownloads.size == 1 && primary.speed > 0) {
-            " · ${ProgressTracker.formatSpeed(primary.speed)}"
+            " · ${formatSpeed(primary.speed)}"
         } else ""
 
         val tapIntent = PendingIntent.getActivity(

@@ -9,9 +9,11 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkManager
 import app.anikuta.download.engine.DownloadEngine
 import app.anikuta.source.api.model.SEpisode
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -302,11 +304,9 @@ class DownloadManager(
 
         // Observe this download's statusFlow and update the status map when it changes.
         // This is the fix for bug B3 — status changes now propagate to the UI reactively.
-        download.statusFlow.let { flow ->
-            kotlinx.coroutines.GlobalScope.launch {
-                flow.collect { _ ->
-                    refreshStatusMap()
-                }
+        GlobalScope.launch {
+            download.statusFlow.collect { _ ->
+                refreshStatusMap()
             }
         }
     }

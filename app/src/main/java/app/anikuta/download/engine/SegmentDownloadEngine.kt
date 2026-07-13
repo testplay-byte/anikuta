@@ -6,6 +6,7 @@ import app.anikuta.download.Download
 import app.anikuta.download.DownloadProvider
 import app.anikuta.download.DownloadVideoResolver
 import app.anikuta.download.progress.ProgressTracker
+import app.anikuta.download.progress.formatBytes
 import app.anikuta.util.storage.toFFmpegString
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.FFmpegKitConfig
@@ -121,17 +122,16 @@ class SegmentDownloadEngine(
         val contentLength = getContentLength(video)
         if (contentLength > 0) {
             progressTracker.setTotalSize(download, contentLength)
-            Log.d(TAG, "download: Content-Length = ${ProgressTracker.formatBytes(contentLength)}")
+            Log.d(TAG, "download: Content-Length = ${formatBytes(contentLength)}")
         } else {
             // Estimate from duration (average anime bitrate ~2 Mbps)
             val estimated = durationMs * 250 // ~250 KB/sec ≈ 2 Mbps
             progressTracker.setTotalSize(download, estimated)
-            Log.d(TAG, "download: no Content-Length, estimated = ${ProgressTracker.formatBytes(estimated)}")
+            Log.d(TAG, "download: no Content-Length, estimated = ${formatBytes(estimated)}")
         }
 
-        // Load or create manifest
-        var manifest = manifestManager.read(download)
-        if (manifest == null) {
+        // Load or create manifest (use val + elvis to ensure non-null after this point)
+        var manifest: DownloadManifest.Manifest = manifestManager.read(download) ?: run {
             // Fresh download — create manifest
             val subtitleStates = video.subtitleTracks.mapIndexed { i, track ->
                 DownloadManifest.SubtitleState(
@@ -141,19 +141,21 @@ class SegmentDownloadEngine(
                     fileName = "sub_${i}_${track.lang.ifBlank { "und" }}.vtt",
                 )
             }
-            manifest = manifestManager.createFresh(
+            val fresh = manifestManager.createFresh(
                 download = download,
                 videoUrl = video.videoUrl,
                 totalDurationMs = durationMs,
                 subtitles = subtitleStates,
                 totalSizeBytes = if (contentLength > 0) contentLength else -1L,
             )
-            manifestManager.write(download, manifest)
+            manifestManager.write(download, fresh)
             Log.d(TAG, "download: ✓ fresh manifest created")
-        } else {
-            Log.d(TAG, "download: ✓ existing manifest loaded — resuming from segment " +
-                "${manifest.segments.indexOfFirst { it.status != DownloadManifest.SegmentStatus.DONE }.let { if (it < 0) -1 else it }}")
+            fresh
         }
+
+        Log.d(TAG, "download: manifest loaded — ${manifest.totalSegments} segments, " +
+            "${manifestManager.getCompletedSegmentCount(manifest)} done, resuming from segment " +
+            "${manifest.segments.indexOfFirst { it.status != DownloadManifest.SegmentStatus.DONE }.let { if (it < 0) -1 else it }}")
 
         // Update progress from manifest state (shows completed segments on resume)
         progressTracker.updateFromManifest(download, manifest)
@@ -195,7 +197,7 @@ class SegmentDownloadEngine(
                 manifestManager.write(download, manifest)
                 progressTracker.updateFromManifest(download, manifest)
                 Log.d(TAG, "download: ✓ segment ${segment.index}/${manifest.totalSegments} done " +
-                    "(${ProgressTracker.formatBytes(segmentResult.sizeBytes)})")
+                    "(${formatBytes(segmentResult.sizeBytes)})")
             } else {
                 manifest = manifestManager.markSegmentPartial(manifest, segment.index)
                 manifestManager.write(download, manifest)
@@ -532,7 +534,7 @@ class SegmentDownloadEngine(
         val session = FFprobeKit.execute(cmd)
         val output = session.output?.trim()
 
-        if (session.returnCode == ReturnCode.success() && !output.isNullOrEmpty()) {
+        if (ReturnCode.isSuccess(session.returnCode) && !output.isNullOrEmpty()) {
             val durationSec = output.toDoubleOrNull() ?: 0.0
             val durationMs = (durationSec * 1000).toLong()
             Log.d(TAG, "getVideoDurationMs: ✓ duration=${durationMs}ms")
@@ -580,7 +582,7 @@ class SegmentDownloadEngine(
             val stat = android.os.StatFs(context.filesDir.path)
             val freeBytes = stat.availableBlocksLong * stat.blockSizeLong
             val hasSpace = freeBytes > MIN_DISK_SPACE_MB * 1024 * 1024
-            Log.v(TAG, "hasMinDiskSpace: free=${ProgressTracker.formatBytes(freeBytes)}, min=${MIN_DISK_SPACE_MB}MB → $hasSpace")
+            Log.v(TAG, "hasMinDiskSpace: free=${formatBytes(freeBytes)}, min=${MIN_DISK_SPACE_MB}MB → $hasSpace")
             hasSpace
         } catch (e: Exception) {
             Log.w(TAG, "hasMinDiskSpace: ⚠ could not check: ${e.message}")
