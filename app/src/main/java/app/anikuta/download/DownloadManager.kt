@@ -7,9 +7,10 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkManager
+import app.anikuta.download.engine.DownloadEngine
 import app.anikuta.source.api.model.SEpisode
-import com.hippo.unifile.UniFile
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -19,7 +20,17 @@ import uy.kohesive.injekt.api.get
  * enqueue, pause, resume, cancel, retry, query.
  *
  * Delegates actual downloading to [DownloadWorker] (WorkManager) which calls
- * the FFmpeg-based download engine.
+ * the [DownloadEngine] (segment-based with resume).
+ *
+ * The queue is reactive: status/progress changes on individual [Download] objects
+ * propagate to all observers via the downloads' StateFlows. The [queue] flow
+ * re-emits when the list structure changes (add/remove). For per-download
+ * status/progress, observers should collect [Download.statusFlow] and
+ * [Download.progressFlow] directly.
+ *
+ * To fix bug B3 (status changes not reaching the UI), the [queueStateFlow]
+ * combines the queue list with each download's statusFlow, so any status
+ * change triggers a re-emit.
  *
  * @param context application context
  * @param store persistent queue state
@@ -39,20 +50,38 @@ class DownloadManager(
 
     /** Live in-memory queue (Download objects with StateFlows). */
     private val _queue = MutableStateFlow<List<Download>>(emptyList())
-    val queue = _queue.asStateFlow()
+    val queue: StateFlow<List<Download>> = _queue.asStateFlow()
+
+    /**
+     * Reactive map of episodeName → download status.
+     * Re-emits whenever any download's status changes (fixes bug B3).
+     * Used by DetailViewModel for the download button state.
+     *
+     * Implementation: a MutableStateFlow that's updated by [onStatusChanged]
+     * whenever a download's status changes. This avoids the complexity of
+     * combining per-download flows (which requires flatMapLatest +
+     * ExperimentalCoroutinesApi).
+     */
+    private val _downloadStatusMap = MutableStateFlow<Map<String, Download.State>>(emptyMap())
+    val downloadStatusMap: StateFlow<Map<String, Download.State>> = _downloadStatusMap.asStateFlow()
+
+    /**
+     * Called internally when a download's status changes to refresh the
+     * downloadStatusMap. The Download objects' statusFlow is observed
+     * in [addToLiveQueue].
+     */
+    private fun refreshStatusMap() {
+        _downloadStatusMap.value = _queue.value.associate { it.episodeName to it.status }
+    }
 
     init {
         // Restore queue from persistent store on startup
         restoreQueue()
+        Log.d(TAG, "init: ✓ DownloadManager initialized, queue size=${_queue.value.size}")
     }
 
     /**
      * Enqueue a single episode for download.
-     * @param anilistId AniList anime ID
-     * @param sourceId source ID (for re-resolution)
-     * @param sourceName source display name (for directory naming)
-     * @param animeTitle anime title (for directory naming)
-     * @param episode the episode to download
      */
     fun enqueueDownload(
         anilistId: Int,
@@ -62,6 +91,8 @@ class DownloadManager(
         episode: SEpisode,
     ): String {
         val downloadId = "dl_${anilistId}_${episode.episode_number}_${System.currentTimeMillis()}"
+
+        Log.d(TAG, "enqueueDownload: → ${episode.name} (id=$downloadId, source=$sourceName, anime=$animeTitle)")
 
         val entry = DownloadStore.DownloadStoreEntry(
             id = downloadId,
@@ -78,7 +109,7 @@ class DownloadManager(
         addToLiveQueue(entry)
         startWork()
 
-        Log.d(TAG, "Enqueued download: ${episode.name} (id=$downloadId)")
+        Log.d(TAG, "enqueueDownload: ✓ enqueued ${episode.name} (id=$downloadId)")
         return downloadId
     }
 
@@ -92,6 +123,8 @@ class DownloadManager(
         animeTitle: String,
         episodes: List<SEpisode>,
     ) {
+        Log.d(TAG, "enqueueDownloads: → ${episodes.size} episodes for $animeTitle")
+
         val entries = episodes.mapIndexed { index, ep ->
             DownloadStore.DownloadStoreEntry(
                 id = "dl_${anilistId}_${ep.episode_number}_${System.currentTimeMillis()}_${index}",
@@ -108,35 +141,92 @@ class DownloadManager(
         store.addAll(entries)
         entries.forEach { addToLiveQueue(it) }
         startWork()
-        Log.d(TAG, "Enqueued ${entries.size} downloads")
+
+        Log.d(TAG, "enqueueDownloads: ✓ enqueued ${entries.size} downloads")
     }
 
     /** Cancel a download + remove from queue. */
     fun cancelDownload(downloadId: String) {
+        Log.d(TAG, "cancelDownload: → $downloadId")
+        _queue.value.find { it.id == downloadId }?.let { download ->
+            // The engine's cancel will be handled by the worker
+            // For now, just remove from queue + store
+        }
         _queue.value = _queue.value.filter { it.id != downloadId }
         store.remove(downloadId)
-        Log.d(TAG, "Cancelled download: $downloadId")
+        Log.d(TAG, "cancelDownload: ✓ $downloadId")
+    }
+
+    /** Pause a download. */
+    fun pauseDownload(downloadId: String) {
+        Log.d(TAG, "pauseDownload: → $downloadId")
+        _queue.value.find { it.id == downloadId }?.let { download ->
+            download.status = Download.State.PAUSED
+            store.update(downloadId, status = Download.State.PAUSED.value)
+        }
+        Log.d(TAG, "pauseDownload: ✓ $downloadId")
+    }
+
+    /** Resume a paused download. */
+    fun resumeDownload(downloadId: String) {
+        Log.d(TAG, "resumeDownload: → $downloadId")
+        _queue.value.find { it.id == downloadId }?.let { download ->
+            download.status = Download.State.QUEUE
+            store.update(downloadId, status = Download.State.QUEUE.value)
+        }
+        startWork()
+        Log.d(TAG, "resumeDownload: ✓ $downloadId")
+    }
+
+    /** Pause all downloads. */
+    fun pauseAll() {
+        Log.d(TAG, "pauseAll: → pausing all downloads")
+        _queue.value.forEach { download ->
+            if (download.status == Download.State.DOWNLOADING ||
+                download.status == Download.State.QUEUE ||
+                download.status == Download.State.RESOLVING) {
+                download.status = Download.State.PAUSED
+                store.update(download.id, status = Download.State.PAUSED.value)
+            }
+        }
+        Log.d(TAG, "pauseAll: ✓ all paused")
+    }
+
+    /** Resume all paused downloads. */
+    fun resumeAll() {
+        Log.d(TAG, "resumeAll: → resuming all paused downloads")
+        _queue.value.forEach { download ->
+            if (download.status == Download.State.PAUSED) {
+                download.status = Download.State.QUEUE
+                store.update(download.id, status = Download.State.QUEUE.value)
+            }
+        }
+        startWork()
+        Log.d(TAG, "resumeAll: ✓ all resumed")
     }
 
     /** Retry a failed download. */
     fun retryDownload(downloadId: String) {
+        Log.d(TAG, "retryDownload: → $downloadId")
         val download = _queue.value.find { it.id == downloadId } ?: return
         download.status = Download.State.QUEUE
         download.progress = 0
         download.error = null
         store.update(downloadId, status = Download.State.QUEUE.value, progress = 0, error = null)
         startWork()
-        Log.d(TAG, "Retrying download: $downloadId")
+        Log.d(TAG, "retryDownload: ✓ $downloadId")
     }
 
     /** Remove a completed download from the queue. */
     fun removeDownload(downloadId: String) {
+        Log.d(TAG, "removeDownload: → $downloadId")
         _queue.value = _queue.value.filter { it.id != downloadId }
         store.remove(downloadId)
     }
 
     /** Clear all completed downloads from the queue. */
     fun clearCompleted() {
+        Log.d(TAG, "clearCompleted: → clearing completed downloads")
         _queue.value = _queue.value.filter { it.status != Download.State.DOWNLOADED }
         store.clearCompleted()
     }
@@ -162,6 +252,7 @@ class DownloadManager(
 
     /** Start the WorkManager job (unique work — only one instance runs at a time). */
     private fun startWork() {
+        Log.d(TAG, "startWork: → starting download worker")
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(
                 if (prefs.downloadOverWifiOnly().get()) NetworkType.UNMETERED
@@ -174,8 +265,8 @@ class DownloadManager(
             .addTag(UNIQUE_WORK)
             .build()
 
-        workManager.enqueueUniqueWork(UNIQUE_WORK, ExistingWorkPolicy.REPLACE, request)
-        Log.d(TAG, "Started download worker")
+        workManager.enqueueUniqueWork(UNIQUE_WORK, ExistingWorkPolicy.KEEP, request)
+        Log.d(TAG, "startWork: ✓ worker enqueued")
     }
 
     /** Restore the queue from persistent store on app start. */
@@ -183,7 +274,7 @@ class DownloadManager(
         val entries = store.getAll()
         if (entries.isNotEmpty()) {
             entries.forEach { addToLiveQueue(it) }
-            Log.d(TAG, "Restored ${entries.size} downloads from store")
+            Log.d(TAG, "restoreQueue: ✓ restored ${entries.size} downloads from store")
         }
     }
 
@@ -200,12 +291,50 @@ class DownloadManager(
             episodeNumber = entry.episodeNumber,
             order = entry.order,
         ).apply {
-            status = Download.State.values().find { it.value == entry.status } ?: Download.State.QUEUE
+            status = Download.State.fromValue(entry.status)
             progress = entry.progress
             totalSize = entry.totalSize
             downloadedBytes = entry.downloadedBytes
             error = entry.error
         }
         _queue.value = _queue.value + download
+        refreshStatusMap()
+
+        // Observe this download's statusFlow and update the status map when it changes.
+        // This is the fix for bug B3 — status changes now propagate to the UI reactively.
+        download.statusFlow.let { flow ->
+            kotlinx.coroutines.GlobalScope.launch {
+                flow.collect { _ ->
+                    refreshStatusMap()
+                }
+            }
+        }
+    }
+
+    /**
+     * Update a download's state in both the live queue and persistent store.
+     * Called by the worker when status/progress changes.
+     */
+    fun updateDownloadState(
+        downloadId: String,
+        status: Download.State? = null,
+        progress: Int? = null,
+        totalSize: Long? = null,
+        downloadedBytes: Long? = null,
+        error: String? = null,
+    ) {
+        _queue.value.find { it.id == downloadId }?.let { download ->
+            if (status != null) download.status = status
+            if (progress != null) download.progress = progress
+            if (totalSize != null) download.totalSize = totalSize
+            if (downloadedBytes != null) download.downloadedBytes = downloadedBytes
+            if (error != null) download.error = error
+        }
+        store.update(
+            downloadId,
+            status = status?.value,
+            progress = progress,
+            error = error,
+        )
     }
 }

@@ -796,17 +796,16 @@ class DetailViewModel(
         uy.kohesive.injekt.Injekt.get()
     } catch (e: Exception) { null }
 
-    /** Download status per episode name. Observed by the UI to update download button icons. */
+    /**
+     * Download status per episode name. Observed by the UI to update download button icons.
+     *
+     * Uses [DownloadManager.downloadStatusMap] which is reactive — it re-emits
+     * whenever any download's statusFlow changes (fixes bug B3 where status
+     * changes didn't propagate to the UI without re-entering the page).
+     */
     val downloadStatus: kotlinx.coroutines.flow.StateFlow<Map<String, app.anikuta.download.Download.State>> =
-        downloadManager?.queue?.let { queueFlow ->
-            kotlinx.coroutines.flow.MutableStateFlow<Map<String, app.anikuta.download.Download.State>>(emptyMap()).also { state ->
-                viewModelScope.launch {
-                    queueFlow.collect { downloads ->
-                        state.value = downloads.associate { it.episodeName to it.status }
-                    }
-                }
-            }
-        } ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
+        downloadManager?.downloadStatusMap
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
 
     /**
      * Enqueue a single episode for download. Resolves the source + anime title

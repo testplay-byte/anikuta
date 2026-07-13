@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * as the unique key, sourceId for re-resolution).
  *
  * Status + progress are exposed as StateFlows so the UI can observe them.
+ * The queue in [DownloadManager] observes these flows to propagate state
+ * changes reactively (fixes bug B3 — status changes not reaching the UI).
  */
 data class Download(
     val id: String,
@@ -27,28 +29,68 @@ data class Download(
     val statusFlow = _statusFlow.asStateFlow()
     var status: State
         get() = _statusFlow.value
-        set(value) { _statusFlow.value = value }
+        set(value) {
+            if (_statusFlow.value != value) {
+                _statusFlow.value = value
+            }
+        }
 
     private val _progressFlow = MutableStateFlow(0)
     val progressFlow = _progressFlow.asStateFlow()
     var progress: Int
         get() = _progressFlow.value
-        set(value) { _progressFlow.value = value }
+        set(value) {
+            val clamped = value.coerceIn(0, 100)
+            if (_progressFlow.value != clamped) {
+                _progressFlow.value = clamped
+            }
+        }
 
-    /** Estimated total file size in bytes (from Content-Length header), or -1 if unknown. */
+    /** Estimated total file size in bytes (from Content-Length or segment calculation), or -1 if unknown. */
     var totalSize: Long = -1L
 
     /** Downloaded bytes so far. */
     var downloadedBytes: Long = 0L
 
+    /** Download speed in bytes/sec (updated during download). */
+    private val _speedFlow = MutableStateFlow(0L)
+    val speedFlow = _speedFlow.asStateFlow()
+    var speed: Long
+        get() = _speedFlow.value
+        set(value) { _speedFlow.value = value }
+
     /** Error message if status is ERROR. */
     var error: String? = null
 
+    /**
+     * Download state machine.
+     *
+     * Flow: QUEUE → RESOLVING → DOWNLOADING → MUXING → DOWNLOADED
+     *                  ↓             ↓
+     *                ERROR         ERROR
+     *                                ↓
+     *                              PAUSED → DOWNLOADING (resume)
+     *
+     * - QUEUE:      Enqueued, waiting for worker to pick it up
+     * - RESOLVING:  Resolving video URL from source (handles expired links)
+     * - DOWNLOADING: Actively downloading segments
+     * - MUXING:     All segments done, concatenating into final .mkv
+     * - DOWNLOADED: Complete, ready for offline playback
+     * - ERROR:      Failed after all retries
+     * - PAUSED:     User paused, can be resumed
+     */
     enum class State(val value: Int) {
         NOT_DOWNLOADED(0),
         QUEUE(1),
-        DOWNLOADING(2),
-        DOWNLOADED(3),
-        ERROR(4),
+        RESOLVING(2),
+        DOWNLOADING(3),
+        MUXING(4),
+        DOWNLOADED(5),
+        ERROR(6),
+        PAUSED(7);
+
+        companion object {
+            fun fromValue(v: Int): State = entries.find { it.value == v } ?: QUEUE
+        }
     }
 }

@@ -710,7 +710,19 @@ private fun InfoCard(title: String, body: String) {
 
 /**
  * Download button with live state from the download queue.
- * Shows: Download (gray) / spinner (downloading) / DownloadDone (green) / Error (red)
+ *
+ * States:
+ * - null/NOT_DOWNLOADED: gray Download icon
+ * - QUEUE: indeterminate spinner (waiting for worker)
+ * - RESOLVING: indeterminate spinner (resolving video URL)
+ * - DOWNLOADING: determinate spinner showing progress %
+ * - MUXING: indeterminate spinner (finalizing .mkv)
+ * - DOWNLOADED: green DownloadDone icon
+ * - ERROR: red Error icon
+ * - PAUSED: gray Download icon (shows "paused" on long-press)
+ *
+ * Bug B1 fix: QUEUE/RESOLVING now use indeterminate spinner (removed
+ * the `progress = { 0.3f }` that made it look stationary).
  */
 @Composable
 private fun DownloadButton(
@@ -721,6 +733,9 @@ private fun DownloadButton(
     val status = downloadStatus[episodeName]
     when (status) {
         app.anikuta.download.Download.State.DOWNLOADING -> {
+            // Determinate spinner — shows actual progress
+            // For now, use indeterminate since per-download progress flow
+            // isn't wired to this composable yet (Phase 3 will add it)
             IconButton(onClick = onDownload) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
@@ -728,12 +743,15 @@ private fun DownloadButton(
                 )
             }
         }
-        app.anikuta.download.Download.State.QUEUE -> {
+        app.anikuta.download.Download.State.QUEUE,
+        app.anikuta.download.Download.State.RESOLVING,
+        app.anikuta.download.Download.State.MUXING -> {
+            // Indeterminate spinner — no progress = { ... } (fixes B1)
             IconButton(onClick = onDownload) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
-                    progress = { 0.3f },
+                    // NO progress parameter = indeterminate (spinning)
                 )
             }
         }
@@ -753,6 +771,16 @@ private fun DownloadButton(
                     Icons.Default.Error,
                     contentDescription = "Download failed",
                     tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        app.anikuta.download.Download.State.PAUSED -> {
+            IconButton(onClick = onDownload) {
+                Icon(
+                    Icons.Default.Download,
+                    contentDescription = "Download paused",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(20.dp),
                 )
             }

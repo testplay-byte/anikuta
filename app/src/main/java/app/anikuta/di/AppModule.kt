@@ -29,6 +29,11 @@ import app.anikuta.download.DownloadProvider
 import app.anikuta.download.DownloadStore
 import app.anikuta.download.DownloadManager
 import app.anikuta.download.DownloadVideoResolver
+import app.anikuta.download.DownloadNotifier
+import app.anikuta.download.engine.DownloadEngine
+import app.anikuta.download.engine.DownloadManifest
+import app.anikuta.download.engine.SegmentDownloadEngine
+import app.anikuta.download.progress.ProgressTracker
 import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.DeleteAnimeExtensionRepo
@@ -124,11 +129,32 @@ class AppModule(val app: Application) : InjektModule {
         // AniList tracker (OAuth + progress sync)
         addSingletonFactory { AniListTracker(get<PreferenceStore>()) }
 
-        // Download manager (Phase 6 Section 5)
+        // Download manager (modular architecture — Phase 1+2)
         addSingletonFactory { DownloadPreferences(get<PreferenceStore>()) }
         addSingletonFactory { DownloadStore(get<PreferenceStore>()) }
         addSingletonFactory { DownloadProvider(get<Context>(), get<app.anikuta.storage.StorageManager>()) }
         addSingletonFactory { DownloadVideoResolver(get<AnimeSourceManager>(), get<DownloadPreferences>()) }
+        // Engine infrastructure
+        addSingletonFactory { DownloadManifest(get<Context>(), get<DownloadProvider>()) }
+        addSingletonFactory { ProgressTracker() }
+        addSingletonFactory { DownloadNotifier(get<Context>()) }
+        // Segment-based download engine (resume-capable)
+        addSingletonFactory<DownloadEngine> {
+            SegmentDownloadEngine(
+                get<Context>(),
+                get<DownloadProvider>(),
+                get<DownloadVideoResolver>(),
+                get<DownloadManifest>(),
+                get<ProgressTracker>(),
+            )
+        }
+        addSingletonFactory { SegmentDownloadEngine(
+            get<Context>(),
+            get<DownloadProvider>(),
+            get<DownloadVideoResolver>(),
+            get<DownloadManifest>(),
+            get<ProgressTracker>(),
+        ) }
         addSingletonFactory { DownloadManager(get<Context>(), get(), get()) }
 
         // AniList client
