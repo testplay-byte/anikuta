@@ -36,7 +36,7 @@ class DownloadManifest(
 ) {
     companion object {
         private const val TAG = "DownloadManifest"
-        private const val MANIFEST_FILE = "manifest.json"
+        const val MANIFEST_FILE = "manifest.json"
         private const val MANIFEST_TMP = "manifest.json.tmp"
         const val SEGMENT_DURATION_SEC = 10
     }
