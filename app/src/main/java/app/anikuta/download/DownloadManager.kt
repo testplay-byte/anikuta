@@ -277,7 +277,12 @@ class DownloadManager(
             .addTag(UNIQUE_WORK)
             .build()
 
-        workManager.enqueueUniqueWork(UNIQUE_WORK, ExistingWorkPolicy.KEEP, request)
+        // FIX (F3): Use APPEND_OR_REPLACE instead of KEEP.
+        // KEEP drops new work requests when a worker is already running — so if a
+        // second download is enqueued while the first is running, the worker won't
+        // pick it up after the first finishes. APPEND_OR_REPLACE queues the new work
+        // to run after the current work completes.
+        workManager.enqueueUniqueWork(UNIQUE_WORK, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
         Log.d(TAG, "startWork: ✓ worker enqueued")
     }
 

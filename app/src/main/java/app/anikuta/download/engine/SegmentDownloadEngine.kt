@@ -85,6 +85,18 @@ class SegmentDownloadEngine(
         download.status = Download.State.DOWNLOADING
         progressTracker.resetSpeed()
 
+        // FIX (F2): Disable FFmpegKit's log redirection to logcat.
+        // FFmpegKit prints version info + per-frame logs for every segment,
+        // which produces ~15 lines × 29 segments = ~435 lines of noise per episode.
+        // We only need our own Log.d messages for debugging.
+        try {
+            FFmpegKitConfig.disableRedirection()
+            FFmpegKitConfig.disableLogs()
+            FFmpegKitConfig.disableStatistics()
+        } catch (e: Exception) {
+            Log.w(TAG, "download: could not disable FFmpegKit logs: ${e.message}")
+        }
+
         if (!hasMinDiskSpace()) {
             download.error = "Insufficient disk space (need ${MIN_DISK_SPACE_MB} MB)"
             Log.e(TAG, "download: ❌ ${download.error}")
@@ -493,14 +505,24 @@ class SegmentDownloadEngine(
 
         var changed = false
         val segments = manifest.segments.map { seg ->
-            if (seg.status == DownloadManifest.SegmentStatus.DONE) {
-                val file = File(segmentsDir, seg.fileName)
-                if (!file.exists() || file.length() == 0L) {
-                    Log.w(TAG, "verifySegmentFiles: ⚠ seg ${seg.index} cache missing — resetting")
+            when (seg.status) {
+                DownloadManifest.SegmentStatus.DONE -> {
+                    val file = File(segmentsDir, seg.fileName)
+                    if (!file.exists() || file.length() == 0L) {
+                        Log.w(TAG, "verifySegmentFiles: ⚠ seg ${seg.index} cache missing — resetting")
+                        changed = true
+                        seg.copy(status = DownloadManifest.SegmentStatus.PENDING, sizeBytes = 0L)
+                    } else seg
+                }
+                DownloadManifest.SegmentStatus.DOWNLOADING -> {
+                    // FIX (F4): A segment stuck in DOWNLOADING state means the app was
+                    // killed mid-download. Reset to PENDING so it gets re-downloaded.
+                    Log.w(TAG, "verifySegmentFiles: ⚠ seg ${seg.index} stuck in DOWNLOADING — resetting to PENDING")
                     changed = true
                     seg.copy(status = DownloadManifest.SegmentStatus.PENDING, sizeBytes = 0L)
-                } else seg
-            } else seg
+                }
+                else -> seg
+            }
         }
 
         return if (changed) {

@@ -253,10 +253,25 @@ class DownloadManifest(
     }
 
     /**
-     * Get the next pending segment to download. Returns null if all are done.
+     * Get the next segment to download. Returns null if all are done.
+     *
+     * Picks up segments with status PENDING, PARTIAL, ERROR, or DOWNLOADING.
+     * DOWNLOADING is included because: if the app was killed mid-segment, the
+     * segment stays in DOWNLOADING state. On resume, we must re-download it
+     * (the partial file was in cache which may have been cleared).
+     *
+     * FIX (F1): Previously, DOWNLOADING segments were NOT picked up, causing
+     * getNextPendingSegment to return null (loop exits, "all segments done"
+     * logged) while allSegmentsDone returned false (DOWNLOADING != DONE) →
+     * "Some segments failed to download" false positive.
      */
     fun getNextPendingSegment(manifest: Manifest): SegmentState? {
-        return manifest.segments.firstOrNull { it.status == SegmentStatus.PENDING || it.status == SegmentStatus.PARTIAL || it.status == SegmentStatus.ERROR }
+        return manifest.segments.firstOrNull {
+            it.status == SegmentStatus.PENDING ||
+            it.status == SegmentStatus.PARTIAL ||
+            it.status == SegmentStatus.ERROR ||
+            it.status == SegmentStatus.DOWNLOADING
+        }
     }
 
     /**
