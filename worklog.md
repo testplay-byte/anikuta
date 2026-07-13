@@ -1374,3 +1374,43 @@ Stage Summary:
 - Duplicate downloads prevented
 - Stuck spinner after cancel fixed
 - Ready for user testing
+
+---
+Task ID: DL-FIXES-D1-D3
+Agent: Z.ai Code (orchestrator)
+Task: Fix 3 issues from second round of user testing
+
+Work Log:
+- Analyzed 3 user-provided log files (download start, pause/resume flow, offline playback crash)
+- Found 3 distinct issues with root cause analysis:
+
+D1 (CRITICAL): App crashes when playing downloaded episode
+- Root cause: MPV vo_android_init assertion "WinID != 0 && WinID != -1" fails
+  because loadfile is called with fd:// URL before SurfaceView has a surface.
+  For HTTP URLs MPV can buffer without surface, but for fd:// it immediately
+  tries to render → crash (SIGABRT).
+- Fix: For fd:// and content:// URLs, delay loadfile 500ms via view.postDelayed().
+  Applied to both minimized + fullscreen AndroidView factories.
+
+D2 (HIGH): Pause doesn't actually pause
+- Root cause: DownloadManager.pauseDownload() sets download.status = PAUSED,
+  but SegmentDownloadEngine only checked its own 'paused' instance variable
+  (never set by the manager). Engine never saw the user's pause request.
+- Fix: Engine now checks download.status directly (PAUSED → save + return,
+  NOT_DOWNLOADED → cleanup + return). Added checks before AND after each
+  segment download (FFmpegKit.execute is blocking).
+
+D3 (MEDIUM): QUEUE state only showed Cancel button
+- Root cause: DownloadQueueScreen QUEUE state had only Cancel.
+  After resuming a paused download → QUEUE → couldn't re-pause.
+- Fix: QUEUE state now shows Pause + Cancel (same as DOWNLOADING).
+
+Build: run #319 (SUCCESS) on player-experiment @ ff9a5f5
+ntfy.sh notification sent to TASKISDONE.
+
+Stage Summary:
+- All 3 issues fixed, build verified
+- Offline playback no longer crashes (surface delay fix)
+- Pause now actually pauses the download (status check fix)
+- QUEUE state has proper controls (Pause + Cancel)
+- Ready for user testing
