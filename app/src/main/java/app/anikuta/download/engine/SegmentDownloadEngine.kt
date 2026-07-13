@@ -86,15 +86,13 @@ class SegmentDownloadEngine(
         progressTracker.resetSpeed()
 
         // FIX (F2): Disable FFmpegKit's log redirection to logcat.
-        // FFmpegKit prints version info + per-frame logs for every segment,
-        // which produces ~15 lines × 29 segments = ~435 lines of noise per episode.
-        // We only need our own Log.d messages for debugging.
+        // FFmpegKit redirects FFmpeg's stdout/stderr to logcat under the
+        // 'ffmpeg-kit' tag, producing ~15 lines per segment (~435 per episode).
+        // disableRedirection() stops this redirect — only our Log.d messages remain.
         try {
             FFmpegKitConfig.disableRedirection()
-            FFmpegKitConfig.disableLogs()
-            FFmpegKitConfig.disableStatistics()
         } catch (e: Exception) {
-            Log.w(TAG, "download: could not disable FFmpegKit logs: ${e.message}")
+            Log.w(TAG, "download: could not disable FFmpegKit redirection: ${e.message}")
         }
 
         if (!hasMinDiskSpace()) {
