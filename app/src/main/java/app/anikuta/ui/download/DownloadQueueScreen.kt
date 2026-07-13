@@ -274,6 +274,25 @@ private fun DownloadQueueItem(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(download.episodeName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     Text(download.animeTitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    // Issue C: Show server/audio/quality info
+                    val infoText = buildString {
+                        if (download.serverName.isNotBlank()) append(download.serverName)
+                        if (download.audioVersion.isNotBlank()) {
+                            if (isNotEmpty()) append(" · ")
+                            append(download.audioVersion)
+                        }
+                        if (download.qualityLabel.isNotBlank()) {
+                            if (isNotEmpty()) append(" · ")
+                            append(download.qualityLabel)
+                        }
+                        if (download.actualResolution.isNotBlank()) {
+                            if (isNotEmpty()) append(" · ")
+                            append(download.actualResolution)
+                        }
+                    }
+                    if (infoText.isNotBlank()) {
+                        Text(infoText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), maxLines = 1)
+                    }
                 }
                 when (status) {
                     Download.State.QUEUE -> Text("Queued", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

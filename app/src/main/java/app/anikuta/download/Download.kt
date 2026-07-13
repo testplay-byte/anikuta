@@ -52,6 +52,21 @@ data class Download(
     /** Downloaded bytes so far. */
     var downloadedBytes: Long = 0L
 
+    /** Actual video duration in milliseconds (from FFprobe on the final .mkv). 0 if unknown. */
+    var actualDurationMs: Long = 0L
+
+    /** Actual video resolution (e.g., "640x360"). Empty if unknown. */
+    var actualResolution: String = ""
+
+    /** Server name used for the download (e.g., "VidPlay-1"). */
+    var serverName: String = ""
+
+    /** Audio version (e.g., "SUB", "DUB"). */
+    var audioVersion: String = ""
+
+    /** Quality label (e.g., "360p"). */
+    var qualityLabel: String = ""
+
     /** Download speed in bytes/sec (updated during download). */
     private val _speedFlow = MutableStateFlow(0L)
     val speedFlow = _speedFlow.asStateFlow()

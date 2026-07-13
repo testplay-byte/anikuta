@@ -836,16 +836,26 @@ class DetailViewModel(
     /**
      * Scan the filesystem for downloaded episodes of the current anime.
      * Returns a set of episode URLs (stable identifiers).
-     * Called when anime details load and when a download completes.
+     *
+     * Works even if [matchedSource] is not yet set — recovers the source name
+     * from the in-memory or disk cache (same pattern as playEpisode).
+     * Called when anime details load, when a download completes, and when
+     * the detail page is entered.
      */
     fun refreshDownloadedOnDisk() {
-        val source = matchedSource ?: return
         val title = getAnimeTitle().ifBlank { return }
         val provider = try { uy.kohesive.injekt.Injekt.get<app.anikuta.download.DownloadProvider>() } catch (e: Exception) { return }
+
+        // Recover source name if matchedSource isn't set yet (in-memory cache path)
+        val sourceName = matchedSource?.name
+            ?: episodeCache[anilistId]?.second
+            ?: preferenceStore?.getString("ext_match_$anilistId", "")?.get()
+            ?: return
+
         kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val downloadedMap = provider.listDownloadedEpisodesWithUrls(title, source.name)
+            val downloadedMap = provider.listDownloadedEpisodesWithUrls(title, sourceName)
             _downloadedOnDisk.value = downloadedMap.keys
-            Log.d(TAG, "refreshDownloadedOnDisk: ${downloadedMap.size} episodes on disk for $title")
+            Log.d(TAG, "refreshDownloadedOnDisk: ${downloadedMap.size} episodes on disk for $title (source=$sourceName)")
         }
     }
 

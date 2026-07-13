@@ -215,17 +215,21 @@ class SegmentDownloadEngine(
                 manifestManager.write(download, manifest)
                 progressTracker.updateFromManifest(download, manifest)
 
-                // FIX (Issue 7): After the first segment downloads, re-estimate total size
-                // based on actual segment size. The initial estimate uses FFprobe duration
-                // which can be wrong (e.g., 24 min for a 5 min video). The actual segment
-                // size gives a much more accurate estimate.
-                if (segmentIndex == 0 && manifest.totalSegments > 0) {
-                    val actualSegSize = segmentResult.sizeBytes
-                    val reEstimatedTotal = actualSegSize * manifest.totalSegments
-                    if (reEstimatedTotal > 0 && Math.abs(reEstimatedTotal - download.totalSize) > download.totalSize * 0.3) {
-                        progressTracker.setTotalSize(download, reEstimatedTotal)
-                        Log.d(TAG, "download: re-estimated size from first segment: " +
-                            "${formatBytes(actualSegSize)}/seg × ${manifest.totalSegments} = ${formatBytes(reEstimatedTotal)}")
+                // FIX (Issue D): Continuously re-estimate total size after each segment.
+                // Uses the average segment size so far × total segments. This gives a
+                // progressively more accurate estimate as more data comes in.
+                if (manifest.totalSegments > 0) {
+                    val completedCount = manifestManager.getCompletedSegmentCount(manifest)
+                    if (completedCount > 0) {
+                        val totalDownloadedBytes = manifest.segments
+                            .filter { it.status == DownloadManifest.SegmentStatus.DONE }
+                            .sumOf { it.sizeBytes }
+                        val avgSegSize = totalDownloadedBytes / completedCount
+                        val reEstimatedTotal = avgSegSize * manifest.totalSegments
+                        // Only update if the difference is significant (>5%)
+                        if (reEstimatedTotal > 0 && Math.abs(reEstimatedTotal - download.totalSize) > download.totalSize * 0.05) {
+                            progressTracker.setTotalSize(download, reEstimatedTotal)
+                        }
                     }
                 }
 
@@ -277,12 +281,28 @@ class SegmentDownloadEngine(
             download.downloadedBytes = actualFileSize
         }
 
+        // FIX (Issue B): FFprobe the final .mkv to get actual duration + resolution.
+        // This corrects the wrong duration from FFprobe on the HLS URL (which returns
+        // 24 min for a 5 min video) and verifies the actual resolution downloaded.
+        val mediaInfo = getMediaInfo(cacheMkv)
+        download.actualDurationMs = mediaInfo.durationMs
+        download.actualResolution = mediaInfo.resolution
+        Log.d(TAG, "download: final mkv actual duration=${mediaInfo.durationMs}ms, " +
+            "resolution=${mediaInfo.resolution}, size=${formatBytes(actualFileSize)}")
+
+        // Parse video title for server/audio/quality info (Issue C)
+        val parsed = app.anikuta.ui.detail.VideoTitleParser.parse(video)
+        download.serverName = parsed.server
+        download.audioVersion = parsed.audio.name
+        download.qualityLabel = "${parsed.quality ?: 0}p"
+
         // Clean up
         cleanupCache(download)
         manifestManager.delete(download)
         progressTracker.markComplete(download)
         download.status = Download.State.DOWNLOADED
-        Log.d(TAG, "download: ✓ COMPLETE — ${download.episodeName} (${formatBytes(actualFileSize)})")
+        Log.d(TAG, "download: ✓ COMPLETE — ${download.episodeName} " +
+            "(${formatBytes(actualFileSize)}, ${mediaInfo.resolution}, ${download.serverName}/${download.audioVersion}/${download.qualityLabel})")
         return true
     }
 
@@ -583,6 +603,38 @@ class SegmentDownloadEngine(
     }
 
     private fun getContentLength(video: Video): Long = 0L
+
+    /**
+     * Media info extracted from a video file via FFprobe (Issue B).
+     */
+    private data class MediaInfo(val durationMs: Long, val resolution: String)
+
+    /**
+     * Run FFprobe on a local .mkv file to get the actual duration and resolution.
+     * This corrects the wrong duration from FFprobe on the HLS URL.
+     */
+    private suspend fun getMediaInfo(file: File): MediaInfo = withContext(Dispatchers.IO) {
+        if (!file.exists() || file.length() == 0L) return@withContext MediaInfo(0L, "")
+
+        // Get duration
+        val durationCmd = "-i \"${file.absolutePath}\" -show_entries format=duration -v quiet -of csv=\"p=0\""
+        val durationSession = FFprobeKit.execute(durationCmd)
+        val durationStr = durationSession.output?.trim()
+        val durationMs = if (ReturnCode.isSuccess(durationSession.returnCode) && !durationStr.isNullOrEmpty()) {
+            (durationStr.toDoubleOrNull() ?: 0.0 * 1000).toLong()
+        } else 0L
+
+        // Get resolution (video stream width × height)
+        val resCmd = "-i \"${file.absolutePath}\" -show_entries stream=width,height -select_streams v:0 -v quiet -of csv=\"p=0\""
+        val resSession = FFprobeKit.execute(resCmd)
+        val resStr = resSession.output?.trim()
+        val resolution = if (ReturnCode.isSuccess(resSession.returnCode) && !resStr.isNullOrEmpty()) {
+            // Output format: "640,360" → "640x360"
+            resStr.replace(",", "x")
+        } else ""
+
+        MediaInfo(durationMs, resolution)
+    }
 
     // ---- Helpers ----
 

@@ -100,6 +100,13 @@ fun DetailScreen(
     val animeInfoPosition by (playerPrefs?.animeInfoPosition()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("below")).collectAsState()
     val dynamicThemingEnabled by (playerPrefs?.dynamicDetailTheming()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
 
+    // Issue A: Scan filesystem for downloaded episodes when the detail page is entered.
+    // This ensures the green checkmark appears for episodes that were downloaded
+    // in a previous session or after the auto-remove countdown removed them from the queue.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.refreshDownloadedOnDisk()
+    }
+
     // Observe play requests from the ViewModel → launch the player.
     androidx.compose.runtime.LaunchedEffect(playRequest) {
         val req = playRequest ?: return@LaunchedEffect
