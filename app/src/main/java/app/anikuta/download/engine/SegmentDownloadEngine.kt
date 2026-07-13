@@ -71,7 +71,14 @@ class SegmentDownloadEngine(
                 return false
             }
             download.video = video
-            Log.d(TAG, "resolve: ✓ ${video.videoTitle ?: "untitled"}")
+
+            // FIX (Issue H): Parse server/audio/quality info early so it's available
+            // during download (not just after completion).
+            val parsed = app.anikuta.ui.detail.VideoTitleParser.parse(video)
+            download.serverName = parsed.server
+            download.audioVersion = parsed.audio.name
+            download.qualityLabel = "${parsed.quality ?: 0}p"
+            Log.d(TAG, "resolve: ✓ ${video.videoTitle ?: "untitled"} (${download.serverName}/${download.audioVersion}/${download.qualityLabel})")
             true
         } catch (e: Exception) {
             Log.e(TAG, "resolve: ❌ ${download.episodeName}: ${e.message}")
@@ -215,18 +222,31 @@ class SegmentDownloadEngine(
                 manifestManager.write(download, manifest)
                 progressTracker.updateFromManifest(download, manifest)
 
-                // FIX (Issue D): Continuously re-estimate total size after each segment.
-                // Uses the average segment size so far × total segments. This gives a
-                // progressively more accurate estimate as more data comes in.
+                // FIX (Issue D + G): Continuously re-estimate total size after each segment.
+                // Uses the average segment size so far × total segments.
+                // FIX (Issue G): Detect small/empty segments (which indicate the video is
+                // shorter than the FFprobe-estimated duration). If we see segments that are
+                // significantly smaller than the average, reduce the effective total segment
+                // count for the estimate.
                 if (manifest.totalSegments > 0) {
-                    val completedCount = manifestManager.getCompletedSegmentCount(manifest)
-                    if (completedCount > 0) {
-                        val totalDownloadedBytes = manifest.segments
-                            .filter { it.status == DownloadManifest.SegmentStatus.DONE }
-                            .sumOf { it.sizeBytes }
-                        val avgSegSize = totalDownloadedBytes / completedCount
-                        val reEstimatedTotal = avgSegSize * manifest.totalSegments
-                        // Only update if the difference is significant (>5%)
+                    val doneSegments = manifest.segments.filter { it.status == DownloadManifest.SegmentStatus.DONE }
+                    if (doneSegments.isNotEmpty()) {
+                        val totalDownloadedBytes = doneSegments.sumOf { it.sizeBytes }
+                        val avgSegSize = totalDownloadedBytes / doneSegments.size
+
+                        // Issue G: Count "real" segments (size > 50% of average).
+                        // Small/empty segments indicate the video has ended but FFprobe
+                        // reported a longer duration. Only count real segments for the estimate.
+                        val realSegmentCount = doneSegments.count { it.sizeBytes > avgSegSize * 0.5 }
+                        val effectiveTotalSegments = if (realSegmentCount < doneSegments.size && realSegmentCount > 0) {
+                            // Extrapolate: if X% of segments so far are "real", assume X% of total are real
+                            val realRatio = realSegmentCount.toDouble() / doneSegments.size
+                            (manifest.totalSegments * realRatio).toInt().coerceAtLeast(1)
+                        } else {
+                            manifest.totalSegments
+                        }
+
+                        val reEstimatedTotal = avgSegSize * effectiveTotalSegments
                         if (reEstimatedTotal > 0 && Math.abs(reEstimatedTotal - download.totalSize) > download.totalSize * 0.05) {
                             progressTracker.setTotalSize(download, reEstimatedTotal)
                         }
@@ -261,6 +281,26 @@ class SegmentDownloadEngine(
         if (!muxSuccess) {
             download.error = "Muxing failed"
             Log.e(TAG, "download: ❌ ${download.error}")
+            // FIX (Issue E): Clean up the cache dir after muxing failure.
+            // Without this, the next retry finds all segments "done" in the manifest
+            // but the cache files may be corrupt/missing → muxing fails again →
+            // infinite loop. By deleting the cache, the next retry will re-download
+            // all segments from scratch.
+            Log.d(TAG, "download: cleaning cache after muxing failure — next retry will re-download")
+            try {
+                segmentsDir.deleteRecursively()
+                segmentsDir.mkdirs()
+            } catch (e: Exception) {
+                Log.w(TAG, "download: could not clean segments dir: ${e.message}")
+            }
+            // Also reset all segments to PENDING in the manifest so verifySegmentFiles
+            // on the next retry will re-download them
+            val resetManifest = manifest.copy(
+                segments = manifest.segments.map { seg ->
+                    seg.copy(status = DownloadManifest.SegmentStatus.PENDING, sizeBytes = 0L)
+                }
+            )
+            manifestManager.write(download, resetManifest)
             return false
         }
 
@@ -282,19 +322,13 @@ class SegmentDownloadEngine(
         }
 
         // FIX (Issue B): FFprobe the final .mkv to get actual duration + resolution.
-        // This corrects the wrong duration from FFprobe on the HLS URL (which returns
-        // 24 min for a 5 min video) and verifies the actual resolution downloaded.
         val mediaInfo = getMediaInfo(cacheMkv)
         download.actualDurationMs = mediaInfo.durationMs
         download.actualResolution = mediaInfo.resolution
         Log.d(TAG, "download: final mkv actual duration=${mediaInfo.durationMs}ms, " +
             "resolution=${mediaInfo.resolution}, size=${formatBytes(actualFileSize)}")
 
-        // Parse video title for server/audio/quality info (Issue C)
-        val parsed = app.anikuta.ui.detail.VideoTitleParser.parse(video)
-        download.serverName = parsed.server
-        download.audioVersion = parsed.audio.name
-        download.qualityLabel = "${parsed.quality ?: 0}p"
+        // Note: server/audio/quality info is already parsed in resolve() (Issue H)
 
         // Clean up
         cleanupCache(download)
@@ -616,12 +650,16 @@ class SegmentDownloadEngine(
     private suspend fun getMediaInfo(file: File): MediaInfo = withContext(Dispatchers.IO) {
         if (!file.exists() || file.length() == 0L) return@withContext MediaInfo(0L, "")
 
-        // Get duration
+        // Get duration — FIX (Issue F): operator precedence bug. Was:
+        //   (durationStr.toDoubleOrNull() ?: 0.0 * 1000).toLong()
+        // `0.0 * 1000` evaluates first → always 0.0 when parsing fails.
+        // Fixed: (durationStr.toDoubleOrNull() ?: 0.0) * 1000
         val durationCmd = "-i \"${file.absolutePath}\" -show_entries format=duration -v quiet -of csv=\"p=0\""
         val durationSession = FFprobeKit.execute(durationCmd)
         val durationStr = durationSession.output?.trim()
         val durationMs = if (ReturnCode.isSuccess(durationSession.returnCode) && !durationStr.isNullOrEmpty()) {
-            (durationStr.toDoubleOrNull() ?: 0.0 * 1000).toLong()
+            val durationSec = durationStr.toDoubleOrNull() ?: 0.0
+            (durationSec * 1000).toLong()
         } else 0L
 
         // Get resolution (video stream width × height)
@@ -629,10 +667,10 @@ class SegmentDownloadEngine(
         val resSession = FFprobeKit.execute(resCmd)
         val resStr = resSession.output?.trim()
         val resolution = if (ReturnCode.isSuccess(resSession.returnCode) && !resStr.isNullOrEmpty()) {
-            // Output format: "640,360" → "640x360"
             resStr.replace(",", "x")
         } else ""
 
+        Log.d(TAG, "getMediaInfo: duration=${durationMs}ms, resolution=$resolution (from ${file.name})")
         MediaInfo(durationMs, resolution)
     }
 

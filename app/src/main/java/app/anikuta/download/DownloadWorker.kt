@@ -106,17 +106,22 @@ class DownloadWorker(
             }.awaitAll()
         }
 
-        // FIX (Issue 8): After processing all downloads, check if any NEW downloads were
+        // FIX (Issue 8 + Issue E): After processing all downloads, check if any NEW downloads were
         // enqueued during processing. If so, process them in the SAME worker run
         // (no Result.retry() — that causes a 30s WorkManager backoff delay).
         // Loop until no more pending downloads remain.
-        while (true) {
+        // FIX (Issue E): Added maxLoopCount to prevent infinite loops when a download
+        // keeps failing (e.g., muxing failure that resets segments to PENDING).
+        var loopCount = 0
+        val maxLoopCount = 3 // max 3 rounds of reprocessing per worker run
+        while (loopCount < maxLoopCount) {
             val remainingPending = downloadManager.queue.value.filter {
                 it.status == Download.State.QUEUE || it.status == Download.State.ERROR
             }
             if (remainingPending.isEmpty()) break
 
-            Log.d(TAG, "doWork: ${remainingPending.size} downloads still pending — processing in same run")
+            loopCount++
+            Log.d(TAG, "doWork: round $loopCount/$maxLoopCount — ${remainingPending.size} downloads still pending")
 
             coroutineScope {
                 remainingPending.map { download ->
@@ -127,6 +132,12 @@ class DownloadWorker(
                     }
                 }.awaitAll()
             }
+        }
+
+        // If we hit the loop limit, any remaining downloads stay in their current
+        // state (ERROR) — the user can manually retry them.
+        if (loopCount >= maxLoopCount) {
+            Log.w(TAG, "doWork: hit max loop count ($maxLoopCount) — stopping to prevent infinite loop")
         }
 
         // Update notification after all downloads
