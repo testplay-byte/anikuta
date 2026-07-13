@@ -61,6 +61,7 @@ fun DetailScreen(
     val videoPicker by viewModel.videoPicker.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val isEnrichingMetadata by viewModel.isEnrichingMetadata.collectAsState()
+    val downloadStatus by viewModel.downloadStatus.collectAsState()
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
 
@@ -383,10 +384,9 @@ fun DetailScreen(
                                     )
                                 }
                                 // Download button with live state
-                                val dlStatus by viewModel.downloadStatus.collectAsState()
                                 DownloadButton(
                                     episodeName = episode.name,
-                                    downloadStatus = dlStatus,
+                                    downloadStatus = downloadStatus,
                                     onDownload = { viewModel.downloadEpisode(episode) },
                                 )
                             }
@@ -513,10 +513,9 @@ fun DetailScreen(
                                                     )
                                                 }
                                                 // Download button with live state
-                                                val dlStatus2 by viewModel.downloadStatus.collectAsState()
                                                 DownloadButton(
                                                     episodeName = episode.name,
-                                                    downloadStatus = dlStatus2,
+                                                    downloadStatus = downloadStatus,
                                                     onDownload = { viewModel.downloadEpisode(episode) },
                                                 )
                                             }

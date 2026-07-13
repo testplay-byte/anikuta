@@ -1873,10 +1873,15 @@ class PlayerActivity : ComponentActivity() {
             Log.d(TAG, "Loading video (direct URL): ${url.take(80)}...")
             try {
                 val resolvedUrl3 = resolveUrlForMpv(url, this@PlayerActivity)
+                Log.d(TAG, "Resolved URL for MPV: ${resolvedUrl3.take(80)}...")
                 MPVLib.command(arrayOf("loadfile", resolvedUrl3, "replace"))
             } catch (e: Exception) {
-                Log.w(TAG, "Could not load video", e)
+                Log.e(TAG, "Could not load video (exception)", e)
                 videoLoaded = false // allow retry
+            } catch (e: Error) {
+                // Catch NoClassDefFoundError or other fatal errors
+                Log.e(TAG, "Could not load video (error)", e)
+                videoLoaded = false
             }
         }
     }
