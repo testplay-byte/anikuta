@@ -1675,3 +1675,34 @@ Duration trimming:
 - Fixes starts-at-5s / can't-seek-to-0s issue (padding)
 
 Build: #332 SUCCESS on player-experiment @ 54a7a5b
+
+---
+Task ID: DL-HLS-DIRECT-ENGINE
+Agent: Z.ai Code (orchestrator)
+Task: Replace FFmpeg -ss segment engine with HLS direct download engine
+
+NEW ENGINE: HlsDownloadEngine
+- Fetches m3u8 via OkHttp → parses → downloads .ts segments directly via HTTP
+- No FFmpeg -ss seeking (fixes duplicate content download + wrong duration)
+- Supports: master/media playlists, AES-128 encryption, relative URL resolution
+- Fallback: SegmentDownloadEngine (FFmpeg) for non-HLS / fMP4 / SAMPLE-AES
+- Per-download cancellation tokens (ConcurrentHashMap, fixes concurrency bug)
+- Link refresh: re-fetches m3u8 on resume for fresh segment URLs
+
+NEW FILES (6):
+- hls/HlsUrlResolver.kt — RFC 3986 URL resolution
+- hls/HlsPlaylist.kt — data model (Master/Media/Segment/Key)
+- hls/HlsPlaylistParser.kt — pure m3u8 text parser
+- hls/HlsPlaylistFetcher.kt — OkHttp fetch + master→media
+- hls/HlsSegmentDownloader.kt — HTTP GET + AES-128-CBC decrypt
+- HlsDownloadEngine.kt — orchestrator (implements DownloadEngine)
+
+MODIFIED FILES (3):
+- DownloadManifest.kt — additive fields (url, durationMs, playlistType) + createFreshHls()
+- DownloadWorker.kt — uses DownloadEngine interface + HlsDownloadEngine.resetFlags()
+- AppModule.kt — register HLS components, switch engine binding
+
+UNCHANGED: DownloadManager, DownloadProvider, DownloadPreferences, DownloadStore,
+DownloadVideoResolver, ProgressTracker, DownloadNotifier, Download.kt, DownloadQueueScreen
+
+Build: #333 FAILED (fully-qualified names in DI), #334 SUCCESS after import fix
