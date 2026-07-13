@@ -492,13 +492,13 @@ class DetailViewModel(
     fun playEpisode(episode: SEpisode) {
         // Check if this episode is downloaded — if so, play the local file directly
         // without resolving videos from the source (offline playback).
-        val source = matchedSource
-        if (source != null) {
+        val dlSource = matchedSource
+        if (dlSource != null) {
             val animeTitle = getAnimeTitle()
             val localUri = downloadManager?.getDownloadedVideoUri(
                 episode.name.ifBlank { "Episode ${episode.episode_number}" },
                 animeTitle,
-                source.name,
+                dlSource.name,
             )
             if (localUri != null) {
                 Log.d(TAG, "Playing downloaded episode: ${episode.name} → $localUri")
@@ -508,7 +508,7 @@ class DetailViewModel(
                     episodeNumber = episode.episode_number,
                     anilistId = anilistId,
                     episodeUrl = episode.url,
-                    sourceId = source.id,
+                    sourceId = dlSource.id,
                 )
                 return
             }

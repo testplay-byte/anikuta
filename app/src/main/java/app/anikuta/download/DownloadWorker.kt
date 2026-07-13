@@ -280,7 +280,7 @@ class DownloadWorker(
         val returnCode = session.returnCode
 
         // Disable statistics callback after completion
-        FFmpegKitConfig.disableStatisticsCallback()
+        FFmpegKitConfig.enableStatisticsCallback(null)
 
         Log.d(TAG, "FFmpeg return code: ${returnCode.value} (isSuccess=${ReturnCode.isSuccess(returnCode)}, isCancel=${ReturnCode.isCancel(returnCode)})")
 
