@@ -1631,3 +1631,27 @@ Issue D: Continuous size estimation
 - Updates only if difference >5% (avoids jitter)
 
 Build: #330 SUCCESS on player-experiment @ 808fa96
+
+---
+Task ID: DL-FIXES-E-F-G-H
+Agent: Z.ai Code (orchestrator)
+Task: Fix Issues E, F, G, H from test feedback
+
+Issue E (CRITICAL): Infinite muxing failure loop
+- Root cause: After muxing fails, manifest says all segments 'done' but cache
+  files may be corrupt → next retry muxing fails again → infinite loop
+- Fix: Delete segments dir + reset all segments to PENDING after muxing failure
+- Added maxLoopCount=3 in doWork() to prevent any future infinite loops
+
+Issue F: FFprobe duration returns 0 (operator precedence bug)
+- Root cause: '0.0 * 1000' evaluated first due to ?: precedence → always 0
+- Fix: Proper precedence '(toDoubleOrNull() ?: 0.0) * 1000'
+
+Issue G: Size estimate too high for short videos
+- Root cause: 144 segments for 3:45 video, many empty → average includes empties
+- Fix: Detect 'real' segments (>50% of avg size), extrapolate ratio to total
+
+Issue H: Server/quality info not shown during download
+- Fix: Parse in resolve() instead of after completion
+
+Build: #331 SUCCESS on player-experiment @ 73b6264
