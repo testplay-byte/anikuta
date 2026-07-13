@@ -171,37 +171,75 @@ class DownloadWorker(
 
     /**
      * Build the FFmpeg command to mux video + subtitles into a .mkv file.
-     * Format: ffmpeg -i <videoUrl> [-i <subUrl>]... -map 0:v -map 0:a? -map 1:s? -c copy <output>
+     * Mirrors aniyomi's getFFmpegOptions + ffmpegDownload pattern.
+     *
+     * Key differences from the previous broken version:
+     * 1. Passes HTTP headers via -headers (CDN requires origin/referer/UA or returns 403)
+     * 2. Uses -f matroska -c:a copy -c:v copy -c:s copy (explicit format + codec specs)
+     * 3. Uses the UniFile's URI toFFmpegString with the application context
+     * 4. Adds -y to overwrite existing files
      */
     private fun buildFFmpegCommand(
         video: eu.kanade.tachiyomi.animesource.model.Video,
         outputFile: UniFile,
         download: Download,
     ): String {
-        val cmd = StringBuilder()
         val context = applicationContext
 
-        // Input: video URL (HTTP or HLS — FFmpeg handles both)
+        // Build header options for HTTP inputs (CDNs require proper headers)
+        val headerOptions = video.headers?.let { headers ->
+            headers.toMultimap().map { (key, values) ->
+                "$key: ${values.firstOrNull() ?: ""}"
+            }.joinToString("\r\n")
+        } ?: "User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
+
+        // Build the output filename via SAF
+        val ffmpegOutput = outputFile.uri.toFFmpegString(context)
+        Log.d(TAG, "FFmpeg output path: $ffmpegOutput")
+
+        // Build the command
+        val cmd = StringBuilder()
+
+        // Video input (with headers if HTTP)
+        if (video.videoUrl.startsWith("http")) {
+            cmd.append("-headers '")
+            cmd.append(headerOptions.replace("'", "\\'"))
+            cmd.append("' ")
+        }
         cmd.append("-i \"${video.videoUrl}\"")
 
-        // Input: subtitle tracks (each .vtt URL)
+        // Subtitle inputs (each .vtt URL, with headers)
         video.subtitleTracks.forEach { sub ->
-            cmd.append(" -i \"${sub.url}\"")
+            cmd.append(" -headers '")
+            cmd.append(headerOptions.replace("'", "\\'"))
+            cmd.append("' ")
+            cmd.append("-i \"${sub.url}\"")
+        }
+
+        // Audio inputs (external audio tracks if any)
+        video.audioTracks.forEach { audio ->
+            cmd.append(" -headers '")
+            cmd.append(headerOptions.replace("'", "\\'"))
+            cmd.append("' ")
+            cmd.append("-i \"${audio.url}\"")
         }
 
         // Mapping: video from input 0, audio from input 0, subtitles from inputs 1+
         cmd.append(" -map 0:v -map 0:a?")
-        if (video.subtitleTracks.isNotEmpty()) {
-            video.subtitleTracks.forEachIndexed { index, _ ->
-                cmd.append(" -map ${index + 1}:s?")
-            }
+        video.subtitleTracks.forEachIndexed { index, _ ->
+            cmd.append(" -map ${index + 1}:s?")
         }
 
-        // Codec: copy all streams (no re-encoding)
-        cmd.append(" -c copy")
+        // Codec: copy all streams (no re-encoding) + matroska format
+        cmd.append(" -f matroska -c:v copy -c:a copy -c:s copy")
 
-        // Output: .mkv file in SAF folder
-        cmd.append(" ${outputFile.toFFmpegString(context)}")
+        // Subtitle metadata (language labels)
+        video.subtitleTracks.forEachIndexed { i, track ->
+            cmd.append(" -metadata:s:s:$i \"title=${track.lang}\"")
+        }
+
+        // Output file + overwrite
+        cmd.append(" \"$ffmpegOutput\" -y")
 
         return cmd.toString()
     }
@@ -224,7 +262,8 @@ class DownloadWorker(
         } else {
             val logs = session.allLogsAsString
             Log.e(TAG, "❌ FFmpeg failed for ${download.episodeName}: rc=${returnCode.value}")
-            Log.e(TAG, "FFmpeg logs (last 1000 chars): ${logs.takeLast(1000)}")
+            // Print full FFmpeg logs (not just last 1000 chars) so we can see the actual error
+            Log.e(TAG, "FFmpeg full logs:\n$logs")
             return false
         }
     }
