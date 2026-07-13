@@ -214,7 +214,21 @@ class SegmentDownloadEngine(
                 manifest = manifestManager.markSegmentDone(manifest, segment.index, segmentResult.sizeBytes)
                 manifestManager.write(download, manifest)
                 progressTracker.updateFromManifest(download, manifest)
-                // Log every 10th segment to show progress without spam
+
+                // FIX (Issue 7): After the first segment downloads, re-estimate total size
+                // based on actual segment size. The initial estimate uses FFprobe duration
+                // which can be wrong (e.g., 24 min for a 5 min video). The actual segment
+                // size gives a much more accurate estimate.
+                if (segmentIndex == 0 && manifest.totalSegments > 0) {
+                    val actualSegSize = segmentResult.sizeBytes
+                    val reEstimatedTotal = actualSegSize * manifest.totalSegments
+                    if (reEstimatedTotal > 0 && Math.abs(reEstimatedTotal - download.totalSize) > download.totalSize * 0.3) {
+                        progressTracker.setTotalSize(download, reEstimatedTotal)
+                        Log.d(TAG, "download: re-estimated size from first segment: " +
+                            "${formatBytes(actualSegSize)}/seg × ${manifest.totalSegments} = ${formatBytes(reEstimatedTotal)}")
+                    }
+                }
+
                 segmentIndex++
                 if (segmentIndex % 10 == 0 || segmentIndex == manifest.totalSegments) {
                     Log.d(TAG, "download: progress ${doneCount + segmentIndex}/${manifest.totalSegments} " +
@@ -255,12 +269,20 @@ class SegmentDownloadEngine(
             return false
         }
 
+        // FIX (Issue 7): Set the final actual size (not the estimate).
+        // The actual file size is the most accurate — no more estimation.
+        val actualFileSize = cacheMkv.length()
+        if (actualFileSize > 0) {
+            progressTracker.setTotalSize(download, actualFileSize)
+            download.downloadedBytes = actualFileSize
+        }
+
         // Clean up
         cleanupCache(download)
         manifestManager.delete(download)
         progressTracker.markComplete(download)
         download.status = Download.State.DOWNLOADED
-        Log.d(TAG, "download: ✓ COMPLETE — ${download.episodeName} (${formatBytes(cacheMkv.length())})")
+        Log.d(TAG, "download: ✓ COMPLETE — ${download.episodeName} (${formatBytes(actualFileSize)})")
         return true
     }
 
