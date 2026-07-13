@@ -14,6 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
@@ -379,15 +382,13 @@ fun DetailScreen(
                                         dynamicColors = null,
                                     )
                                 }
-                                // Download button (simplified — no per-row filesystem check to avoid scroll jitter)
-                                IconButton(onClick = { viewModel.downloadEpisode(episode) }) {
-                                    Icon(
-                                        Icons.Default.Download,
-                                        contentDescription = "Download",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
+                                // Download button with live state
+                                val dlStatus by viewModel.downloadStatus.collectAsState()
+                                DownloadButton(
+                                    episodeName = episode.name,
+                                    downloadStatus = dlStatus,
+                                    onDownload = { viewModel.downloadEpisode(episode) },
+                                )
                             }
                         }
                     }
@@ -511,15 +512,13 @@ fun DetailScreen(
                                                         dynamicColors = null,
                                                     )
                                                 }
-                                                // Download button (simplified — no per-row filesystem check to avoid scroll jitter)
-                                                IconButton(onClick = { viewModel.downloadEpisode(episode) }) {
-                                                    Icon(
-                                                        Icons.Default.Download,
-                                                        contentDescription = "Download",
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(20.dp),
-                                                    )
-                                                }
+                                                // Download button with live state
+                                                val dlStatus2 by viewModel.downloadStatus.collectAsState()
+                                                DownloadButton(
+                                                    episodeName = episode.name,
+                                                    downloadStatus = dlStatus2,
+                                                    onDownload = { viewModel.downloadEpisode(episode) },
+                                                )
                                             }
                                         }
                                     }
@@ -706,6 +705,68 @@ private fun InfoCard(title: String, body: String) {
             Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(4.dp))
             Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/**
+ * Download button with live state from the download queue.
+ * Shows: Download (gray) / spinner (downloading) / DownloadDone (green) / Error (red)
+ */
+@Composable
+private fun DownloadButton(
+    episodeName: String,
+    downloadStatus: Map<String, app.anikuta.download.Download.State>,
+    onDownload: () -> Unit,
+) {
+    val status = downloadStatus[episodeName]
+    when (status) {
+        app.anikuta.download.Download.State.DOWNLOADING -> {
+            IconButton(onClick = onDownload) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+            }
+        }
+        app.anikuta.download.Download.State.QUEUE -> {
+            IconButton(onClick = onDownload) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    progress = { 0.3f },
+                )
+            }
+        }
+        app.anikuta.download.Download.State.DOWNLOADED -> {
+            IconButton(onClick = onDownload) {
+                Icon(
+                    Icons.Default.DownloadDone,
+                    contentDescription = "Downloaded",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        app.anikuta.download.Download.State.ERROR -> {
+            IconButton(onClick = onDownload) {
+                Icon(
+                    Icons.Default.Error,
+                    contentDescription = "Download failed",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        else -> {
+            IconButton(onClick = onDownload) {
+                Icon(
+                    Icons.Default.Download,
+                    contentDescription = "Download",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
 }

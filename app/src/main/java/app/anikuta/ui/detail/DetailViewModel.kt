@@ -490,6 +490,30 @@ class DetailViewModel(
      * with qualities sorted descending within each server section.
      */
     fun playEpisode(episode: SEpisode) {
+        // Check if this episode is downloaded — if so, play the local file directly
+        // without resolving videos from the source (offline playback).
+        val source = matchedSource
+        if (source != null) {
+            val animeTitle = getAnimeTitle()
+            val localUri = downloadManager?.getDownloadedVideoUri(
+                episode.name.ifBlank { "Episode ${episode.episode_number}" },
+                animeTitle,
+                source.name,
+            )
+            if (localUri != null) {
+                Log.d(TAG, "Playing downloaded episode: ${episode.name} → $localUri")
+                _playRequest.value = PlayRequest.Play(
+                    url = localUri,
+                    title = episode.name,
+                    episodeNumber = episode.episode_number,
+                    anilistId = anilistId,
+                    episodeUrl = episode.url,
+                    sourceId = source.id,
+                )
+                return
+            }
+        }
+
         // SAFETY NET: If matchedSource is null (e.g. disk cache was loaded but
         // the source lookup is still in progress), try to recover it from the
         // episode cache or persistent preference before giving up.
@@ -771,6 +795,18 @@ class DetailViewModel(
     private val downloadManager: app.anikuta.download.DownloadManager? = try {
         uy.kohesive.injekt.Injekt.get()
     } catch (e: Exception) { null }
+
+    /** Download status per episode name. Observed by the UI to update download button icons. */
+    val downloadStatus: kotlinx.coroutines.flow.StateFlow<Map<String, app.anikuta.download.Download.State>> =
+        downloadManager?.queue?.let { queueFlow ->
+            kotlinx.coroutines.flow.MutableStateFlow<Map<String, app.anikuta.download.Download.State>>(emptyMap()).also { state ->
+                viewModelScope.launch {
+                    queueFlow.collect { downloads ->
+                        state.value = downloads.associate { it.episodeName to it.status }
+                    }
+                }
+            }
+        } ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
 
     /**
      * Enqueue a single episode for download. Resolves the source + anime title

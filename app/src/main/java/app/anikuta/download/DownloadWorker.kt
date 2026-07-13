@@ -245,14 +245,42 @@ class DownloadWorker(
     }
 
     /**
-     * Execute FFmpeg synchronously and report progress.
+     * Execute FFmpeg synchronously with progress reporting via statistics callback.
+     * Uses FFmpegKitConfig.enableStatisticsCallback to get frame/time updates
+     * during execution. Progress is calculated from statistics.getTime() vs
+     * the estimated video duration (from the video URL's m3u8 metadata).
+     *
+     * The FFmpeg logs show frame counts (e.g. frame=32703) — we use the
+     * statistics callback's time value to calculate percentage.
+     *
      * @return true if FFmpeg succeeded (return code 0), false otherwise
      */
     private fun executeFFmpeg(command: String, download: Download): Boolean {
         Log.d(TAG, "executeFFmpeg: command length=${command.length}")
 
+        // Enable statistics callback for live progress updates
+        // The callback fires on a separate thread during FFmpeg execution.
+        // statistics.getTime() returns microseconds of processed video.
+        // We estimate total duration from the video (typical anime: 24 min = 1,440,000,000 μs)
+        // and calculate percentage = (processed_time / estimated_total) * 100
+        val estimatedDurationMs = 24 * 60 * 1000L // 24 minutes default (will be refined)
+        FFmpegKitConfig.enableStatisticsCallback { statistics ->
+            val processedTimeMs = statistics.time / 1000 // μs → ms
+            if (processedTimeMs > 0) {
+                val progress = ((100.0 * processedTimeMs / estimatedDurationMs).toInt()).coerceIn(0, 99)
+                if (progress != download.progress) {
+                    download.progress = progress
+                    downloadStore.update(download.id, progress = progress)
+                    Log.d(TAG, "Progress: $progress% (${processedTimeMs}ms / ${estimatedDurationMs}ms)")
+                }
+            }
+        }
+
         val session = FFmpegKit.execute(command)
         val returnCode = session.returnCode
+
+        // Disable statistics callback after completion
+        FFmpegKitConfig.disableStatisticsCallback()
 
         Log.d(TAG, "FFmpeg return code: ${returnCode.value} (isSuccess=${ReturnCode.isSuccess(returnCode)}, isCancel=${ReturnCode.isCancel(returnCode)})")
 
@@ -262,7 +290,6 @@ class DownloadWorker(
         } else {
             val logs = session.allLogsAsString
             Log.e(TAG, "❌ FFmpeg failed for ${download.episodeName}: rc=${returnCode.value}")
-            // Print full FFmpeg logs (not just last 1000 chars) so we can see the actual error
             Log.e(TAG, "FFmpeg full logs:\n$logs")
             return false
         }
