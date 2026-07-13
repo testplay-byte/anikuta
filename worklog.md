@@ -1556,3 +1556,54 @@ Stage Summary:
 - episodeUrl is the stable key — survives metadata enrichment name changes
 - Download all button + count badge improve bulk download UX
 - Cancel All + Retry All improve queue management
+
+---
+Task ID: DL-QOL-BATCH1-5
+Agent: Z.ai Code (orchestrator)
+Task: Implement all QoL improvements from test feedback (Issues 1-9)
+
+Work Log:
+- Implemented all 9 issues in 5 batches + code review fixes:
+
+Batch 1 (Issues 1,2,3): UI removals
+- Removed Download All button + count badge (user doesn't want)
+- Single-tap on completed download = no-op (must long-press)
+- Removed "Remove from list" from long-press menu
+
+Batch 2 (Issues 5,9,8): Core download fixes
+- Issue 5: doWork() picks up stuck DOWNLOADING/RESOLVING/MUXING → resets to QUEUE
+- Issue 9: cancelDownload() calls FFmpegKit.cancel() + processDownload checks
+  queue before each retry (aborts if removed)
+- Issue 8: doWork() loops to process remaining pending (no Result.retry() delay)
+
+Batch 3 (Issue 7): Wrong duration/size
+- Re-estimate size after first segment: actualSegSize × totalSegments
+- Set final actual file size after muxing (no more estimation)
+
+Batch 4 (Issue 4): Auto-remove completed after 20s
+- Download.autoRemoveCountdown StateFlow (1.0 → 0.0)
+- DownloadManager.startAutoRemoveCountdown() — 20s, updates every 100ms
+- DownloadQueueScreen shows "Removing from list in Xs" + countdown bar
+
+Batch 5 (Issue 6): RECONNECTING state
+- New RECONNECTING(8) state in Download.State enum
+- Worker catches CancellationException → sets RECONNECTING + 10s timeout
+- DownloadManager.startReconnectTimeout() — 10s → ERROR if still RECONNECTING
+- Pulsing red↔yellow animation (500ms) in both downloads page + detail page
+- Long-press menu shows Cancel for RECONNECTING
+
+Code review fix:
+- Added RECONNECTING to onDownloadButtonClick (no-op, same as DOWNLOADING)
+- Added RECONNECTING to long-press menu (Cancel option)
+
+Build: #327 FAILED (missing imports), #329 SUCCESS after adding delay + animateColor imports
+
+Stage Summary:
+- All 9 issues implemented and build verified
+- Download button behavior: no-op for completed, retry for error, resume for paused
+- Stuck downloads recovered on worker restart
+- Cancel All properly stops FFmpeg + aborts retry loop
+- Queue auto-start has no delay (processes in same worker run)
+- Size estimation: re-estimated after first segment + actual size after mux
+- Completed downloads auto-remove from queue after 20s with countdown bar
+- RECONNECTING state with pulsing red/yellow when network drops (10s → ERROR)
