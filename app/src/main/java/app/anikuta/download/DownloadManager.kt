@@ -55,27 +55,29 @@ class DownloadManager(
     val queue: StateFlow<List<Download>> = _queue.asStateFlow()
 
     /**
-     * Reactive map of episodeName → download status.
+     * Reactive map of episodeUrl → download status.
      * Re-emits whenever any download's status changes (fixes bug B3).
+     * Keyed by episodeUrl (stable) instead of episodeName (mutable) — fixes H4.
      * Used by DetailViewModel for the download button state.
      */
     private val _downloadStatusMap = MutableStateFlow<Map<String, Download.State>>(emptyMap())
     val downloadStatusMap: StateFlow<Map<String, Download.State>> = _downloadStatusMap.asStateFlow()
 
     /**
-     * Reactive map of episodeName → download progress (0-100).
+     * Reactive map of episodeUrl → download progress (0-100).
      * Re-emits whenever any download's progress changes.
-     * Used by DetailViewModel to show determinate progress on the download button (fixes C5).
+     * Keyed by episodeUrl (stable) — fixes H4.
      */
     private val _downloadProgressMap = MutableStateFlow<Map<String, Int>>(emptyMap())
     val downloadProgressMap: StateFlow<Map<String, Int>> = _downloadProgressMap.asStateFlow()
 
     /**
      * Refresh both status and progress maps from the current queue state.
+     * Keyed by episodeUrl (stable identifier that survives metadata enrichment).
      */
     private fun refreshStatusMap() {
-        _downloadStatusMap.value = _queue.value.associate { it.episodeName to it.status }
-        _downloadProgressMap.value = _queue.value.associate { it.episodeName to it.progress }
+        _downloadStatusMap.value = _queue.value.associate { it.episodeUrl to it.status }
+        _downloadProgressMap.value = _queue.value.associate { it.episodeUrl to it.progress }
     }
 
     init {
@@ -244,6 +246,29 @@ class DownloadManager(
         }
         startWork()
         Log.d(TAG, "resumeAll: ✓ all resumed")
+    }
+
+    /**
+     * Cancel all downloads and delete ALL associated files.
+     * Calls [cancelDownload] for each download in the queue.
+     */
+    fun cancelAll() {
+        Log.d(TAG, "cancelAll: → cancelling all downloads")
+        val allIds = _queue.value.map { it.id }.toList()
+        allIds.forEach { cancelDownload(it) }
+        Log.d(TAG, "cancelAll: ✓ all cancelled")
+    }
+
+    /**
+     * Retry all failed downloads.
+     * Only retries downloads with status ERROR.
+     */
+    fun retryAll() {
+        Log.d(TAG, "retryAll: → retrying all failed downloads")
+        _queue.value.filter { it.status == Download.State.ERROR }.forEach { download ->
+            retryDownload(download.id)
+        }
+        Log.d(TAG, "retryAll: ✓ all failed downloads retried")
     }
 
     /** Retry a failed download. */

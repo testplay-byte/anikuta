@@ -50,6 +50,8 @@ class DownloadQueueViewModel : ViewModel() {
     fun clearCompleted() { manager?.clearCompleted() }
     fun pauseAll() { manager?.pauseAll() }
     fun resumeAll() { manager?.resumeAll() }
+    fun cancelAll() { manager?.cancelAll() }
+    fun retryAll() { manager?.retryAll() }
 }
 
 /**
@@ -90,15 +92,28 @@ fun DownloadQueueScreen(
                     }
                 },
                 actions = {
-                    // Pause/Resume all button (only when there are active downloads)
+                    // Retry all failed downloads (only when there are failures)
+                    if (failed > 0) {
+                        IconButton(onClick = { viewModel.retryAll() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Retry all failed")
+                        }
+                    }
+                    // Pause all (only when there are active downloads)
                     if (hasActive) {
                         IconButton(onClick = { viewModel.pauseAll() }) {
                             Icon(Icons.Default.Pause, contentDescription = "Pause all")
                         }
                     }
+                    // Resume all (only when there are paused downloads)
                     if (paused > 0) {
                         IconButton(onClick = { viewModel.resumeAll() }) {
                             Icon(Icons.Default.PlayArrow, contentDescription = "Resume all")
+                        }
+                    }
+                    // Cancel all (always available when there are any downloads)
+                    if (queue.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.cancelAll() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel all")
                         }
                     }
                     // Settings button — rectangular with rounded edges + depth (per user request)

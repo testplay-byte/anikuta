@@ -67,6 +67,9 @@ fun DetailScreen(
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
 
+    // Long-press download menu state (Q4)
+    var longPressEpisode by remember { mutableStateOf<app.anikuta.source.api.model.SEpisode?>(null) }
+
     // Phase 7.5: Episode display settings
     // FIX (D.8): Use stateIn().collectAsState() so preferences update reactively
     // when the user changes them in Settings. Previously used remember { .get() }
@@ -330,6 +333,38 @@ fun DetailScreen(
                                         }
                                     }
                                 }
+                                // Downloaded count badge (Q3) + Download all button (Q5)
+                                Spacer(modifier = Modifier.weight(1f))
+                                val eps = (episodeState as? EpisodeState.Loaded)?.episodes ?: emptyList()
+                                if (eps.isNotEmpty()) {
+                                    val downloadedCount = eps.count { downloadedOnDisk.contains(it.url) }
+                                    if (downloadedCount > 0) {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                        ) {
+                                            Text(
+                                                "$downloadedCount/${eps.size}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    // Download all button — only downloads episodes not already on disk
+                                    val undownloadedEps = eps.filter { !downloadedOnDisk.contains(it.url) }
+                                    if (undownloadedEps.isNotEmpty()) {
+                                        IconButton(onClick = { viewModel.downloadAllEpisodes(undownloadedEps) }) {
+                                            Icon(
+                                                Icons.Default.Download,
+                                                contentDescription = "Download all",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                        }
+                                    }
+                                }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
@@ -385,13 +420,14 @@ fun DetailScreen(
                                         dynamicColors = null,
                                     )
                                 }
-                                // Download button with live state
+                                // Download button with live state + long-press menu (Q4)
                                 DownloadButton(
-                                    episodeName = episode.name,
+                                    episodeUrl = episode.url,
                                     downloadStatus = downloadStatus,
                                     downloadProgress = downloadProgress,
                                     downloadedOnDisk = downloadedOnDisk,
-                                    onDownload = { viewModel.downloadEpisode(episode) },
+                                    onDownload = { viewModel.onDownloadButtonClick(episode) },
+                                    onLongClick = { longPressEpisode = episode },
                                 )
                             }
                         }
@@ -426,6 +462,37 @@ fun DetailScreen(
                                                 "Fetching metadata…",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+                                // Downloaded count badge (Q3) + Download all button (Q5)
+                                Spacer(modifier = Modifier.weight(1f))
+                                val eps = (episodeState as? EpisodeState.Loaded)?.episodes ?: emptyList()
+                                if (eps.isNotEmpty()) {
+                                    val downloadedCount = eps.count { downloadedOnDisk.contains(it.url) }
+                                    if (downloadedCount > 0) {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                        ) {
+                                            Text(
+                                                "$downloadedCount/${eps.size}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    val undownloadedEps = eps.filter { !downloadedOnDisk.contains(it.url) }
+                                    if (undownloadedEps.isNotEmpty()) {
+                                        IconButton(onClick = { viewModel.downloadAllEpisodes(undownloadedEps) }) {
+                                            Icon(
+                                                Icons.Default.Download,
+                                                contentDescription = "Download all",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp),
                                             )
                                         }
                                     }
@@ -516,13 +583,14 @@ fun DetailScreen(
                                                         dynamicColors = null,
                                                     )
                                                 }
-                                                // Download button with live state
+                                                // Download button with live state + long-press menu (Q4)
                                                 DownloadButton(
-                                                    episodeName = episode.name,
+                                                    episodeUrl = episode.url,
                                                     downloadStatus = downloadStatus,
                                                     downloadProgress = downloadProgress,
                                                     downloadedOnDisk = downloadedOnDisk,
-                                                    onDownload = { viewModel.downloadEpisode(episode) },
+                                                    onDownload = { viewModel.onDownloadButtonClick(episode) },
+                                                    onLongClick = { longPressEpisode = episode },
                                                 )
                                             }
                                         }
@@ -559,6 +627,87 @@ fun DetailScreen(
                     onPickVideo = { video, ep -> viewModel.playSpecificVideo(video, ep) },
                     onDismiss = { viewModel.dismissVideoPicker() },
                 )
+            }
+
+            // Long-press download menu (Q4)
+            longPressEpisode?.let { episode ->
+                val sheetState = androidx.compose.material3.rememberModalBottomSheetState()
+                androidx.compose.material3.ModalBottomSheet(
+                    onDismissRequest = { longPressEpisode = null },
+                    sheetState = sheetState,
+                ) {
+                    val status = downloadStatus[episode.url]
+                    val isOnDisk = downloadedOnDisk.contains(episode.url)
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            episode.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(12.dp))
+
+                        // State-dependent options
+                        when {
+                            // Downloaded → Play + Delete file
+                            status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
+                                DownloadMenuOption("Play downloaded", Icons.Default.DownloadDone) {
+                                    longPressEpisode = null
+                                    viewModel.playEpisode(episode)
+                                }
+                                DownloadMenuOption("Delete download", Icons.Default.Delete, isDestructive = true) {
+                                    longPressEpisode = null
+                                    viewModel.deleteDownloadedEpisode(episode)
+                                }
+                                if (status == app.anikuta.download.Download.State.DOWNLOADED) {
+                                    DownloadMenuOption("Remove from list", Icons.Default.Close) {
+                                        longPressEpisode = null
+                                        viewModel.removeDownloadFromQueue(episode)
+                                    }
+                                }
+                            }
+                            // Downloading/Queued/Resolving/Muxing → Cancel
+                            status == app.anikuta.download.Download.State.DOWNLOADING ||
+                            status == app.anikuta.download.Download.State.QUEUE ||
+                            status == app.anikuta.download.Download.State.RESOLVING ||
+                            status == app.anikuta.download.Download.State.MUXING -> {
+                                DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
+                                    longPressEpisode = null
+                                    viewModel.cancelDownloadForEpisode(episode)
+                                }
+                            }
+                            // Paused → Resume + Cancel
+                            status == app.anikuta.download.Download.State.PAUSED -> {
+                                DownloadMenuOption("Resume", Icons.Default.Download) {
+                                    longPressEpisode = null
+                                    viewModel.onDownloadButtonClick(episode)
+                                }
+                                DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
+                                    longPressEpisode = null
+                                    viewModel.cancelDownloadForEpisode(episode)
+                                }
+                            }
+                            // Error → Retry + Cancel
+                            status == app.anikuta.download.Download.State.ERROR -> {
+                                DownloadMenuOption("Retry", Icons.Default.Refresh) {
+                                    longPressEpisode = null
+                                    viewModel.onDownloadButtonClick(episode)
+                                }
+                                DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
+                                    longPressEpisode = null
+                                    viewModel.cancelDownloadForEpisode(episode)
+                                }
+                            }
+                            // Not downloaded → Download
+                            else -> {
+                                DownloadMenuOption("Download", Icons.Default.Download) {
+                                    longPressEpisode = null
+                                    viewModel.onDownloadButtonClick(episode)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
             }
             } // end ThreeStagePullRefresh
             } // end Box
@@ -730,42 +879,47 @@ private fun InfoCard(title: String, body: String) {
  * Bug B1 fix: QUEUE/RESOLVING now use indeterminate spinner (removed
  * the `progress = { 0.3f }` that made it look stationary).
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun DownloadButton(
-    episodeName: String,
+    episodeUrl: String,
     downloadStatus: Map<String, app.anikuta.download.Download.State>,
     downloadProgress: Map<String, Int>,
     downloadedOnDisk: Set<String>,
     onDownload: () -> Unit,
+    onLongClick: () -> Unit = {},
 ) {
-    val status = downloadStatus[episodeName]
-    val progress = downloadProgress[episodeName] ?: 0
-    // Check if the episode is on disk (filesystem state) — shows green checkmark
-    // even if the download was removed from the queue (completed downloads are kept).
-    val isOnDisk = downloadedOnDisk.any { it == episodeName || it == episodeName.ifBlank { "Episode" } }
-    when {
-        // Queue states take priority over on-disk check
-        status == app.anikuta.download.Download.State.DOWNLOADING -> {
-            IconButton(onClick = onDownload) {
+    val status = downloadStatus[episodeUrl]
+    val progress = downloadProgress[episodeUrl] ?: 0
+    val isOnDisk = downloadedOnDisk.contains(episodeUrl)
+
+    // Use Box with combinedClickable instead of IconButton to support long-press (Q4)
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .combinedClickable(
+                onClick = onDownload,
+                onLongClick = onLongClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            status == app.anikuta.download.Download.State.DOWNLOADING -> {
                 CircularProgressIndicator(
                     progress = { progress / 100f },
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
                 )
             }
-        }
-        status == app.anikuta.download.Download.State.QUEUE ||
-        status == app.anikuta.download.Download.State.RESOLVING ||
-        status == app.anikuta.download.Download.State.MUXING -> {
-            IconButton(onClick = onDownload) {
+            status == app.anikuta.download.Download.State.QUEUE ||
+            status == app.anikuta.download.Download.State.RESOLVING ||
+            status == app.anikuta.download.Download.State.MUXING -> {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
                 )
             }
-        }
-        status == app.anikuta.download.Download.State.ERROR -> {
-            IconButton(onClick = onDownload) {
+            status == app.anikuta.download.Download.State.ERROR -> {
                 Icon(
                     Icons.Default.Error,
                     contentDescription = "Download failed",
@@ -773,9 +927,7 @@ private fun DownloadButton(
                     modifier = Modifier.size(20.dp),
                 )
             }
-        }
-        status == app.anikuta.download.Download.State.PAUSED -> {
-            IconButton(onClick = onDownload) {
+            status == app.anikuta.download.Download.State.PAUSED -> {
                 Icon(
                     Icons.Default.Download,
                     contentDescription = "Download paused",
@@ -783,10 +935,7 @@ private fun DownloadButton(
                     modifier = Modifier.size(20.dp),
                 )
             }
-        }
-        // Show green checkmark if: queue says DOWNLOADED OR the file is on disk
-        status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
-            IconButton(onClick = onDownload) {
+            status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
                 Icon(
                     Icons.Default.DownloadDone,
                     contentDescription = "Downloaded",
@@ -794,9 +943,7 @@ private fun DownloadButton(
                     modifier = Modifier.size(20.dp),
                 )
             }
-        }
-        else -> {
-            IconButton(onClick = onDownload) {
+            else -> {
                 Icon(
                     Icons.Default.Download,
                     contentDescription = "Download",
@@ -805,6 +952,38 @@ private fun DownloadButton(
                 )
             }
         }
+    }
+}
+
+/**
+ * A single option row in the long-press download menu (Q4).
+ */
+@Composable
+private fun DownloadMenuOption(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isDestructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp)
+            .combinedClickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.width(16.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 

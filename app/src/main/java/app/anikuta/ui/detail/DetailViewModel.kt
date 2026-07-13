@@ -801,23 +801,25 @@ class DetailViewModel(
     } catch (e: Exception) { null }
 
     /**
-     * Download status per episode name. Observed by the UI to update download button icons.
+     * Download status per episode URL. Observed by the UI to update download button icons.
      * Reactive — re-emits whenever any download's statusFlow changes (fixes B3).
+     * Keyed by episodeUrl (stable) instead of episodeName (mutable) — fixes H4.
      */
     val downloadStatus: kotlinx.coroutines.flow.StateFlow<Map<String, app.anikuta.download.Download.State>> =
         downloadManager?.downloadStatusMap
             ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
 
     /**
-     * Download progress per episode name (0-100). Observed by the UI to show
+     * Download progress per episode URL (0-100). Observed by the UI to show
      * determinate progress on the download button (fixes C5).
+     * Keyed by episodeUrl (stable) — fixes H4.
      */
     val downloadProgress: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> =
         downloadManager?.downloadProgressMap
             ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
 
     /**
-     * Set of episode names that are downloaded on disk (filesystem state).
+     * Set of episode URLs that are downloaded on disk (filesystem state).
      *
      * This is SEPARATE from the download queue. An episode can be on disk but
      * not in the queue (e.g. after the user removes a completed download from
@@ -825,14 +827,15 @@ class DetailViewModel(
      * to show the green checkmark for episodes that exist on disk, regardless
      * of queue state.
      *
+     * Keyed by episodeUrl (stable) — survives metadata enrichment name changes.
      * Populated by scanning the current anime's directory via [refreshDownloadedOnDisk].
-     * Refreshed when the anime details load and when a download completes.
      */
     private val _downloadedOnDisk = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
     val downloadedOnDisk: kotlinx.coroutines.flow.StateFlow<Set<String>> = _downloadedOnDisk
 
     /**
      * Scan the filesystem for downloaded episodes of the current anime.
+     * Returns a set of episode URLs (stable identifiers).
      * Called when anime details load and when a download completes.
      */
     fun refreshDownloadedOnDisk() {
@@ -840,9 +843,9 @@ class DetailViewModel(
         val title = getAnimeTitle().ifBlank { return }
         val provider = try { uy.kohesive.injekt.Injekt.get<app.anikuta.download.DownloadProvider>() } catch (e: Exception) { return }
         kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val downloaded = provider.listDownloadedEpisodes(title, source.name)
-            _downloadedOnDisk.value = downloaded
-            Log.d(TAG, "refreshDownloadedOnDisk: ${downloaded.size} episodes on disk for $title")
+            val downloadedMap = provider.listDownloadedEpisodesWithUrls(title, source.name)
+            _downloadedOnDisk.value = downloadedMap.keys
+            Log.d(TAG, "refreshDownloadedOnDisk: ${downloadedMap.size} episodes on disk for $title")
         }
     }
 
@@ -854,12 +857,108 @@ class DetailViewModel(
     init {
         viewModelScope.launch {
             downloadStatus.collect { statusMap ->
-                // If any download just completed, refresh the on-disk set
                 if (statusMap.values.any { it == app.anikuta.download.Download.State.DOWNLOADED }) {
                     refreshDownloadedOnDisk()
                 }
             }
         }
+    }
+
+    /**
+     * Handle a download button click with state-aware behavior (fixes H1, H2, H3).
+     *
+     * Behavior per state:
+     * - DOWNLOADING / QUEUE / RESOLVING / MUXING → do nothing (already in progress)
+     * - PAUSED → resume the download
+     * - ERROR → retry the download
+     * - DOWNLOADED (queue or disk) → play the downloaded episode
+     * - Not downloaded → enqueue a new download
+     *
+     * @param episode the episode whose download button was tapped
+     */
+    fun onDownloadButtonClick(episode: app.anikuta.source.api.model.SEpisode) {
+        val status = downloadStatus.value[episode.url]
+        val isOnDisk = downloadedOnDisk.value.contains(episode.url)
+
+        when {
+            // Already in progress — do nothing
+            status == app.anikuta.download.Download.State.DOWNLOADING ||
+            status == app.anikuta.download.Download.State.QUEUE ||
+            status == app.anikuta.download.Download.State.RESOLVING ||
+            status == app.anikuta.download.Download.State.MUXING -> {
+                Log.d(TAG, "onDownloadButtonClick: ${episode.name} already in progress (status=$status)")
+            }
+
+            // Paused → resume
+            status == app.anikuta.download.Download.State.PAUSED -> {
+                Log.d(TAG, "onDownloadButtonClick: ${episode.name} resuming")
+                val dl = downloadManager?.queue?.value?.find { it.episodeUrl == episode.url }
+                if (dl != null) downloadManager?.resumeDownload(dl.id)
+            }
+
+            // Error → retry
+            status == app.anikuta.download.Download.State.ERROR -> {
+                Log.d(TAG, "onDownloadButtonClick: ${episode.name} retrying")
+                val dl = downloadManager?.queue?.value?.find { it.episodeUrl == episode.url }
+                if (dl != null) downloadManager?.retryDownload(dl.id)
+            }
+
+            // Downloaded (queue or disk) → play
+            status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
+                Log.d(TAG, "onDownloadButtonClick: ${episode.name} playing downloaded")
+                playEpisode(episode)
+            }
+
+            // Not downloaded → enqueue
+            else -> {
+                Log.d(TAG, "onDownloadButtonClick: ${episode.name} enqueuing download")
+                downloadEpisode(episode)
+            }
+        }
+    }
+
+    /**
+     * Delete a downloaded episode's file from disk (long-press menu action).
+     * Also removes from queue if present.
+     */
+    fun deleteDownloadedEpisode(episode: app.anikuta.source.api.model.SEpisode) {
+        val source = matchedSource ?: return
+        val title = getAnimeTitle()
+        Log.d(TAG, "deleteDownloadedEpisode: ${episode.name}")
+        // Find in queue and cancel (which deletes everything)
+        val dl = downloadManager?.queue?.value?.find { it.episodeUrl == episode.url }
+        if (dl != null) {
+            downloadManager?.cancelDownload(dl.id)
+        } else {
+            // Not in queue — delete the file directly
+            downloadManager?.deleteDownloadedEpisode(
+                episode.name.ifBlank { "Episode ${episode.episode_number}" },
+                title,
+                source.name,
+            )
+        }
+        refreshDownloadedOnDisk()
+    }
+
+    /**
+     * Remove a download from the queue but keep the file (long-press menu action).
+     * Only works for completed downloads — for incomplete, use [cancelDownloadForEpisode].
+     */
+    fun removeDownloadFromQueue(episode: app.anikuta.source.api.model.SEpisode) {
+        val dl = downloadManager?.queue?.value?.find { it.episodeUrl == episode.url } ?: return
+        Log.d(TAG, "removeDownloadFromQueue: ${episode.name}")
+        downloadManager?.removeDownload(dl.id)
+        refreshDownloadedOnDisk()
+    }
+
+    /**
+     * Cancel a download and delete all files (long-press menu action).
+     */
+    fun cancelDownloadForEpisode(episode: app.anikuta.source.api.model.SEpisode) {
+        val dl = downloadManager?.queue?.value?.find { it.episodeUrl == episode.url } ?: return
+        Log.d(TAG, "cancelDownloadForEpisode: ${episode.name}")
+        downloadManager?.cancelDownload(dl.id)
+        refreshDownloadedOnDisk()
     }
 
     /**

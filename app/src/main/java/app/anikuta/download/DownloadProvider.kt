@@ -11,6 +11,10 @@ import com.hippo.unifile.UniFile
  *
  * Path scheme: `<downloads>/<sourceName>/<animeTitle>/<episodeName>/`
  *
+ * Each episode directory contains a `.episode_url` file with the stable episode URL.
+ * This file is the source of truth for matching episodes to downloads — it survives
+ * metadata enrichment (which can change episode names) and app reinstalls.
+ *
  * Uses [DiskUtil.buildValidFilename] to sanitize directory names for
  * filesystem compatibility. All directories are created on demand via
  * [UniFile.createDirectory] (idempotent — returns existing if present).
@@ -22,12 +26,16 @@ class DownloadProvider(
     private val context: Context,
     private val storageManager: StorageManager,
 ) {
+    companion object {
+        private const val TAG = "DownloadProvider"
+        private const val EPISODE_URL_FILE = ".episode_url"
+    }
+
     private val downloadsDir: UniFile?
         get() = storageManager.getDownloadsDirectory()
 
     /**
      * Get (or create) the source directory.
-     * @param sourceName the display name of the source
      */
     fun getSourceDir(sourceName: String): UniFile? {
         return downloadsDir?.createDirectory(DiskUtil.buildValidFilename(sourceName))
@@ -35,8 +43,6 @@ class DownloadProvider(
 
     /**
      * Get (or create) the anime directory inside a source directory.
-     * @param animeTitle the anime title
-     * @param sourceName the source display name
      */
     fun getAnimeDir(animeTitle: String, sourceName: String): UniFile? {
         return getSourceDir(sourceName)
@@ -45,9 +51,6 @@ class DownloadProvider(
 
     /**
      * Get (or create) the episode directory inside an anime directory.
-     * @param episodeName the episode name (e.g. "Episode 1")
-     * @param animeTitle the anime title
-     * @param sourceName the source display name
      */
     fun getEpisodeDir(episodeName: String, animeTitle: String, sourceName: String): UniFile? {
         return getAnimeDir(animeTitle, sourceName)
@@ -56,10 +59,6 @@ class DownloadProvider(
 
     /**
      * Find an existing episode directory (without creating it).
-     * @param episodeName the episode name
-     * @param animeTitle the anime title
-     * @param sourceName the source display name
-     * @return the UniFile if it exists, null otherwise
      */
     fun findEpisodeDir(episodeName: String, animeTitle: String, sourceName: String): UniFile? {
         val animeDir = getAnimeDir(animeTitle, sourceName) ?: return null
@@ -68,11 +67,38 @@ class DownloadProvider(
     }
 
     /**
-     * Check if an episode is downloaded.
-     * @param episodeName the episode name
-     * @param animeTitle the anime title
-     * @param sourceName the source display name
-     * @return true if the episode directory exists and contains a .mkv or .mp4 file
+     * Write the `.episode_url` file inside an episode directory.
+     *
+     * This file contains the stable episode URL, which is used to match
+     * episodes to downloads even when the episode name changes (e.g., after
+     * metadata enrichment). Called by the download engine when creating
+     * a new download.
+     */
+    fun writeEpisodeUrlFile(episodeDir: UniFile, episodeUrl: String) {
+        try {
+            val urlFile = episodeDir.createFile(EPISODE_URL_FILE) ?: return
+            urlFile.openOutputStream(false).bufferedWriter().use { it.write(episodeUrl) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not write .episode_url file: ${e.message}")
+        }
+    }
+
+    /**
+     * Read the `.episode_url` file from an episode directory.
+     * Returns null if the file doesn't exist (old downloads before this feature).
+     */
+    private fun readEpisodeUrlFile(episodeDir: UniFile): String? {
+        return try {
+            val urlFile = episodeDir.findFile(EPISODE_URL_FILE) ?: return null
+            urlFile.openInputStream().bufferedReader().use { it.readText().trim() }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Check if an episode is downloaded (by name).
+     * Kept for backward compatibility. Prefer [isEpisodeDownloadedByUrl].
      */
     fun isEpisodeDownloaded(episodeName: String, animeTitle: String, sourceName: String): Boolean {
         val episodeDir = findEpisodeDir(episodeName, animeTitle, sourceName) ?: return false
@@ -83,20 +109,22 @@ class DownloadProvider(
     }
 
     /**
-     * List all downloaded episode names for a given anime.
+     * List all downloaded episodes for a given anime, keyed by episode URL.
      *
-     * Scans the anime directory and returns the names of all episode subdirectories
-     * that contain a .mkv or .mp4 file. Used by the detail page to show green
-     * checkmarks for episodes that are on disk but not in the download queue
-     * (e.g. after removing from the downloads page, or after app reinstall).
+     * Scans the anime directory. For each episode directory that contains a video file:
+     * - Reads the `.episode_url` file if present (new downloads) → uses episodeUrl as key
+     * - Falls back to the directory name (old downloads) → uses dirName as key
+     *
+     * Returns a map of episodeUrl → episodeDirName. The episodeUrl is the stable
+     * identifier used to match episodes across metadata changes.
      *
      * @param animeTitle the anime title
      * @param sourceName the source display name
-     * @return set of episode names that are downloaded on disk
+     * @return map of episodeUrl (or dirName for old downloads) → episode directory name
      */
-    fun listDownloadedEpisodes(animeTitle: String, sourceName: String): Set<String> {
-        val animeDir = getAnimeDir(animeTitle, sourceName) ?: return emptySet()
-        val result = mutableSetOf<String>()
+    fun listDownloadedEpisodesWithUrls(animeTitle: String, sourceName: String): Map<String, String> {
+        val animeDir = getAnimeDir(animeTitle, sourceName) ?: return emptyMap()
+        val result = mutableMapOf<String, String>()
         animeDir.listFiles()?.forEach { episodeDir ->
             if (episodeDir.isDirectory) {
                 val hasVideo = episodeDir.listFiles()?.any { file ->
@@ -104,7 +132,9 @@ class DownloadProvider(
                     name.endsWith(".mkv") || name.endsWith(".mp4")
                 } ?: false
                 if (hasVideo) {
-                    episodeDir.name?.let { result.add(it) }
+                    val dirName = episodeDir.name ?: return@forEach
+                    val episodeUrl = readEpisodeUrlFile(episodeDir) ?: dirName
+                    result[episodeUrl] = dirName
                 }
             }
         }
@@ -112,11 +142,16 @@ class DownloadProvider(
     }
 
     /**
-     * Get the downloaded video file for an episode.
-     * @param episodeName the episode name
-     * @param animeTitle the anime title
-     * @param sourceName the source display name
-     * @return the UniFile of the video, or null if not found
+     * List all downloaded episode names for a given anime.
+     * Kept for backward compatibility. Prefer [listDownloadedEpisodesWithUrls].
+     */
+    fun listDownloadedEpisodes(animeTitle: String, sourceName: String): Set<String> {
+        return listDownloadedEpisodesWithUrls(animeTitle, sourceName).values.toSet()
+    }
+
+    /**
+     * Get the downloaded video file for an episode (by name).
+     * Kept for backward compatibility.
      */
     fun getDownloadedVideoFile(episodeName: String, animeTitle: String, sourceName: String): UniFile? {
         val episodeDir = findEpisodeDir(episodeName, animeTitle, sourceName) ?: return null
@@ -128,10 +163,6 @@ class DownloadProvider(
 
     /**
      * Delete a downloaded episode.
-     * @param episodeName the episode name
-     * @param animeTitle the anime title
-     * @param sourceName the source display name
-     * @return true if deleted (or didn't exist), false on error
      */
     fun deleteEpisode(episodeName: String, animeTitle: String, sourceName: String): Boolean {
         val episodeDir = findEpisodeDir(episodeName, animeTitle, sourceName) ?: return true
@@ -141,9 +172,5 @@ class DownloadProvider(
             Log.e(TAG, "Failed to delete episode dir", e)
             false
         }
-    }
-
-    companion object {
-        private const val TAG = "DownloadProvider"
     }
 }

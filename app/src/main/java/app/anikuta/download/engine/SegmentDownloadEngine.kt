@@ -147,6 +147,15 @@ class SegmentDownloadEngine(
             )
             manifestManager.write(download, fresh)
             Log.d(TAG, "download: ✓ fresh manifest created")
+
+            // Write .episode_url file for stable episode identification (fixes H4).
+            // This file survives metadata enrichment (which can change episode names)
+            // and allows the detail page to match episodes by their stable URL.
+            val episodeDir = provider.getEpisodeDir(download.episodeName, download.animeTitle, download.sourceName)
+            if (episodeDir != null) {
+                provider.writeEpisodeUrlFile(episodeDir, download.episodeUrl)
+            }
+
             fresh
         }
 
