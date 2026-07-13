@@ -1607,3 +1607,27 @@ Stage Summary:
 - Size estimation: re-estimated after first segment + actual size after mux
 - Completed downloads auto-remove from queue after 20s with countdown bar
 - RECONNECTING state with pulsing red/yellow when network drops (10s → ERROR)
+
+---
+Task ID: DL-FIXES-A-B-C-D
+Agent: Z.ai Code (orchestrator)
+Task: Fix Issues A, B, C, D from test feedback
+
+Issue A: Downloaded episode not showing on details page
+- Root cause: refreshDownloadedOnDisk() required matchedSource, but the
+  in-memory cache path doesn't set it. The scan never ran.
+- Fix: recover source name from cache/prefs + LaunchedEffect(Unit) on page entry
+
+Issue B: Wrong video duration + resolution
+- Root cause: FFprobe on HLS URL returns wrong duration; resolution from title
+- Fix: FFprobe the final .mkv for actual duration + resolution after muxing
+
+Issue C: Show server/resolution/version in downloads page
+- Added Download.serverName, audioVersion, qualityLabel, actualResolution fields
+- Parsed from video title + FFprobe, displayed in download cards
+
+Issue D: Continuous size estimation
+- Re-estimate after every segment using average segment size × total segments
+- Updates only if difference >5% (avoids jitter)
+
+Build: #330 SUCCESS on player-experiment @ 808fa96
