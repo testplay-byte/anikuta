@@ -170,6 +170,16 @@ class DownloadManager(
         Log.d(TAG, "cancelDownload: → $downloadId")
         val download = _queue.value.find { it.id == downloadId }
         if (download != null) {
+            // FIX (Issue 9): Cancel any running FFmpeg process immediately.
+            // Without this, FFmpeg keeps running even after the download is removed
+            // from the queue, and the worker's retry loop re-downloads.
+            try {
+                com.arthenica.ffmpegkit.FFmpegKit.cancel()
+                Log.d(TAG, "cancelDownload: ✓ cancelled FFmpeg")
+            } catch (e: Exception) {
+                Log.w(TAG, "cancelDownload: ⚠ could not cancel FFmpeg: ${e.message}")
+            }
+
             // 1. Delete the episode folder from SAF (includes .mkv, manifest, etc.)
             try {
                 val provider = Injekt.get<DownloadProvider>()

@@ -51,8 +51,23 @@ class DownloadWorker(
     override suspend fun doWork(): Result {
         Log.d(TAG, "doWork: → worker started")
 
+        // FIX (Issue 5): Pick up downloads stuck in DOWNLOADING/RESOLVING/MUXING state.
+        // These are downloads that were interrupted by WorkManager cancellation
+        // (e.g., Wi-Fi dropped mid-download). WorkManager cancels the worker, but
+        // the download status stays DOWNLOADING. Without this fix, the worker
+        // only picks up QUEUE and ERROR — stuck downloads are orphaned forever.
         val queue = downloadManager.queue.value
-        val pending = queue.filter {
+        queue.filter {
+            it.status == Download.State.DOWNLOADING ||
+            it.status == Download.State.RESOLVING ||
+            it.status == Download.State.MUXING
+        }.forEach { stuck ->
+            Log.w(TAG, "doWork: ⚠ ${stuck.episodeName} stuck in ${stuck.status} — resetting to QUEUE")
+            downloadManager.updateDownloadState(stuck.id, status = Download.State.QUEUE)
+        }
+
+        // Re-read the queue after resetting stuck downloads
+        val pending = downloadManager.queue.value.filter {
             it.status == Download.State.QUEUE ||
             it.status == Download.State.ERROR
         }
@@ -90,16 +105,27 @@ class DownloadWorker(
             }.awaitAll()
         }
 
-        // FIX (E2): After processing all downloads, check if any NEW downloads were
-        // enqueued during processing. If so, re-run the worker to pick them up.
-        // Without this, a download enqueued while the worker is running would sit
-        // in QUEUE status forever until the user manually pauses+resumes.
-        val remainingPending = downloadManager.queue.value.filter {
-            it.status == Download.State.QUEUE || it.status == Download.State.ERROR
-        }
-        if (remainingPending.isNotEmpty()) {
-            Log.d(TAG, "doWork: ${remainingPending.size} downloads still pending — returning retry")
-            return Result.retry()
+        // FIX (Issue 8): After processing all downloads, check if any NEW downloads were
+        // enqueued during processing. If so, process them in the SAME worker run
+        // (no Result.retry() — that causes a 30s WorkManager backoff delay).
+        // Loop until no more pending downloads remain.
+        while (true) {
+            val remainingPending = downloadManager.queue.value.filter {
+                it.status == Download.State.QUEUE || it.status == Download.State.ERROR
+            }
+            if (remainingPending.isEmpty()) break
+
+            Log.d(TAG, "doWork: ${remainingPending.size} downloads still pending — processing in same run")
+
+            coroutineScope {
+                remainingPending.map { download ->
+                    async {
+                        semaphore.withPermit {
+                            processDownload(download)
+                        }
+                    }
+                }.awaitAll()
+            }
         }
 
         // Update notification after all downloads
@@ -117,6 +143,10 @@ class DownloadWorker(
 
     /**
      * Process a single download. Delegates to the engine.
+     *
+     * FIX (Issue 9): Before each retry attempt, checks if the download is still
+     * in the queue. If it was cancelled (e.g., via Cancel All), aborts immediately
+     * instead of retrying. This prevents cancelled downloads from re-downloading.
      */
     private suspend fun processDownload(download: Download) {
         Log.d(TAG, "processDownload: → ${download.episodeName} (id=${download.id})")
@@ -124,7 +154,6 @@ class DownloadWorker(
         val engine: DownloadEngine = Injekt.get<SegmentDownloadEngine>()
         val progressTracker: ProgressTracker = Injekt.get()
 
-        // Get the engine instance and reset its pause/cancel flags
         if (engine is SegmentDownloadEngine) {
             engine.resetFlags()
         }
@@ -133,6 +162,14 @@ class DownloadWorker(
         val maxRetries = 3
 
         for (attempt in 1..maxRetries) {
+            // FIX (Issue 9): Check if the download is still in the queue.
+            // If it was cancelled (Cancel All / individual cancel), abort immediately.
+            val stillInQueue = downloadManager.queue.value.any { it.id == download.id }
+            if (!stillInQueue) {
+                Log.d(TAG, "processDownload: ⏹ ${download.episodeName} removed from queue — aborting")
+                return
+            }
+
             try {
                 Log.d(TAG, "processDownload: ${download.episodeName} attempt $attempt/$maxRetries")
 
@@ -149,7 +186,6 @@ class DownloadWorker(
                 downloadManager.updateDownloadState(download.id, status = Download.State.DOWNLOADING)
                 downloadNotifier.updateProgress(listOf(download))
 
-                // Start a coroutine to periodically update the notification
                 val notifJob = kotlinx.coroutines.GlobalScope.launch {
                     while (true) {
                         delay(1000)
@@ -182,7 +218,6 @@ class DownloadWorker(
                     Log.d(TAG, "processDownload: ✓ ${download.episodeName} complete")
                     return
                 } else {
-                    // Check if paused
                     if (download.status == Download.State.PAUSED) {
                         Log.d(TAG, "processDownload: ⏸ ${download.episodeName} paused")
                         return
@@ -192,16 +227,6 @@ class DownloadWorker(
             } catch (e: Exception) {
                 lastError = e.message ?: "Unknown error"
                 Log.e(TAG, "processDownload: ❌ ${download.episodeName} attempt $attempt failed: $lastError")
-
-                // FIX (E4): Do NOT call engine.cancel() on failure.
-                // engine.cancel() deletes the cache dir (segments) which destroys
-                // resume state. The manifest is in SAF and survives, but on retry
-                // verifySegmentFiles() finds no cache files → marks all "done"
-                // segments as "pending" → re-downloads from scratch.
-                // Instead: leave the cache intact. The engine's downloadSegment()
-                // already deletes the failed segment's partial file. On retry,
-                // the engine reads the manifest, finds completed segments in cache,
-                // and resumes from the first pending/partial one.
 
                 if (attempt < maxRetries) {
                     val backoff = when (attempt) {
