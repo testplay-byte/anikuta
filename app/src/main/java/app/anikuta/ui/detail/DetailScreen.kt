@@ -601,11 +601,12 @@ fun DetailScreen(
                                     viewModel.deleteDownloadedEpisode(episode)
                                 }
                             }
-                            // Downloading/Queued/Resolving/Muxing → Cancel
+                            // Downloading/Queued/Resolving/Muxing/Reconnecting → Cancel
                             status == app.anikuta.download.Download.State.DOWNLOADING ||
                             status == app.anikuta.download.Download.State.QUEUE ||
                             status == app.anikuta.download.Download.State.RESOLVING ||
-                            status == app.anikuta.download.Download.State.MUXING -> {
+                            status == app.anikuta.download.Download.State.MUXING ||
+                            status == app.anikuta.download.Download.State.RECONNECTING -> {
                                 DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
                                     longPressEpisode = null
                                     viewModel.cancelDownloadForEpisode(episode)

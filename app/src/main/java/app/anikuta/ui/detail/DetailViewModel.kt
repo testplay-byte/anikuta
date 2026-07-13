@@ -885,7 +885,8 @@ class DetailViewModel(
             status == app.anikuta.download.Download.State.DOWNLOADING ||
             status == app.anikuta.download.Download.State.QUEUE ||
             status == app.anikuta.download.Download.State.RESOLVING ||
-            status == app.anikuta.download.Download.State.MUXING -> {
+            status == app.anikuta.download.Download.State.MUXING ||
+            status == app.anikuta.download.Download.State.RECONNECTING -> {
                 Log.d(TAG, "onDownloadButtonClick: ${episode.name} already in progress (status=$status)")
             }
 
