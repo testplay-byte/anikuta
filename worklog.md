@@ -2221,3 +2221,83 @@ FILES MODIFIED (1):
 - DownloadQueueScreen.kt — complete rewrite with new design
 
 Build: pending (will trigger workflow_dispatch next).
+
+---
+Task ID: DOWNLOADS-PAGE-REDESIGN-V2
+Agent: Z.ai Code (orchestrator)
+Task: Downloads page v2 — fix status bar, one section per anime, pills on right, taller bar, no alternating, reactive counts, no primaryContainer, size toggle, notification improvements
+
+Work Log:
+
+(1) STATUS BAR OVERLAP FIX:
+- Added windowInsetsPadding(WindowInsets.statusBars) to the top bar Surface
+  so the back button / title / settings button are pushed below the status bar.
+
+(2) ONE SECTION PER ANIME:
+- Replaced separate AnimeGroupHeader + DownloadItemCard with a single
+  AnimeSectionCard that contains the header + ALL episode rows inside.
+- Header: tertiary accent bar + anime name + episode count badge
+  (secondaryContainer, NOT primaryContainer).
+- Episodes inside the card are separated by thin dividers.
+
+(3) INFO PILLS ON RIGHT SIDE:
+- Moved server/audio/quality pills to the RIGHT of the episode name (in a Row),
+  not below. Removed the resolution pill (user only wants server/audio/quality).
+- Each pill: RoundedCornerShape(6.dp), surfaceVariant bg, colored text.
+
+(4) TALLER PROGRESS BAR:
+- Progress bar height increased from default (4dp) to 8.dp.
+- Progress bar is below the name+pills row.
+- Percentage + speed shown to the right of the size text (below the bar).
+
+(5) NO ALTERNATING COLORS:
+- Removed all index-based alternating colors. All cards use uniform
+  surfaceContainerLow. Action panel is transparent (no own bg).
+
+(6) NO primaryContainer (deep dark blue):
+- Replaced ALL primaryContainer usages:
+  - Status pills → removed (percentage shown as text instead)
+  - Count badge → secondaryContainer
+  - Progress bar color → tertiary
+  - Accent bar → tertiary
+  - Empty state icon bg → secondaryContainer
+  - Stat chips → tertiary (for downloading/paused/done)
+- primaryContainer only appears in comments documenting its absence.
+
+(7) REACTIVE COUNTS (Resume All fix):
+- Root cause: status counts were derived from queue (List<Download>) which
+  doesn't re-emit when individual download.status changes. After Pause All,
+  all downloads become PAUSED but the queue list doesn't change → counts
+  don't update → Resume All button doesn't appear.
+- Fix: derive counts from downloadStatusMap (Map<String, State>) which
+  re-emits on every status change (DownloadManager.refreshStatusMap is called
+  on every statusFlow emission).
+- Now after Pause All, hasPaused becomes true immediately → Resume All appears.
+
+(8) SEPARATION BETWEEN PAUSE/CANCEL BUTTONS:
+- Added a 1dp tall, 28dp wide separator Box between the icon buttons in the
+  action panel (in addition to the 6dp spacedBy gap).
+
+(9) SHOW DOWNLOAD SIZE TOGGLE:
+- DownloadPreferences: added showDownloadSize() (default: true).
+- DownloadsViewModel: added showDownloadSize StateFlow + setShowDownloadSize().
+- DownloadsSettingsScreen: added "Show download size" ToggleRow in General section.
+- DownloadQueueScreen: reads preference reactively (stateIn+collectAsState),
+  conditionally shows size text.
+
+(10) DOWNLOAD NOTIFICATION IMPROVEMENTS:
+- Progress notification (single download): shows anime title, episode name,
+  percentage, size (downloaded/total), speed — all in one clean line.
+- Progress notification (multi-download): BigTextStyle with per-episode
+  progress + speed, overall percentage in content text.
+- Error notification: BigTextStyle with anime, episode, server, quality, error.
+- Complete notification: includes resolution + duration.
+
+FILES MODIFIED (5):
+- DownloadPreferences.kt: added showDownloadSize()
+- DownloadsViewModel.kt: added showDownloadSize state + setter
+- DownloadsSettingsScreen.kt: added "Show download size" toggle
+- DownloadQueueScreen.kt: complete rewrite (v2)
+- DownloadNotifier.kt: improved notification content
+
+Build: pending (will trigger workflow_dispatch next).

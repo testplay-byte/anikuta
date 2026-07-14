@@ -69,6 +69,9 @@ class DownloadPreferences(
     fun numberOfDownloads() = preferenceStore.getInt("download_slots", 1)
     fun downloadSpeedLimit() = preferenceStore.getInt("download_speed_limit", 0)
 
+    /** Show download size info (downloaded/total bytes) on download cards. Default: true. */
+    fun showDownloadSize() = preferenceStore.getBoolean("pref_show_download_size", true)
+
     fun downloadNewUnreadChaptersOnly() = preferenceStore.getBoolean("download_new_unread_chapters_only", false)
     fun downloadNewUnseenEpisodesOnly() = preferenceStore.getBoolean("download_new_unread_episodes_only", false)
 

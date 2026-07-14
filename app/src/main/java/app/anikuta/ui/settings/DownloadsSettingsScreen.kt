@@ -202,6 +202,13 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
                         checked = deleteAfter,
                         onCheckedChange = { viewModel.setDeleteAfterWatching(it) },
                     )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    val showSize by viewModel.showDownloadSize.collectAsState()
+                    ToggleRow(
+                        label = "Show download size",
+                        checked = showSize,
+                        onCheckedChange = { viewModel.setShowDownloadSize(it) },
+                    )
                 }
             }
         }
