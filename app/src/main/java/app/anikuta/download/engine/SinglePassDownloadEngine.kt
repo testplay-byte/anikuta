@@ -16,7 +16,6 @@ import com.arthenica.ffmpegkit.StatisticsCallback
 import eu.kanade.tachiyomi.animesource.model.Video
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Headers
@@ -190,7 +189,11 @@ class SinglePassDownloadEngine(
         val session = kotlinx.coroutines.suspendCancellableCoroutine<com.arthenica.ffmpegkit.FFmpegSession> { cont ->
             val s = com.arthenica.ffmpegkit.FFmpegKit.executeWithArgumentsAsync(
                 args,
-                { completedSession -> cont.resume(completedSession) {} },
+                { completedSession ->
+                    if (cont.isActive) {
+                        cont.resumeWith(kotlin.Result.success(completedSession))
+                    }
+                },
                 null, // no log callback
                 statsCallback, // statistics callback — fires during execution
             )
