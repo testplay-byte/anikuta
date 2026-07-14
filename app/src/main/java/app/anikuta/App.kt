@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.WorkManager
 import app.anikuta.core.preference.AndroidPreferenceStore
 import app.anikuta.di.AppModule
+import app.anikuta.di.DomainModule
 import app.anikuta.di.PreferenceModule
 import app.anikuta.download.DownloadManager
 import app.anikuta.download.DownloadNotifier
@@ -47,7 +48,9 @@ class App : Application() {
             Injekt.importModule(PreferenceModule(preferenceStore))
             Log.d("AnikutaApp", "PreferenceModule imported")
             Injekt.importModule(AppModule(this))
-            Log.d("AnikutaApp", "AppModule imported — DI ready")
+            Log.d("AnikutaApp", "AppModule imported")
+            Injekt.importModule(DomainModule())
+            Log.d("AnikutaApp", "DomainModule imported — DI ready")
 
             // Create notification channels for the download system
             try {
