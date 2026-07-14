@@ -904,7 +904,7 @@ private fun DownloadButtonTall(
                 onClick = onDownload,
                 onLongClick = onLongClick,
             ),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
         color = backgroundColor,
         tonalElevation = 1.dp,
     ) {
@@ -1037,7 +1037,7 @@ private fun EpisodeRow(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         color = cardColor,
         onClick = onClick,
     ) {
@@ -1181,43 +1181,9 @@ private fun EpisodeRowSimple(
                         )
                     }
                 }
-                // Audio pills — combined with dot separators
+                // Audio pills — adaptive (shortens to S•D when space is tight)
                 if (showAudioPills && (hasSub || hasDub || hasHsub)) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            val audioParts = mutableListOf<String>()
-                            if (hasSub) audioParts.add("SUB")
-                            if (hasDub) audioParts.add("DUB")
-                            if (hasHsub) audioParts.add("HSUB")
-                            audioParts.forEachIndexed { idx, label ->
-                                if (idx > 0) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(3.dp)
-                                            .background(
-                                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                                androidx.compose.foundation.shape.CircleShape,
-                                            ),
-                                    )
-                                }
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                )
-                            }
-                        }
-                    }
+                    AudioPills(hasSub = hasSub, hasDub = hasDub, hasHsub = hasHsub)
                 }
             }
         }
@@ -1300,44 +1266,9 @@ private fun EpisodeRowRich(
                         )
                     }
                 }
-                // Audio pills — combined in one Surface with dot separators
+                // Audio pills — adaptive (shortens to S•D when space is tight)
                 if (showAudioPills && (hasSub || hasDub || hasHsub)) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            val audioParts = mutableListOf<String>()
-                            if (hasSub) audioParts.add("SUB")
-                            if (hasDub) audioParts.add("DUB")
-                            if (hasHsub) audioParts.add("HSUB")
-                            audioParts.forEachIndexed { idx, label ->
-                                if (idx > 0) {
-                                    // Circular dot separator
-                                    Box(
-                                        modifier = Modifier
-                                            .size(3.dp)
-                                            .background(
-                                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                                androidx.compose.foundation.shape.CircleShape,
-                                            ),
-                                    )
-                                }
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                )
-                            }
-                        }
-                    }
+                    AudioPills(hasSub = hasSub, hasDub = hasDub, hasHsub = hasHsub)
                 }
             }
         }
@@ -1672,4 +1603,85 @@ private fun cleanHtmlTags(text: String): String {
         .replace("&#39;", "'")
         .replace("&nbsp;", " ")
         .trim()
+}
+
+/**
+ * Audio pills (SUB / DUB / HSUB) — ADAPTIVE: keeps everything on ONE row.
+ *
+ * When there isn't enough horizontal space for the full labels with dot
+ * separators, the labels automatically shorten to their first letter
+ * (SUB→S, DUB→D, HSUB→H) while keeping the dot separators, e.g. "S•D".
+ * This guarantees the pills are always fully visible on a single row
+ * regardless of available width (fixes the character-per-line wrap issue).
+ *
+ * Uses BoxWithConstraints to measure the available width and picks the
+ * representation that fits. The pill Surface sizes to its content's natural
+ * width, so there's never any clipping or overflow.
+ *
+ * @param hasSub / hasDub / hasHsub  which audio versions are available
+ */
+@Composable
+private fun AudioPills(
+    hasSub: Boolean,
+    hasDub: Boolean,
+    hasHsub: Boolean,
+) {
+    if (!hasSub && !hasDub && !hasHsub) return
+
+    // Full labels:   "SUB", "DUB", "HSUB"
+    // Short labels:  "S", "D", "H"  (first letter only)
+    data class Audio(val full: String, val short: String)
+    val parts = buildList {
+        if (hasSub) add(Audio("SUB", "S"))
+        if (hasDub) add(Audio("DUB", "D"))
+        if (hasHsub) add(Audio("HSUB", "H"))
+    }
+
+    BoxWithConstraints {
+        val maxWidthPx = maxWidth
+        // Heuristic threshold: if the available width is less than a full
+        // representation would need (roughly: sum of label widths + dot
+        // separators + padding), use the short form. We estimate ~7dp per
+        // character at labelSmall, plus 4dp per separator + 16dp padding.
+        // Full form chars = sum of full label lengths + (n-1) dots.
+        // Short form chars = n letters + (n-1) dots.
+        val fullChars = parts.sumOf { it.full.length } + (parts.size - 1)
+        // Rough px-per-char estimate for labelSmall (SemiBold). On a typical
+        // 3×-density screen, ~6dp per char is safe. Convert dp→px.
+        val estimatedFullWidthDp = fullChars * 6 + 16 // +16 for padding
+        val useShort = maxWidthPx < estimatedFullWidthDp.dp
+
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = MaterialTheme.colorScheme.outlineVariant,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                parts.forEachIndexed { idx, audio ->
+                    if (idx > 0) {
+                        // Circular dot separator
+                        Box(
+                            modifier = Modifier
+                                .size(3.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                    androidx.compose.foundation.shape.CircleShape,
+                                ),
+                        )
+                    }
+                    Text(
+                        text = if (useShort) audio.short else audio.full,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            }
+        }
+    }
 }

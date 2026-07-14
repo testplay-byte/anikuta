@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -67,6 +68,7 @@ fun EpisodeRowPreview(
     episodeNumberPosition: String = "overlay",
     thumbnailPosition: String = "left",
     downloadButtonPlacement: String = "episode_row",
+    showDownloadButton: Boolean = true,
 ) {
     val demoTitle = "The Dragon's Labyrinth"
     val demoSynopsis = "A young adventurer discovers a hidden labyrinth beneath the ancient city, where a mysterious dragon guards a long-forgotten secret that could change the fate of the realm forever."
@@ -177,44 +179,9 @@ fun EpisodeRowPreview(
                         )
                     }
                 }
-                // Audio pills — combined in one Surface with dot separators
+                // Audio pills — adaptive (shortens to S•D when space is tight)
                 if (showAudioPills && (hasSub || hasDub || hasHsub)) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            val audioParts = mutableListOf<String>()
-                            if (hasSub) audioParts.add("SUB")
-                            if (hasDub) audioParts.add("DUB")
-                            if (hasHsub) audioParts.add("HSUB")
-                            audioParts.forEachIndexed { idx, label ->
-                                if (idx > 0) {
-                                    // Circular dot separator
-                                    Box(
-                                        modifier = Modifier
-                                            .size(3.dp)
-                                            .background(
-                                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                                CircleShape,
-                                            ),
-                                    )
-                                }
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                )
-                            }
-                        }
-                    }
+                    AudioPillsPreview(hasSub = hasSub, hasDub = hasDub, hasHsub = hasHsub)
                 }
             }
         }
@@ -223,7 +190,7 @@ fun EpisodeRowPreview(
     @Composable
     fun SynopsisContent() {
         if (hasSummary) {
-            if (downloadButtonPlacement == "synopsis") {
+            if (showDownloadButton && downloadButtonPlacement == "synopsis") {
                 // Two separated panels side-by-side, each with its own background:
                 //  - Left:  synopsis text (reduced width, all corners rounded)
                 //  - Right: a dedicated tall button for the download (own background,
@@ -324,12 +291,12 @@ fun EpisodeRowPreview(
     // For "synopsis" placement the card is full-width and the download button is
     // rendered inside the synopsis area (see SynopsisContent above).
     Row(
-        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(horizontal = 6.dp),
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
             modifier = Modifier.weight(1f).fillMaxHeight(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             tonalElevation = 1.dp,
         ) {
@@ -440,11 +407,11 @@ fun EpisodeRowPreview(
         // Matches the real DownloadButtonTall (48dp wide, fills card height,
         // own background, fully rounded) so the preview accounts for the
         // download button in both placement modes.
-        if (downloadButtonPlacement == "episode_row") {
+        if (showDownloadButton && downloadButtonPlacement == "episode_row") {
             Spacer(modifier = Modifier.width(8.dp))
             // Tall button — dedicated background, all corners rounded, fills card height
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 1.dp,
                 modifier = Modifier.width(48.dp).fillMaxHeight(),
@@ -455,6 +422,67 @@ fun EpisodeRowPreview(
                         contentDescription = "Download",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Audio pills (SUB / DUB / HSUB) — ADAPTIVE: keeps everything on ONE row.
+ *
+ * When there isn't enough horizontal space for the full labels, they
+ * automatically shorten to their first letter (SUB→S, DUB→D, HSUB→H) while
+ * keeping the dot separators, e.g. "S•D". Mirrors the detail page's AudioPills.
+ */
+@Composable
+private fun AudioPillsPreview(
+    hasSub: Boolean,
+    hasDub: Boolean,
+    hasHsub: Boolean,
+) {
+    if (!hasSub && !hasDub && !hasHsub) return
+
+    data class Audio(val full: String, val short: String)
+    val parts = buildList {
+        if (hasSub) add(Audio("SUB", "S"))
+        if (hasDub) add(Audio("DUB", "D"))
+        if (hasHsub) add(Audio("HSUB", "H"))
+    }
+
+    BoxWithConstraints {
+        val fullChars = parts.sumOf { it.full.length } + (parts.size - 1)
+        val estimatedFullWidthDp = fullChars * 6 + 16
+        val useShort = maxWidth < estimatedFullWidthDp.dp
+
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = MaterialTheme.colorScheme.outlineVariant,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                parts.forEachIndexed { idx, audio ->
+                    if (idx > 0) {
+                        Box(
+                            modifier = Modifier
+                                .size(3.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                    CircleShape,
+                                ),
+                        )
+                    }
+                    Text(
+                        text = if (useShort) audio.short else audio.full,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
             }

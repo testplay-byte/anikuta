@@ -35,6 +35,15 @@ class PlayerEpisodePreferences(
     fun showAudioPills(): Preference<Boolean> =
         preferenceStore.getBoolean("player_ep_show_audio_pills", true)
 
+    /**
+     * Whether to render a download button on each episode card in the player's
+     * episode list. Mirrors the detail page's "download button" toggle but is
+     * scoped to the player (separate preference). When false, the player
+     * episode list looks like it did before the download button was added.
+     */
+    fun showDownloadButton(): Preference<Boolean> =
+        preferenceStore.getBoolean("player_ep_show_download_button", true)
+
     fun synopsisPosition(): Preference<String> =
         preferenceStore.getString("player_ep_synopsis_pos", "below")
 

@@ -110,6 +110,13 @@ internal fun PlayerScreen(
     val currentIndex by viewModel.currentEpisodeIndex.collectAsState()
     val currentEpisode = episodeList.getOrNull(currentIndex)
 
+    // ---- Download state (Phase: PLAYER-DL-BTN) ----
+    // Collected here so the inline episode rows in the LazyColumn below can
+    // render the per-episode download button with live queue state.
+    val downloadStatus by viewModel.downloadStatus.collectAsState()
+    val downloadProgress by viewModel.downloadProgress.collectAsState()
+    val downloadedOnDisk by viewModel.downloadedOnDisk.collectAsState()
+
     // ---- LazyColumn scroll state ----
     // FIX: Force-scroll to the VERY top when the episode list first loads.
     // The list loads asynchronously from disk cache (lifecycleScope.launch in
@@ -464,8 +471,8 @@ internal fun PlayerScreen(
                         state = episodeListState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            start = 12.dp,
-                            end = 12.dp,
+                            start = 8.dp,
+                            end = 8.dp,
                             top = 13.dp,
                             bottom = 24.dp,
                         ),
@@ -565,6 +572,15 @@ internal fun PlayerScreen(
                             isSwitching = viewModel.isSwitchingEpisode.value && index == currentIndex,
                             onClick = { onEpisodeSwitch(index) },
                             prefs = null,  // Uses default PlayerEpisodePreferences from Injekt
+                            // Phase: PLAYER-DL-BTN — download state from PlayerViewModel.
+                            // onDownloadClick / onDownloadLongClick are no-op stubs for
+                            // now (enqueueing needs the anime title + source which live on
+                            // PlayerActivity, not the ViewModel — deferred).
+                            downloadStatus = downloadStatus,
+                            downloadProgress = downloadProgress,
+                            downloadedOnDisk = downloadedOnDisk,
+                            onDownloadClick = {},
+                            onDownloadLongClick = {},
                         )
                     }
                     } // end LazyColumn

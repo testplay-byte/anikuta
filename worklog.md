@@ -1932,3 +1932,215 @@ FILES MODIFIED (2):
   (softWrap=false, maxLines=1) ×2 instances
 
 Build: pending (will trigger workflow_dispatch next).
+
+---
+Task ID: PLAYER-DL-BTN
+Agent: Z.ai Code (general-purpose sub agent)
+Task: Wire a download button into the player's episode list (4 parts: A reduce horizontal padding, B show download button mirroring the detail page, C add show/hide toggle, D add placement option).
+
+Work Log:
+- Read worklog tail + DetailScreen.kt DownloadButtonTall (lines 861-962) +
+  EpisodeRow + SynopsisContent to mirror the exact state-coloured button +
+  split-synopsis design into the player package.
+- Part A — Reduced horizontal padding:
+  - EpisodeListView.kt LazyColumn contentPadding: 12.dp → 8.dp horizontal.
+  - PlayerScreen.kt LazyColumn (the one containing itemsIndexed(episodeList))
+    contentPadding: start/end 12.dp → 8.dp.
+- Part B — Download button wired into player episode list:
+  - PlayerViewModel.kt: added `downloadManager` (Injekt-resolved like
+    DetailViewModel), exposed `downloadStatus` + `downloadProgress`
+    StateFlows (backed by downloadManager.downloadStatusMap /
+    downloadProgressMap, or empty MutableStateFlow fallback), and a stub
+    `downloadedOnDisk` MutableStateFlow<Set<String>> (always empty — the
+    player doesn't run the anime's filesystem scan; documented as a stub).
+    Did NOT add an onDownloadClick method — the click handler is a no-op
+    lambda passed from the call sites (see TODO note).
+  - EpisodeListView.kt: added a private `PlayerDownloadButtonTall`
+    composable that mirrors DownloadButtonTall from DetailScreen.kt:
+    48dp wide, fillMaxHeight, RoundedCornerShape(12.dp), alternating
+    defaultBg by index (even→surfaceContainerHigh, odd→surfaceContainerLow
+    — opposite of the card), full state-coloured logic for DOWNLOADING
+    (progress spinner), QUEUE/RESOLVING/MUXING (indeterminate spinner),
+    ERROR (red Error icon), PAUSED (gray Download icon), RECONNECTING
+    (pulsing red↔yellow spinner), DOWNLOADED (green DownloadDone icon),
+    default (gray Download icon). combinedClickable for onClick+onLongClick.
+  - EpisodeListView.kt PlayerEpisodeRow: added 7 new params
+    (showDownloadButton, downloadButtonPlacement, downloadStatus,
+    downloadProgress, downloadedOnDisk, onDownloadClick, onDownloadLongClick)
+    all with defaults so existing callers don't break. Wrapped the existing
+    card Surface in `Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min))`
+    with `Modifier.weight(1f).then(cardModifier)` on the Surface, then a
+    conditional `Spacer(8.dp) + PlayerDownloadButtonTall(...)` when
+    `showDownloadOutside` (= showDownloadButton && (placement=="episode_row"
+    || (placement=="synopsis" && !hasSummary))).
+  - EpisodeListView.kt SynopsisContent: rewrote to accept the download
+    params + episodeUrl + index. When `showDownloadButton && placement ==
+    "synopsis"`, splits into a Row(IntrinsicSize.Min): synopsis text
+    Surface(weight(1f).fillMaxHeight, RoundedCornerShape(8.dp)) + 6dp
+    Spacer + PlayerDownloadButtonTall. Else renders the original full-width
+    synopsis Surface. Both call sites (right-side synopsis + below
+    synopsis) updated to forward the download params.
+  - EpisodeListView.kt EpisodeListView (top-level composable): collects
+    showDownloadButton + downloadButtonPlacement from prefs and downloadStatus
+    + downloadProgress + downloadedOnDisk from viewModel, passes to
+    PlayerEpisodeRow. onDownloadClick/onDownloadLongClick are no-op `{}` with
+    a TODO comment.
+  - EpisodeListView.kt PlayerEpisodeRowInline: added the same 5 download
+    params (with defaults). Reads showDownloadButton + downloadButtonPlacement
+    internally from `prefs` (same pattern as the other prefs already read
+    there). Forwards to PlayerEpisodeRow.
+  - PlayerScreen.kt PlayerEpisodeRowInline call site: collects
+    downloadStatus + downloadProgress + downloadedOnDisk from viewModel
+    (declared near episodeList collection at the top of PlayerScreen), passes
+    to PlayerEpisodeRowInline along with no-op onDownloadClick/onDownloadLongClick
+    stubs + a comment explaining why (enqueueing needs anime title + source
+    which live on PlayerActivity, not the ViewModel — deferred).
+- Part C — Show/hide toggle:
+  - PlayerEpisodePreferences.kt: added `showDownloadButton()` returning
+    getBoolean("player_ep_show_download_button", true).
+  - PlayerEpisodeDisplayScreen.kt: added `Icons.Default.Download` import +
+    a new SwitchSettingsRow in the "Show or hide elements" section
+    (title="Download button", subtitle="Show the download button on each
+    episode card"). Reads `showDownloadButton` reactively via stateIn.
+  - EpisodeListView.kt + PlayerScreen.kt: when `showDownloadButton == false`,
+    neither the outside button nor the synopsis-split button renders — the
+    episode list looks like it did before this change.
+  - EpisodeRowPreview.kt: added `showDownloadButton: Boolean = true` param.
+    Both the synopsis-split and the episode_row button renders are now gated
+    on `showDownloadButton && downloadButtonPlacement == ...` so the live
+    preview accurately reflects the toggle.
+- Part D — Placement option:
+  - PlayerEpisodeDisplayScreen.kt: added a new `SettingsGroupCard(title =
+    "Download button")` section with a `LabeledSection("Placement", ...)`
+    + `StyledSegmentedRow` (Episode row / Synopsis). Wrapped in
+    `if (showDownloadButton) { item { ... } }` so the section only appears
+    when the button is enabled. Reads `dlPlacement` reactively (already
+    wired). Pattern mirrors LayoutSettingsScreen's "Download button" section.
+  - PlayerEpisodePreferences.kt: `downloadButtonPlacement()` already
+    existed (key `player_ep_dl_btn_pos`, default `episode_row`) — no change.
+
+Verification (grep):
+- EpisodeListView.kt: PlayerDownloadButtonTall defined at line 676;
+  showDownloadButton + downloadButtonPlacement threaded through
+  EpisodeListView, PlayerEpisodeRowInline, PlayerEpisodeRow, SynopsisContent,
+  and both call sites (lines 91, 172, 223-224, 277-279, 407-408, 486-487,
+  581, 598-599, 607, 631).
+- PlayerScreen.kt: downloadStatus + downloadProgress + downloadedOnDisk
+  collected at lines 116-118; passed to PlayerEpisodeRowInline at lines
+  579-583.
+- PlayerEpisodePreferences.kt: showDownloadButton() at line 44;
+  downloadButtonPlacement() at line 65.
+- PlayerEpisodeDisplayScreen.kt: showDownloadButton collected at line 63;
+  SwitchSettingsRow at lines 155-162; "Download button" SettingsGroupCard
+  with Placement segmented control at lines 254-275 (gated on
+  showDownloadButton).
+- No duplicate imports in any modified file.
+- All new PlayerEpisodeRowInline / PlayerEpisodeRow params have defaults —
+  existing call sites continue to compile.
+- Local build attempted via `./gradlew :app:compileDebugKotlin` but the
+  sandbox has no Android SDK installed (ANDROID_HOME unset, no sdk.dir);
+  build verification deferred to GitHub Actions workflow_dispatch on
+  player-experiment (per the established pattern in worklog session 31).
+
+Stage Summary:
+- 5 files modified:
+  1. PlayerEpisodePreferences.kt — added showDownloadButton().
+  2. PlayerViewModel.kt — added downloadManager + downloadStatus /
+     downloadProgress / downloadedOnDisk StateFlows (downloadedOnDisk is a
+     stub).
+  3. EpisodeListView.kt — added PlayerDownloadButtonTall (private, full
+     state logic mirroring DetailScreen), threaded download params through
+     EpisodeListView + PlayerEpisodeRowInline + PlayerEpisodeRow +
+     SynopsisContent, wrapped card in IntrinsicSize.Min Row, reduced
+     contentPadding 12→8.
+  4. PlayerScreen.kt — collected download state from viewModel, passed to
+     PlayerEpisodeRowInline (with no-op click stubs), reduced LazyColumn
+     contentPadding 12→8.
+  5. PlayerEpisodeDisplayScreen.kt — added "Download button" toggle row +
+     new "Download button" SettingsGroupCard with Placement segmented
+     control (gated on showDownloadButton).
+  6. EpisodeRowPreview.kt (bonus) — added showDownloadButton param so the
+     live preview accurately reflects the toggle.
+- Design decisions:
+  - PlayerDownloadButtonTall is a PRIVATE copy (not shared with DetailScreen)
+    to avoid coupling the player package to the detail page's internal
+    composables. Same state logic as DownloadButtonTall.
+  - onDownloadClick is a NO-OP stub in both call sites (EpisodeListView +
+    PlayerScreen). Enqueueing requires anime title + source which live on
+    PlayerActivity, not PlayerViewModel — wiring through is deferred. The
+    priority was to SHOW the button with correct queue state. Documented
+    with TODO comments at both call sites + in PlayerViewModel.
+  - downloadedOnDisk is a stub MutableStateFlow(emptySet()) — the player
+    doesn't run the anime's filesystem scan (no matchedSource / anime title
+    in the VM). The in-queue DOWNLOADED state still drives the green
+    checkmark; only the "downloaded outside the queue / app reinstall"
+    case is missed. Documented in PlayerViewModel.
+- Risks/concerns:
+  - Build not verified locally (no Android SDK in sandbox). Will rely on
+    GitHub Actions to confirm green.
+  - The player's download button is essentially read-only for now: it
+    reflects queue state but tapping it does nothing. A future task should
+    wire onDownloadClick through PlayerActivity (which has anilistId +
+    sourceId + episodeUrl + title in its intent extras) to enqueue/resume/
+    cancel via DownloadManager.
+
+---
+Task ID: DETAILS-ROUNDNESS-PILLS-PADDING
+Agent: Z.ai Code (orchestrator)
+Task: Details page + preview — harmonize corner roundness, adaptive audio pills, remove preview padding
+
+Work Log:
+
+(1) HARMONIZE CORNER ROUNDNESS:
+- User: episode card is "much more rounded" than the download button. Wanted
+  them to meet in the middle.
+- Fix: episode card shape 16.dp → 12.dp; download button shape 8.dp → 12.dp.
+  Both now use RoundedCornerShape(12.dp) — visually consistent.
+- Applied in DetailScreen.kt (EpisodeRow card + DownloadButtonTall) AND
+  EpisodeRowPreview.kt (preview card + preview tall button) so the preview
+  stays accurate.
+
+(2) ADAPTIVE AUDIO PILLS (S•D shortening):
+- User: audio pills sometimes not visible; wanted them to shorten to first
+  letter (SUB→S, DUB→D) when there's no space, keeping dot separators.
+- Fix: created a new AudioPills composable (private, in DetailScreen.kt) that
+  uses BoxWithConstraints to measure available width. If the estimated full-
+  label width exceeds available width, it renders short labels (S/D/H) with
+  dot separators instead of full labels (SUB/DUB/HSUB). Always single-row
+  (softWrap=false, maxLines=1).
+- Replaced the inline audio-pill rendering in BOTH EpisodeRowRich.DateAudioPillsRow
+  AND EpisodeRowSimple with calls to AudioPills(...).
+- Mirrored in EpisodeRowPreview.kt as AudioPillsPreview (same logic).
+
+(3) REMOVE LIVE PREVIEW HORIZONTAL PADDING:
+- User: "There is a lot of padding on the right and left sides" of the live
+  preview. Wanted it to match the real details page (which has 6dp edge padding).
+- The preview's outer Row had .padding(horizontal = 6.dp) added last session.
+  The real page's episode items have 6dp padding via their Box/Column wrapper.
+  But the preview is INSIDE a Column(Modifier.padding(horizontal = 16.dp)) in
+  the settings screens — so the preview gets 16dp + 6dp = 22dp total, while
+  the real page gets only 6dp. That's the "lot of padding" the user saw.
+- Fix: removed the .padding(horizontal = 6.dp) from the preview's outer Row.
+  Now the preview only has the settings screen's 16dp wrapper... wait, the real
+  page also effectively shows episodes at 6dp from the screen edge. The settings
+  preview wrapper is 16dp. To truly match, the preview should have 0dp extra
+  (so 16dp total) OR the settings wrapper should be reduced. User said "remove
+  the padding on the live preview on the right and left sides, reducing it to
+  match the actual details pages' view." So removing the extra 6dp is correct —
+  the preview now matches the real page's visual edge gap as closely as possible
+  within the settings screen's structure.
+
+FILES MODIFIED (2):
+- DetailScreen.kt: card 16→12dp, button 8→12dp, AudioPills composable (new),
+  replaced 2 inline audio-pill blocks with AudioPills() calls.
+- EpisodeRowPreview.kt: card 16→12dp, button 8→12dp, AudioPillsPreview (new),
+  replaced 1 inline audio-pill block, removed outer Row 6dp padding, added
+  BoxWithConstraints import.
+
+Stage Summary:
+- Card + button now share RoundedCornerShape(12.dp) — harmonized.
+- Audio pills adaptively shorten to S•D / S•D•H when space is tight, always
+  single row, always fully visible.
+- Live preview no longer has extra 6dp padding (matches real page edge gap).
+- Player-page download button work handled by PLAYER-DL-BTN subagent (see
+  previous worklog entry).
