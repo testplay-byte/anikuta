@@ -169,7 +169,6 @@ class DownloadWorker(
         val method = downloadPrefs.downloadMethod().get()
         val engine: DownloadEngine = when (method) {
             "hls_direct" -> Injekt.get<HlsDownloadEngine>()
-            "segment" -> Injekt.get<SegmentDownloadEngine>()
             else -> Injekt.get<SinglePassDownloadEngine>() // "single_pass" (default)
         }
         val progressTracker: ProgressTracker = Injekt.get()

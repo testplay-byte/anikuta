@@ -157,27 +157,31 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
 
             // ---- Download method ----
             SettingsGroupCard(title = "Download method") {
-                Column {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                     val method by viewModel.downloadMethod.collectAsState()
-                    DownloadMethodOption(
-                        label = "Single-pass (recommended)",
-                        description = "Aniyomi's approach. Correct size & duration. No resume after failure.",
-                        selected = method == "single_pass",
-                        onClick = { viewModel.setDownloadMethod("single_pass") },
+                    Text(
+                        text = "Choose how episodes are downloaded",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp),
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    DownloadMethodOption(
-                        label = "HLS direct",
-                        description = "Downloads .ts segments via HTTP. Resume + precise progress. May not work with all sources.",
-                        selected = method == "hls_direct",
-                        onClick = { viewModel.setDownloadMethod("hls_direct") },
+                    StyledSegmentedRow(
+                        options = listOf(
+                            "Single-pass" to (method == "single_pass"),
+                            "HLS direct" to (method == "hls_direct"),
+                        ),
+                        onSelect = {
+                            viewModel.setDownloadMethod(if (it == 0) "single_pass" else "hls_direct")
+                        },
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    DownloadMethodOption(
-                        label = "Segment (legacy)",
-                        description = "FFmpeg -ss segments. Resume + precise progress. Wrong size for short videos.",
-                        selected = method == "segment",
-                        onClick = { viewModel.setDownloadMethod("segment") },
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = when (method) {
+                            "hls_direct" -> "Downloads .ts segments individually via HTTP. Supports resume + precise progress. May not work with all sources."
+                            else -> "Aniyomi's approach. Correct size & duration. Progress is estimated. No resume after failure."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -306,33 +310,3 @@ private fun ToggleRow(
     }
 }
 
-@Composable
-private fun DownloadMethodOption(
-    label: String,
-    description: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(selected = selected, onClick = onClick)
-        Spacer(modifier = Modifier.width(12.dp))
-        Column {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}

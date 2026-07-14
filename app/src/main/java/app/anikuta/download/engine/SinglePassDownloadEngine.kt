@@ -108,11 +108,21 @@ class SinglePassDownloadEngine(
         val durationMs = getVideoDurationMs(video)
         Log.d(TAG, "download: estimated duration=${durationMs}ms (${durationMs / 1000 / 60}m${(durationMs / 1000) % 60}s)")
 
-        // Progress callback — uses FFmpeg statistics.
-        // We track bytes processed (stats.size) and estimate progress based on
-        // the FFprobe duration. If the FFprobe duration is wrong (e.g., 24min for
-        // a 3min video), progress will be low but the download will still complete.
-        // We also update the totalSize estimate from the bitrate.
+        // Adaptive progress tracking for single-pass FFmpeg download.
+        //
+        // Challenge: FFprobe may return a wrong duration (e.g., 24 min for a 3 min video).
+        // If we blindly use processedTime / estimatedDuration, progress would be stuck at ~12%.
+        //
+        // Solution: Track the RATE of change. If processedTime stops increasing (FFmpeg finished
+        // processing all real content), we know the real duration ≈ last processedTime.
+        // We then re-calibrate: progress = processedTime / realDuration × 100.
+        //
+        // We also track bytes (stats.size) for the UI size display, and estimate total size
+        // from the bitrate (bytes/ms × duration).
+        var lastProcessedTime = 0L
+        var stableTimeCount = 0 // how many consecutive callbacks had the same time
+        var calibratedDurationMs = durationMs // will be reduced if FFmpeg finishes early
+
         val statsCallback = StatisticsCallback { stats ->
             val processedTimeMs = stats.time
             val processedBytes = stats.size
@@ -122,18 +132,37 @@ class SinglePassDownloadEngine(
                 download.downloadedBytes = processedBytes
             }
 
-            // Estimate total size from bitrate if we don't have it
-            if (download.totalSize <= 0 && processedTimeMs > 0 && processedBytes > 0) {
+            // Detect if FFmpeg has finished processing real content.
+            // If processedTime hasn't changed for 3 consecutive callbacks, FFmpeg is likely
+            // done with the real video (just flushing/muxing remaining). Re-calibrate duration.
+            if (processedTimeMs == lastProcessedTime) {
+                stableTimeCount++
+                if (stableTimeCount >= 3 && processedTimeMs > 0 && processedTimeMs < calibratedDurationMs) {
+                    calibratedDurationMs = processedTimeMs
+                    Log.d(TAG, "download: re-calibrated duration: ${durationMs}ms → ${calibratedDurationMs}ms")
+                }
+            } else {
+                stableTimeCount = 0
+                lastProcessedTime = processedTimeMs
+            }
+
+            // Estimate total size from bitrate (updated continuously)
+            if (processedTimeMs > 0 && processedBytes > 0) {
                 val bitrate = processedBytes.toDouble() / processedTimeMs // bytes per ms
-                val estimatedTotal = (bitrate * durationMs).toLong()
+                val estimatedTotal = (bitrate * calibratedDurationMs).toLong()
                 if (estimatedTotal > 0) {
-                    progressTracker.setTotalSize(download, estimatedTotal)
+                    // Only update if difference is significant (>10%)
+                    if (Math.abs(estimatedTotal - download.totalSize) > download.totalSize * 0.1) {
+                        progressTracker.setTotalSize(download, estimatedTotal)
+                    }
                 }
             }
 
-            // Calculate progress from time (may be inaccurate if duration is wrong)
-            if (durationMs > 0 && processedTimeMs > 0) {
-                val progress = ((processedTimeMs.toDouble() / durationMs) * 100).toInt().coerceIn(0, 99)
+            // Calculate progress from calibrated duration
+            if (calibratedDurationMs > 0 && processedTimeMs > 0) {
+                val progress = ((processedTimeMs.toDouble() / calibratedDurationMs) * 100)
+                    .toInt()
+                    .coerceIn(0, 99)
                 if (progress != download.progress && progress > 0) {
                     download.progress = progress
                 }
