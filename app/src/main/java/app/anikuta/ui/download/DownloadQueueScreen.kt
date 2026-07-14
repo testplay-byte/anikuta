@@ -60,7 +60,7 @@ import app.anikuta.download.Download
 import app.anikuta.download.DownloadManager
 import app.anikuta.download.progress.formatBytes
 import app.anikuta.download.progress.formatSpeed
-import app.anikuta.domain.download.service.DownloadPreferences
+import app.anikuta.download.DownloadPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import uy.kohesive.injekt.Injekt

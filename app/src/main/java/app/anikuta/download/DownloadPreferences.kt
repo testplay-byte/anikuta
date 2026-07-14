@@ -91,6 +91,10 @@ class DownloadPreferences(
     fun downloadOverWifiOnly(): Preference<Boolean> =
         preferenceStore.getBoolean("download_wifi_only", false)
 
+    /** Show download size info (downloaded/total bytes) on download cards. Default: true. */
+    fun showDownloadSize(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_show_download_size", true)
+
     /**
      * Migrate old single-value prefs (Phase 6) to single-element ordered lists.
      * Called on first run of Phase 7. Idempotent — safe to call multiple times.
