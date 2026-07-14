@@ -240,7 +240,7 @@ private fun StatChip(count: String, label: String, color: androidx.compose.ui.gr
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical: 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
         ) {
             Text(count, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = color)
             Text(label, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.8f))
