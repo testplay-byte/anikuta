@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * ANI-KUTA PlayerViewModel — holds the player UI state.
