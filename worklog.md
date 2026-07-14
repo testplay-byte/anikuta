@@ -1789,3 +1789,88 @@ Stage Summary:
 - ALL 5 live previews now account for the download button in both modes
 - "episode_row" mode unchanged (compact icon outside the card)
 - No-summary fallback ensures the download button is always accessible
+
+---
+Task ID: DL-BTN-SYNOPSIS-SPLIT-BUILD
+Agent: Z.ai Code (orchestrator)
+Task: Build the APK for the synopsis-split changes via GitHub Actions + confirm ntfy.sh notification
+
+Work Log:
+- Clarified build infra: .github/workflows/build-apk.yml only auto-triggers on
+  `main` pushes; `player-experiment` builds are triggered via workflow_dispatch
+  (GitHub API) — confirmed by runs #354-#358 all being on player-experiment.
+- Extracted GitHub token from git remote URL (x-access-token).
+- Triggered workflow_dispatch for build-apk.yml on ref=player-experiment
+  (commit 324987e). HTTP 204 accepted.
+- Polled run #359 (id=29349198404) — completed in ~3 min:
+    started 16:20:03 → completed 16:22:57
+- All 13 steps passed, including "Notify ntfy.sh" (✅ success).
+- ntfy.sh notification sent automatically by workflow to https://ntfy.sh/TASKISDONE
+  with ✅ "ANI-KUTA build succeeded" + click-link to the run.
+
+Build: #359 SUCCESS on player-experiment @ 324987e
+Artifact: anikuta-debug-arm64-v8a (41,252,293 bytes / ~39.3 MB)
+  id=8317455666, expires 2026-10-12
+  download: https://github.com/testplay-byte/anikuta/actions/runs/29349198404/artifacts/8317455666
+Run URL: https://github.com/testplay-byte/anikuta/actions/runs/29349198404
+
+Stage Summary:
+- APK built successfully via GitHub Actions (workflow_dispatch).
+- ntfy.sh notification (topic TASKISDONE) confirmed sent by the workflow's
+  final step (if: always()).
+- APK ready for download as a GitHub Actions artifact (90-day retention).
+- No sandbox blockers encountered.
+
+---
+Task ID: DL-BTN-TALL-SEPARATE-PADDING
+Agent: Z.ai Code (orchestrator)
+Task: 4 UI improvements — (2) separate synopsis button from synopsis text, (3) make episode-row button a tall proper button, (4) reduce episode-list horizontal padding to ~4dp
+
+Work Log:
+
+(2) SEPARATE SYNOPSIS BUTTON FROM SYNOPSIS TEXT:
+- Previously the synopsis text panel and download button were JOINED (split
+  container: synopsis had rounded LEFT corners only, button had rounded RIGHT
+  corners only, no gap).
+- Now they are SEPARATED:
+  - Synopsis text panel: RoundedCornerShape(8.dp) — all corners rounded (standalone)
+  - 6dp Spacer between them (small gap, "just slightly")
+  - Download button: RoundedCornerShape(8.dp) — all corners rounded (standalone)
+- Applied in BOTH DetailScreen.EpisodeRowRich.SynopsisContent AND
+  EpisodeRowPreview.SynopsisContent (preview stays accurate).
+
+(3) EPISODE-ROW BUTTON → TALL PROPER BUTTON:
+- Previously the episode_row placement used a bare 40dp icon (no background).
+- Now it uses the SAME tall button component as the synopsis placement.
+- UNIFIED into ONE component: DownloadButtonTall (renamed from
+  DownloadButtonSynopsisSplit):
+  - width(48.dp), fillMaxHeight(), RoundedCornerShape(8.dp), own state-coloured
+    background, 24dp icon/spinner.
+- Both call sites: added Modifier.height(IntrinsicSize.Min) to the episode Row
+  so the button's fillMaxHeight stretches to match the episode card's height
+  (tall button = episode row height, as requested).
+- Deleted the old icon-only DownloadButton function (dead code).
+- Preview updated: the compact 40dp icon → tall button Surface (matches real).
+
+(4) REDUCE EPISODE-LIST HORIZONTAL PADDING:
+- Above mode (Box wrapping each episode): 16.dp → 4.dp horizontal
+- Below mode (episodes section Column): 16.dp → 4.dp horizontal
+- Note: interpreted "3-4px" as 4.dp (clean small value; much smaller than 16dp).
+
+DESIGN DECISION (unified tall button):
+- ONE component (DownloadButtonTall) serves all 3 render contexts:
+  1. episode_row placement (outside card, Row IntrinsicSize.Min → button = card height)
+  2. synopsis placement + no summary (outside card, same as above)
+  3. synopsis placement + summary (inside synopsis Row, IntrinsicSize.Min → button = synopsis height)
+- All use width(48dp) + fillMaxHeight + RoundedCornerShape(8.dp) + own background.
+- The button is always a "proper tall button" with its own background, never a bare icon.
+
+FILES MODIFIED (2):
+- DetailScreen.kt: renamed DownloadButtonSynopsisSplit→DownloadButtonTall (full
+  rounded corners), separated synopsis panels (6dp gap), both call sites use
+  DownloadButtonTall + IntrinsicSize.Min, padding 16→4dp, deleted dead
+  DownloadButton function, updated comments.
+- EpisodeRowPreview.kt: mirrored all changes (separated panels, tall button,
+  IntrinsicSize.Min, updated comments) so all 5 live previews stay accurate.
+
+Build: pending (will trigger workflow_dispatch next).

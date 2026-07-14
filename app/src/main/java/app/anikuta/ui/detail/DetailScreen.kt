@@ -377,9 +377,9 @@ fun DetailScreen(
                     // Each episode gets 16dp horizontal padding (to align with the
                     // header) and 4dp vertical padding (so 8dp total between episodes).
                     itemsIndexed(loadedEpisodes.episodeList, key = { _, it -> it.url }) { index, episode ->
-                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        Box(modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 // Whether the download button is rendered OUTSIDE the episode
@@ -418,7 +418,7 @@ fun DetailScreen(
                                 // Download button outside the episode container — only for
                                 // "episode_row" placement, or "synopsis" with no summary (fallback)
                                 if (showDownloadOutside) {
-                                    DownloadButton(
+                                    DownloadButtonTall(
                                         episodeUrl = episode.url,
                                         downloadStatus = downloadStatus,
                                         downloadProgress = downloadProgress,
@@ -434,7 +434,7 @@ fun DetailScreen(
                     // Below mode OR not-yet-loaded: episodes in a section with an
                     // inner scrollable container (max height) when loaded.
                     item(key = "episodes") {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.fillMaxWidth(),
@@ -527,7 +527,7 @@ fun DetailScreen(
                                     ) {
                                         itemsIndexed(es.episodeList, key = { _, it -> it.url }) { index, episode ->
                                             Row(
-                                                modifier = Modifier.fillMaxWidth(),
+                                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
                                                 // Whether the download button is rendered OUTSIDE
@@ -566,7 +566,7 @@ fun DetailScreen(
                                                 // Download button outside the episode container —
                                                 // only for "episode_row", or "synopsis" with no summary
                                                 if (showDownloadOutside) {
-                                                    DownloadButton(
+                                                    DownloadButtonTall(
                                                         episodeUrl = episode.url,
                                                         downloadStatus = downloadStatus,
                                                         downloadProgress = downloadProgress,
@@ -842,126 +842,19 @@ private fun InfoCard(title: String, body: String) {
 }
 
 /**
- * Download button with live state from the download queue.
+ * Tall download button with a dedicated (state-coloured) background and fully
+ * rounded corners. Used for BOTH placement modes:
+ *  - "episode_row": rendered beside the episode card; fills the card's height
+ *    via the parent Row's IntrinsicSize.Min.
+ *  - "synopsis": rendered inside the synopsis area, beside the synopsis text
+ *    panel (with a small gap); fills the synopsis height via IntrinsicSize.Min.
  *
- * States:
- * - null/NOT_DOWNLOADED: gray Download icon
- * - QUEUE: indeterminate spinner (waiting for worker)
- * - RESOLVING: indeterminate spinner (resolving video URL)
- * - DOWNLOADING: determinate spinner showing progress %
- * - MUXING: indeterminate spinner (finalizing .mkv)
- * - DOWNLOADED: green DownloadDone icon
- * - ERROR: red Error icon
- * - PAUSED: gray Download icon (shows "paused" on long-press)
- *
- * Bug B1 fix: QUEUE/RESOLVING now use indeterminate spinner (removed
- * the `progress = { 0.3f }` that made it look stationary).
+ * Shows the same download states as the legacy icon button, but as a proper
+ * tall button (width 48dp × parent height) with its own background.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun DownloadButton(
-    episodeUrl: String,
-    downloadStatus: Map<String, app.anikuta.download.Download.State>,
-    downloadProgress: Map<String, Int>,
-    downloadedOnDisk: Set<String>,
-    onDownload: () -> Unit,
-    onLongClick: () -> Unit = {},
-) {
-    val status = downloadStatus[episodeUrl]
-    val progress = downloadProgress[episodeUrl] ?: 0
-    val isOnDisk = downloadedOnDisk.contains(episodeUrl)
-
-    // Use Box with combinedClickable instead of IconButton to support long-press (Q4)
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .combinedClickable(
-                onClick = onDownload,
-                onLongClick = onLongClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        when {
-            status == app.anikuta.download.Download.State.DOWNLOADING -> {
-                CircularProgressIndicator(
-                    progress = { progress / 100f },
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                )
-            }
-            status == app.anikuta.download.Download.State.QUEUE ||
-            status == app.anikuta.download.Download.State.RESOLVING ||
-            status == app.anikuta.download.Download.State.MUXING -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                )
-            }
-            status == app.anikuta.download.Download.State.ERROR -> {
-                Icon(
-                    Icons.Default.Error,
-                    contentDescription = "Download failed",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            // Issue 6: Pulsing red/yellow spinner for RECONNECTING state
-            status == app.anikuta.download.Download.State.RECONNECTING -> {
-                val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "reconnect_spinner")
-                val spinnerColor by transition.animateColor(
-                    initialValue = MaterialTheme.colorScheme.error,
-                    targetValue = androidx.compose.ui.graphics.Color(0xFFFFA000), // amber/yellow
-                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                        animation = androidx.compose.animation.core.tween(500),
-                        repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
-                    ),
-                    label = "reconnect_spinner_color",
-                )
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = spinnerColor,
-                )
-            }
-            status == app.anikuta.download.Download.State.PAUSED -> {
-                Icon(
-                    Icons.Default.Download,
-                    contentDescription = "Download paused",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
-                Icon(
-                    Icons.Default.DownloadDone,
-                    contentDescription = "Downloaded",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            else -> {
-                Icon(
-                    Icons.Default.Download,
-                    contentDescription = "Download",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-    }
-}
-
-/**
- * Download button rendered INSIDE the synopsis area (split placement).
- *
- * Sits on the right side of the synopsis text, sharing the synopsis's height
- * via the parent Row's IntrinsicSize.Min. Has its own dedicated (state-coloured)
- * background and rounded right corners so it reads as the right half of a split
- * container. Shows the same states as [DownloadButton] but with a filled background.
- */
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun DownloadButtonSynopsisSplit(
+private fun DownloadButtonTall(
     episodeUrl: String,
     downloadStatus: Map<String, app.anikuta.download.Download.State>,
     downloadProgress: Map<String, Int>,
@@ -997,7 +890,7 @@ private fun DownloadButtonSynopsisSplit(
                 onClick = onDownload,
                 onLongClick = onLongClick,
             ),
-        shape = RoundedCornerShape(0.dp, 8.dp, 8.dp, 0.dp),
+        shape = RoundedCornerShape(8.dp),
         color = backgroundColor,
         tonalElevation = 1.dp,
     ) {
@@ -1431,17 +1324,17 @@ private fun EpisodeRowRich(
     fun SynopsisContent() {
         if (hasSummary) {
             if (downloadButtonPlacement == "synopsis") {
-                // Split the synopsis area into two side-by-side parts:
-                //  - Left:  synopsis text (reduced width, own background)
-                //  - Right: a dedicated square panel for the download button (own background)
-                // Both share the same height (IntrinsicSize.Min + fillMaxHeight) so the
-                // two panels read as a single split container with rounded outer corners.
+                // Two separated panels side-by-side, each with its own background:
+                //  - Left:  synopsis text (reduced width, all corners rounded)
+                //  - Right: a dedicated tall button for the download (own background,
+                //           all corners rounded), with a small gap between them.
+                // Both share the same height (IntrinsicSize.Min + fillMaxHeight).
                 Row(
                     modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                 ) {
-                    // Synopsis text — own background, rounded left corners
+                    // Synopsis text — own background, all corners rounded (standalone panel)
                     Surface(
-                        shape = RoundedCornerShape(8.dp, 0.dp, 0.dp, 8.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceContainer,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                     ) {
@@ -1456,8 +1349,10 @@ private fun EpisodeRowRich(
                                 .clickable { summaryExpanded = !summaryExpanded },
                         )
                     }
-                    // Download button square — dedicated background, rounded right corners
-                    DownloadButtonSynopsisSplit(
+                    // Small gap between the two panels (separated, not joined)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    // Download button — dedicated background, all corners rounded (standalone)
+                    DownloadButtonTall(
                         episodeUrl = episode.url,
                         downloadStatus = downloadStatus,
                         downloadProgress = downloadProgress,

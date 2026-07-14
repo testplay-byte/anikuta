@@ -220,17 +220,17 @@ fun EpisodeRowPreview(
     fun SynopsisContent() {
         if (hasSummary) {
             if (downloadButtonPlacement == "synopsis") {
-                // Split the synopsis area into two parts:
-                //  - Left:  synopsis text (reduced width, own background)
-                //  - Right: a dedicated square panel for the download button (own background)
-                // Both share the same height (IntrinsicSize.Min + fillMaxHeight) so the
-                // two panels form a unified split container with rounded outer corners.
+                // Two separated panels side-by-side, each with its own background:
+                //  - Left:  synopsis text (reduced width, all corners rounded)
+                //  - Right: a dedicated tall button for the download (own background,
+                //           all corners rounded), with a small gap between them.
+                // Both share the same height (IntrinsicSize.Min + fillMaxHeight).
                 Row(
                     modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                 ) {
-                    // Synopsis text — own background, rounded left corners
+                    // Synopsis text — own background, all corners rounded (standalone panel)
                     Surface(
-                        shape = RoundedCornerShape(8.dp, 0.dp, 0.dp, 8.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceContainer,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                     ) {
@@ -245,9 +245,11 @@ fun EpisodeRowPreview(
                                 .clickable { summaryExpanded = !summaryExpanded },
                         )
                     }
-                    // Download button square — dedicated background, rounded right corners
+                    // Small gap between the two panels (separated, not joined)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    // Download button — dedicated background, all corners rounded (standalone)
                     Surface(
-                        shape = RoundedCornerShape(0.dp, 8.dp, 8.dp, 0.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         tonalElevation = 1.dp,
                         modifier = Modifier.width(48.dp).fillMaxHeight(),
@@ -313,16 +315,16 @@ fun EpisodeRowPreview(
         }
     }
 
-    // The episode row card — wrapped in a Row so a compact download icon can
+    // The episode row card — wrapped in a Row so a tall download button can
     // sit beside it for "episode_row" placement (matching the real detail page).
     // For "synopsis" placement the card is full-width and the download button is
     // rendered inside the synopsis area (see SynopsisContent above).
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             tonalElevation = 1.dp,
@@ -430,21 +432,27 @@ fun EpisodeRowPreview(
             }
         }
         }
-        // Compact download icon — only for "episode_row" placement.
-        // Matches the real DownloadButton (40dp box, 20dp icon) so the preview
-        // accounts for the download button in both placement modes.
+        // Tall download button — only for "episode_row" placement.
+        // Matches the real DownloadButtonTall (48dp wide, fills card height,
+        // own background, fully rounded) so the preview accounts for the
+        // download button in both placement modes.
         if (downloadButtonPlacement == "episode_row") {
             Spacer(modifier = Modifier.width(8.dp))
-            Box(
-                modifier = Modifier.size(40.dp),
-                contentAlignment = Alignment.Center,
+            // Tall button — dedicated background, all corners rounded, fills card height
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 1.dp,
+                modifier = Modifier.width(48.dp).fillMaxHeight(),
             ) {
-                Icon(
-                    imageVector = Icons.Default.Download,
-                    contentDescription = "Download",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Download",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
         }
     }
