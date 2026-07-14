@@ -2144,3 +2144,80 @@ Stage Summary:
 - Live preview no longer has extra 6dp padding (matches real page edge gap).
 - Player-page download button work handled by PLAYER-DL-BTN subagent (see
   previous worklog entry).
+
+---
+Task ID: DOWNLOADS-PAGE-REDESIGN
+Agent: Z.ai Code (orchestrator)
+Task: Redesign downloads page UI — card-style layout matching episode list, right-side action panel, clean top bar
+
+Work Log:
+
+COMPLETE REWRITE of DownloadQueueScreen.kt (394 → 813 lines). New design
+follows the episode list's card-style aesthetic with depth and dedicated
+backgrounds for each element.
+
+DESIGN CHANGES:
+
+1. TOP BAR (clean):
+   - Back button: styled Surface (RoundedCornerShape(12.dp), surfaceContainerHigh,
+     tonalElevation 1dp, 44dp box) — matches settings button styling
+   - "Downloads" title: titleLarge, Bold
+   - Settings button: styled Surface (rectangular, rounded, depth)
+   - NO bulk action icons in the top bar (moved to dedicated action bar below)
+
+2. ACTION BAR (dedicated section below top bar):
+   - Surface(RoundedCornerShape(12.dp), surfaceContainerLow) container
+   - Row of ActionButtons (Pause All / Resume All / Retry All / Cancel All)
+   - Each button: Surface(RoundedCornerShape(10.dp), surfaceContainerHigh),
+     22dp icon, weight(1f) — evenly spaced
+   - Only shown when relevant (conditional on hasActive/hasPaused/hasFailed/hasAny)
+
+3. SUMMARY CHIPS:
+   - Status count chips (downloading/queued/paused/done/failed)
+   - Same design as before (rounded, colored, alpha background)
+
+4. ANIME GROUP HEADERS:
+   - Surface(RoundedCornerShape(12.dp), surfaceContainerLow) card
+   - Primary-colored accent bar (3dp wide) + anime title (titleSmall, Bold)
+   + episode count badge (primaryContainer pill)
+   - Matches SettingsGroupCard design language
+
+5. DOWNLOAD ITEM CARDS (main redesign):
+   - Surface(RoundedCornerShape(12.dp), alternating color by index)
+   - Row(IntrinsicSize.Min):
+     LEFT (weight 1f) — Episode info column:
+       - Episode name: title Surface (8dp rounded, surfaceContainer bg) — matches episode list
+       - Info pills row: server, audio version, quality, resolution — each as
+         separate pill (6dp rounded, outlineVariant bg), colored text
+       - Status pill: state-colored Surface (primaryContainer/errorContainer/etc.)
+       - Progress surface: 8dp rounded, surfaceContainer bg, contains:
+         - LinearProgressIndicator (determinate for DOWNLOADING/PAUSED,
+           indeterminate for RESOLVING/MUXING)
+         - Size text (downloaded/total) + speed text (right-aligned, primary color)
+       - Error message: errorContainer Surface with error text
+       - Auto-remove countdown: text + progress bar
+     RIGHT (52dp) — Action panel:
+       - Surface(RoundedCornerShape(12.dp), alternating OPPOSITE color, fillMaxHeight)
+       - Vertical column of 36dp icon buttons (combinedClickable)
+       - State-dependent buttons:
+         DOWNLOADING/RESOLVING/MUXING/QUEUE: Pause + Cancel
+         RECONNECTING: Cancel
+         PAUSED: Resume + Cancel
+         ERROR: Retry + Cancel
+         DOWNLOADED: Remove + Delete file
+
+DESIGN LANGUAGE (matches episode list):
+- Cards: RoundedCornerShape(12.dp), surfaceContainerLow/High, tonalElevation 1dp
+- Title surfaces: RoundedCornerShape(8.dp), surfaceContainer bg
+- Info pills: RoundedCornerShape(6.dp), outlineVariant bg
+- Action panel: RoundedCornerShape(12.dp), own bg, fillMaxHeight via IntrinsicSize.Min
+- Alternating colors: even=surfaceContainerLow, odd=surfaceContainerHigh
+- Action panel uses OPPOSITE level (alternating contrast)
+
+NO BoxWithConstraints used (learned from previous crash).
+NO SubcomposeLayouts inside IntrinsicSize.Min.
+
+FILES MODIFIED (1):
+- DownloadQueueScreen.kt — complete rewrite with new design
+
+Build: pending (will trigger workflow_dispatch next).
