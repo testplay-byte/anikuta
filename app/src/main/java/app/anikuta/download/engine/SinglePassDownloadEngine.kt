@@ -12,11 +12,11 @@ import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.FFmpegKitConfig
 import com.arthenica.ffmpegkit.FFprobeKit
 import com.arthenica.ffmpegkit.ReturnCode
-import com.arthenica.ffmpegkit.StatisticsCallback
 import eu.kanade.tachiyomi.animesource.model.Video
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import java.io.File
@@ -112,95 +112,107 @@ class SinglePassDownloadEngine(
         val durationMs = getVideoDurationMs(video)
         Log.d(TAG, "download: estimated duration=${durationMs}ms (${durationMs / 1000 / 60}m${(durationMs / 1000) % 60}s)")
 
-        // Adaptive progress tracking for single-pass FFmpeg download.
+        // Progress tracking via file-size polling.
         //
-        // Challenge: FFprobe may return a wrong duration (e.g., 24 min for a 3 min video).
-        // If we blindly use processedTime / estimatedDuration, progress would be stuck at ~12%.
+        // FFmpegKit's statistics callback doesn't fire reliably in our setup (the aniyomi
+        // fork may behave differently). Instead, we poll the output file size on disk
+        // every 500ms. This is more reliable and mirrors what users see in file managers.
         //
-        // Solution: Track the RATE of change. If processedTime stops increasing (FFmpeg finished
-        // processing all real content), we know the real duration ≈ last processedTime.
-        // We then re-calibrate: progress = processedTime / realDuration × 100.
-        //
-        // We also track bytes (stats.size) for the UI size display, and estimate total size
-        // from the bitrate (bytes/ms × duration).
-        var lastProcessedTime = 0.0
-        var stableTimeCount = 0 // how many consecutive callbacks had the same time
-        var calibratedDurationMs = durationMs.toDouble() // will be reduced if FFmpeg finishes early
+        // We estimate total size from the FFprobe duration × typical bitrate (250 KB/s for 360p).
+        // As the file grows, we refine the estimate based on actual download speed.
+        val estimatedTotalBytes = (durationMs * 250 / 1000).toLong().coerceAtLeast(1_000_000) // at least 1MB
+        progressTracker.setTotalSize(download, estimatedTotalBytes)
+        Log.d(TAG, "download: estimated total size=${estimatedTotalBytes / 1024 / 1024}MB")
 
-        val statsCallback = StatisticsCallback { stats ->
-            val processedTimeMs = stats.time // Double (microseconds of processed video)
-            val processedBytes = stats.size.toLong()
-
-            // Log every callback for debugging (can remove later)
-            Log.v(TAG, "stats: time=$processedTimeMs bytes=$processedBytes bitrate=${if (processedTimeMs > 0) processedBytes / processedTimeMs else 0}")
-
-            // Update downloaded bytes (for UI display)
-            if (processedBytes > 0) {
-                download.downloadedBytes = processedBytes
-            }
-
-            // Detect if FFmpeg has finished processing real content.
-            // If processedTime hasn't changed for 3 consecutive callbacks, FFmpeg is likely
-            // done with the real video (just flushing/muxing remaining). Re-calibrate duration.
-            if (processedTimeMs == lastProcessedTime) {
-                stableTimeCount++
-                if (stableTimeCount >= 3 && processedTimeMs > 0 && processedTimeMs < calibratedDurationMs) {
-                    calibratedDurationMs = processedTimeMs
-                    Log.d(TAG, "download: re-calibrated duration: ${durationMs}ms → ${calibratedDurationMs}ms")
-                }
-            } else {
-                stableTimeCount = 0
-                lastProcessedTime = processedTimeMs
-            }
-
-            // Estimate total size from bitrate (updated continuously)
-            if (processedTimeMs > 0 && processedBytes > 0) {
-                val bitrate = processedBytes.toDouble() / processedTimeMs // bytes per ms
-                val estimatedTotal = (bitrate * calibratedDurationMs).toLong()
-                if (estimatedTotal > 0) {
-                    // Only update if difference is significant (>10%)
-                    if (Math.abs(estimatedTotal - download.totalSize) > download.totalSize * 0.1) {
-                        progressTracker.setTotalSize(download, estimatedTotal)
-                    }
-                }
-            }
-
-            // Calculate progress from calibrated duration
-            if (calibratedDurationMs > 0 && processedTimeMs > 0) {
-                val progress = ((processedTimeMs / calibratedDurationMs) * 100)
-                    .toInt()
-                    .coerceIn(0, 99)
-                if (progress != download.progress && progress > 0) {
-                    download.progress = progress
-                    Log.d(TAG, "download: progress=$progress% (${processedBytes / 1024 / 1024}MB / ~${download.totalSize / 1024 / 1024}MB)")
-                }
-            }
-        }
-
-        // Execute FFmpeg using async API with statistics callback.
-        // The synchronous FFmpegKit.execute() does NOT fire statistics callbacks.
-        // Aniyomi uses executeWithArgumentsAsync with the callback passed directly.
-        // We use suspendCancellableCoroutine to make it suspend-friendly.
+        // Start FFmpeg async
         download.status = Download.State.DOWNLOADING
-
         val args = FFmpegKitConfig.parseArguments(cmd)
         Log.d(TAG, "download: executing FFmpeg async with ${args.size} args")
 
-        val session = kotlinx.coroutines.suspendCancellableCoroutine<com.arthenica.ffmpegkit.FFmpegSession> { cont ->
-            val s = com.arthenica.ffmpegkit.FFmpegKit.executeWithArgumentsAsync(
+        var ffmpegFinished = false
+        var ffmpegSession: com.arthenica.ffmpegkit.FFmpegSession? = null
+
+        val ffmpegJob = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            ffmpegSession = com.arthenica.ffmpegkit.FFmpegKit.executeWithArgumentsAsync(
                 args,
-                { completedSession ->
-                    if (cont.isActive) {
-                        cont.resumeWith(kotlin.Result.success(completedSession))
-                    }
-                },
-                null, // no log callback
-                statsCallback, // statistics callback — fires during execution
+                { session -> ffmpegFinished = true },
+                null,
+                null, // no statistics callback — we poll file size instead
             )
-            cont.invokeOnCancellation {
-                s.cancel()
-            }
         }
+
+        // Poll output file size for progress
+        var lastFileSize = 0L
+        var stableSizeCount = 0
+        var calibratedTotal = estimatedTotalBytes
+        val pollIntervalMs = 500L
+        val startTime = System.currentTimeMillis()
+
+        while (!ffmpegFinished) {
+            // Check cancellation
+            val cs = cancelStates[download.id]
+            if (cs?.cancelled == true || download.status == Download.State.NOT_DOWNLOADED) {
+                ffmpegSession?.cancel()
+                break
+            }
+            if (cs?.paused == true || download.status == Download.State.PAUSED) {
+                ffmpegSession?.cancel()
+                break
+            }
+
+            // Read file size
+            val currentSize = if (outputFile.exists()) outputFile.length() else 0L
+
+            if (currentSize > 0) {
+                download.downloadedBytes = currentSize
+
+                // Detect if file size has stabilized (FFmpeg finished writing but
+                // hasn't signaled completion yet). Re-calibrate total.
+                if (currentSize == lastFileSize) {
+                    stableSizeCount++
+                    if (stableSizeCount >= 4 && currentSize < calibratedTotal) {
+                        // File stopped growing — likely done
+                        calibratedTotal = currentSize
+                        progressTracker.setTotalSize(download, calibratedTotal)
+                    }
+                } else {
+                    stableSizeCount = 0
+                    lastFileSize = currentSize
+
+                    // Refine total estimate based on elapsed time and current size.
+                    // If we're downloading at X bytes/sec, and the video is Y seconds long,
+                    // total ≈ X * Y. But we don't know the real duration — so we use
+                    // the FFprobe duration as an upper bound and refine downward.
+                    val elapsedMs = System.currentTimeMillis() - startTime
+                    if (elapsedMs > 2000 && currentSize > 0) {
+                        val bytesPerMs = currentSize.toDouble() / elapsedMs
+                        val estimatedFromRate = (bytesPerMs * durationMs).toLong()
+                        // Use the smaller of: rate-based estimate or current calibrated total
+                        if (estimatedFromRate > 0 && estimatedFromRate < calibratedTotal) {
+                            calibratedTotal = estimatedFromRate
+                            progressTracker.setTotalSize(download, calibratedTotal)
+                        }
+                    }
+                }
+
+                // Calculate progress
+                val progress = if (calibratedTotal > 0) {
+                    ((currentSize.toDouble() / calibratedTotal) * 100).toInt().coerceIn(0, 99)
+                } else 0
+
+                if (progress != download.progress && progress > 0) {
+                    download.progress = progress
+                    Log.d(TAG, "download: progress=$progress% (${currentSize / 1024 / 1024}MB / ~${calibratedTotal / 1024 / 1024}MB)")
+                }
+            }
+
+            delay(pollIntervalMs)
+        }
+
+        // Wait for the FFmpeg job to fully complete
+        ffmpegJob.join()
+
+        val session = ffmpegSession
 
         val cs = cancelStates[download.id]
         if (cs?.cancelled == true || download.status == Download.State.NOT_DOWNLOADED) {
