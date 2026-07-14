@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -520,7 +522,7 @@ private fun EpisodeRow(
     val autoRemoveProgress by download.autoRemoveCountdown.collectAsState()
 
     // 3-dot menu sheet state
-    var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val showMenu = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -687,14 +689,14 @@ private fun EpisodeRow(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 1.dp,
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                onClick = { showMenu = true },
+                onClick = { showMenu.value = true },
             ) {
                 Box(
                     modifier = Modifier.size(36.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        androidx.compose.material.icons.Icons.Default.MoreVert,
+                        Icons.Default.MoreVert,
                         contentDescription = "Options",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp),
@@ -705,10 +707,10 @@ private fun EpisodeRow(
     }
 
     // 3-dot menu bottom sheet
-    if (showMenu) {
+    if (showMenu.value) {
         val sheetState = androidx.compose.material3.rememberModalBottomSheetState()
         androidx.compose.material3.ModalBottomSheet(
-            onDismissRequest = { showMenu = false },
+            onDismissRequest = { showMenu.value = false },
             sheetState = sheetState,
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -721,23 +723,23 @@ private fun EpisodeRow(
                 // State-dependent options
                 when (status) {
                     Download.State.DOWNLOADING, Download.State.RESOLVING, Download.State.MUXING, Download.State.QUEUE -> {
-                        MenuOption("Pause", Icons.Default.Pause) { showMenu = false; onPause() }
-                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu = false; onCancel() }
+                        MenuOption("Pause", Icons.Default.Pause) { showMenu.value = false; onPause() }
+                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu.value = false; onCancel() }
                     }
                     Download.State.RECONNECTING -> {
-                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu = false; onCancel() }
+                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu.value = false; onCancel() }
                     }
                     Download.State.PAUSED -> {
-                        MenuOption("Resume", Icons.Default.PlayArrow) { showMenu = false; onResume() }
-                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu = false; onCancel() }
+                        MenuOption("Resume", Icons.Default.PlayArrow) { showMenu.value = false; onResume() }
+                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu.value = false; onCancel() }
                     }
                     Download.State.ERROR -> {
-                        MenuOption("Retry", Icons.Default.Refresh) { showMenu = false; onRetry() }
-                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu = false; onCancel() }
+                        MenuOption("Retry", Icons.Default.Refresh) { showMenu.value = false; onRetry() }
+                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu.value = false; onCancel() }
                     }
                     Download.State.DOWNLOADED -> {
-                        MenuOption("Remove from list", Icons.Default.Close) { showMenu = false; onRemove() }
-                        MenuOption("Delete file", Icons.Default.Delete, isDestructive = true) { showMenu = false; onCancel() }
+                        MenuOption("Remove from list", Icons.Default.Close) { showMenu.value = false; onRemove() }
+                        MenuOption("Delete file", Icons.Default.Delete, isDestructive = true) { showMenu.value = false; onCancel() }
                     }
                     else -> {}
                 }
