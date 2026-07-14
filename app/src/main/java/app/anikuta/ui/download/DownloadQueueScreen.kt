@@ -505,7 +505,7 @@ private fun AnimeSectionCard(
 // EPISODE ROW (inside the anime section card)
 // ============================================================
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun EpisodeRow(
     download: Download,
