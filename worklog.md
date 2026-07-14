@@ -2301,3 +2301,48 @@ FILES MODIFIED (5):
 - DownloadNotifier.kt: improved notification content
 
 Build: pending (will trigger workflow_dispatch next).
+
+---
+Task ID: DOWNLOADS-PAGE-V4
+Agent: Z.ai Code (orchestrator)
+Task: Downloads page v4 — one section per anime with shared bg, percentage on pills row, 3-dot menu, active downloads first
+
+Work Log:
+
+(1) ONE SECTION PER ANIME (shared background):
+- AnimeSectionCard now renders ONE Surface card (surfaceContainer, tonalElevation 2dp)
+  containing the header + ALL episode rows inside.
+- Episodes inside the card are separated by thin outlineVariant dividers (1dp).
+- Different background from the page (surfaceContainer vs surfaceContainerLow) so
+  the section stands out with depth.
+- No more separate cards per episode — they're all inside the shared section card.
+
+(2) PROGRESS PERCENTAGE ON INFO PILLS ROW:
+- Moved the percentage pill to the RIGHT of the info pills row (same row as
+  server/audio/quality), not on the next row.
+- Uses Spacer(weight(1f)) to push the percentage to the right.
+- Size/speed info moved to a separate row above the progress bar.
+
+(3) 3-DOT MENU (replaces pause/cancel buttons):
+- Replaced the EpisodeActionPanel (pause/cancel icon buttons) with a 3-dot
+  MoreVert button (Surface with border + depth).
+- Clicking opens a ModalBottomSheet with state-dependent options:
+  - DOWNLOADING/RESOLVING/MUXING/QUEUE: Pause / Cancel
+  - RECONNECTING: Cancel
+  - PAUSED: Resume / Cancel
+  - ERROR: Retry / Cancel
+  - DOWNLOADED: Remove from list / Delete file
+- Each option is a MenuOption row (icon + label, destructive=red).
+- Removed the old EpisodeActionPanel function.
+
+(4) ACTIVE DOWNLOADS FIRST (sorting):
+- Downloads are now sorted: active (DOWNLOADING/RESOLVING/MUXING/RECONNECTING/QUEUE)
+  first, then by anime title.
+- Within each anime, insertion order is preserved.
+- Currently-downloading episodes always appear at the top of their anime section,
+  and anime with active downloads appear first in the list.
+
+FILES MODIFIED (1):
+- DownloadQueueScreen.kt
+
+Build: pending (will trigger workflow_dispatch next).

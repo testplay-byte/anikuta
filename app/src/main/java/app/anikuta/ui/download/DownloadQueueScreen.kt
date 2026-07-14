@@ -130,9 +130,18 @@ fun DownloadQueueScreen(
     val paused = statusMap.values.count { it == Download.State.PAUSED }
     val hasActive = downloading > 0 || queued > 0
 
-    // Group downloads by animeTitle
-    val groupedByAnime = remember(queue) {
-        queue.groupBy { it.animeTitle }.toList()
+    // Sort: active downloads (DOWNLOADING/RESOLVING/MUXING/RECONNECTING/QUEUE) first,
+    // then by anime title. Within each anime, preserve insertion order.
+    val sortedQueue = remember(queue) {
+        val activeStates = setOf(
+            Download.State.DOWNLOADING, Download.State.RESOLVING,
+            Download.State.MUXING, Download.State.RECONNECTING, Download.State.QUEUE,
+        )
+        queue.sortedWith(compareBy<Download> { if (it.status in activeStates) 0 else 1 }.thenBy { it.animeTitle })
+    }
+    // Group sorted downloads by animeTitle
+    val groupedByAnime = remember(sortedQueue) {
+        sortedQueue.groupBy { it.animeTitle }.toList()
     }
 
     // Use statusBarsPadding on the root (matching SettingsSubpageScaffold pattern)
@@ -418,14 +427,16 @@ private fun AnimeSectionCard(
     onRetry: (String) -> Unit,
     onRemove: (String) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
-        // Header card (separate from episode cards)
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 1.dp,
-        ) {
+    // ONE section card with shared background — header + all episodes inside.
+    // Different background from the page so the section stands out.
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 2.dp,
+    ) {
+        Column {
+            // Header (inside the card)
             Row(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -460,17 +471,20 @@ private fun AnimeSectionCard(
                     )
                 }
             }
-        }
 
-        // Episode cards — each episode is its OWN distinct card with spacing
-        downloads.forEachIndexed { index, download ->
-            Spacer(modifier = Modifier.height(6.dp))
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                tonalElevation = 1.dp,
-            ) {
+            // Episode rows — inside the SAME card, separated by thin dividers.
+            // Each episode row has its own subtle background for distinction.
+            downloads.forEachIndexed { index, download ->
+                if (index > 0) {
+                    // Thin divider between episodes
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp)
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    )
+                }
                 EpisodeRow(
                     download = download,
                     showDownloadSize = showDownloadSize,
@@ -505,8 +519,11 @@ private fun EpisodeRow(
     val speed by download.speedFlow.collectAsState()
     val autoRemoveProgress by download.autoRemoveCountdown.collectAsState()
 
+    // 3-dot menu sheet state
+    var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
     Row(
-        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top,
     ) {
         // ---- Left: Episode info ----
@@ -523,81 +540,77 @@ private fun EpisodeRow(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            // Info pills — on the NEXT row below the episode name
-            if (download.serverName.isNotBlank() || download.audioVersion.isNotBlank() || download.qualityLabel.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (download.serverName.isNotBlank()) {
-                        InfoPill(text = download.serverName, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (download.audioVersion.isNotBlank()) {
-                        InfoPill(text = download.audioVersion.uppercase(), color = MaterialTheme.colorScheme.tertiary)
-                    }
-                    if (download.qualityLabel.isNotBlank()) {
-                        InfoPill(text = download.qualityLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // Info pills row — includes server/audio/quality + percentage (right side)
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (download.serverName.isNotBlank()) {
+                    InfoPill(text = download.serverName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (download.audioVersion.isNotBlank()) {
+                    InfoPill(text = download.audioVersion.uppercase(), color = MaterialTheme.colorScheme.tertiary)
+                }
+                if (download.qualityLabel.isNotBlank()) {
+                    InfoPill(text = download.qualityLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.weight(1f))
+                // Percentage pill — on the RIGHT of the info pills row
+                if (status == Download.State.DOWNLOADING || status == Download.State.PAUSED) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
+                    ) {
+                        Text(
+                            "$progress%",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
                     }
                 }
             }
 
-            // Progress bar — percentage ABOVE the bar (top-right, bold, with bg pill)
+            // Progress bar — below the pills row
             if (status == Download.State.DOWNLOADING || status == Download.State.PAUSED ||
                 status == Download.State.RESOLVING || status == Download.State.MUXING
             ) {
-                Spacer(Modifier.height(8.dp))
-                // Row: percentage pill (right) + size/speed (left) — ABOVE the bar
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Left: size text (if enabled)
-                    if (showDownloadSize && status == Download.State.DOWNLOADING) {
-                        val sizeText = if (download.totalSize > 0) {
-                            "${formatBytes(download.downloadedBytes)} / ${formatBytes(download.totalSize)}"
-                        } else {
-                            formatBytes(download.downloadedBytes)
-                        }
-                        Text(
-                            sizeText,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        Box(Modifier)
-                    }
-                    // Right: percentage in a background pill (bold)
+                Spacer(Modifier.height(6.dp))
+                // Size + speed row (below pills, above bar)
+                if (status == Download.State.DOWNLOADING) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        if (speed > 0 && status == Download.State.DOWNLOADING) {
+                        if (showDownloadSize) {
+                            val sizeText = if (download.totalSize > 0) {
+                                "${formatBytes(download.downloadedBytes)} / ${formatBytes(download.totalSize)}"
+                            } else {
+                                formatBytes(download.downloadedBytes)
+                            }
+                            Text(
+                                sizeText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            Box(Modifier)
+                        }
+                        if (speed > 0) {
                             Text(
                                 formatSpeed(speed),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        if (status == Download.State.DOWNLOADING || status == Download.State.PAUSED) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
-                            ) {
-                                Text(
-                                    "$progress%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-                        }
                     }
+                    Spacer(Modifier.height(4.dp))
                 }
-                // Progress bar (taller, below the percentage row)
-                Spacer(Modifier.height(4.dp))
+                // Progress bar (taller)
                 if (status == Download.State.DOWNLOADING || status == Download.State.PAUSED) {
                     LinearProgressIndicator(
                         progress = { progress / 100f },
@@ -665,14 +678,100 @@ private fun EpisodeRow(
             }
         }
 
-        // ---- Right: Action panel ----
-        EpisodeActionPanel(
-            status = status,
-            onPause = onPause,
-            onResume = onResume,
-            onCancel = onCancel,
-            onRetry = onRetry,
-            onRemove = onRemove,
+        // ---- Right: 3-dot menu button ----
+        Box(
+            modifier = Modifier.padding(top = 6.dp, end = 6.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 1.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                onClick = { showMenu = true },
+            ) {
+                Box(
+                    modifier = Modifier.size(36.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        androidx.compose.material.icons.Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    // 3-dot menu bottom sheet
+    if (showMenu) {
+        val sheetState = androidx.compose.material3.rememberModalBottomSheetState()
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { showMenu = false },
+            sheetState = sheetState,
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    download.episodeName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(12.dp))
+                // State-dependent options
+                when (status) {
+                    Download.State.DOWNLOADING, Download.State.RESOLVING, Download.State.MUXING, Download.State.QUEUE -> {
+                        MenuOption("Pause", Icons.Default.Pause) { showMenu = false; onPause() }
+                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu = false; onCancel() }
+                    }
+                    Download.State.RECONNECTING -> {
+                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu = false; onCancel() }
+                    }
+                    Download.State.PAUSED -> {
+                        MenuOption("Resume", Icons.Default.PlayArrow) { showMenu = false; onResume() }
+                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu = false; onCancel() }
+                    }
+                    Download.State.ERROR -> {
+                        MenuOption("Retry", Icons.Default.Refresh) { showMenu = false; onRetry() }
+                        MenuOption("Cancel", Icons.Default.Close, isDestructive = true) { showMenu = false; onCancel() }
+                    }
+                    Download.State.DOWNLOADED -> {
+                        MenuOption("Remove from list", Icons.Default.Close) { showMenu = false; onRemove() }
+                        MenuOption("Delete file", Icons.Default.Delete, isDestructive = true) { showMenu = false; onCancel() }
+                    }
+                    else -> {}
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuOption(
+    label: String,
+    icon: ImageVector,
+    isDestructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp)
+            .combinedClickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.width(16.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -699,76 +798,3 @@ private fun InfoPill(text: String, color: Color) {
     }
 }
 
-// ============================================================
-// EPISODE ACTION PANEL (right side, with separation between buttons)
-// ============================================================
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun EpisodeActionPanel(
-    status: Download.State,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onCancel: () -> Unit,
-    onRetry: () -> Unit,
-    onRemove: () -> Unit,
-) {
-    data class ActionBtn(val icon: ImageVector, val label: String, val tint: Color, val onClick: () -> Unit)
-    val buttons = when (status) {
-        Download.State.DOWNLOADING, Download.State.RESOLVING, Download.State.MUXING, Download.State.QUEUE -> listOf(
-            ActionBtn(Icons.Default.Pause, "Pause", MaterialTheme.colorScheme.onSurfaceVariant, onPause),
-            ActionBtn(Icons.Default.Close, "Cancel", MaterialTheme.colorScheme.error, onCancel),
-        )
-        Download.State.RECONNECTING -> listOf(
-            ActionBtn(Icons.Default.Close, "Cancel", MaterialTheme.colorScheme.error, onCancel),
-        )
-        Download.State.PAUSED -> listOf(
-            ActionBtn(Icons.Default.PlayArrow, "Resume", MaterialTheme.colorScheme.tertiary, onResume),
-            ActionBtn(Icons.Default.Close, "Cancel", MaterialTheme.colorScheme.error, onCancel),
-        )
-        Download.State.ERROR -> listOf(
-            ActionBtn(Icons.Default.Refresh, "Retry", MaterialTheme.colorScheme.tertiary, onRetry),
-            ActionBtn(Icons.Default.Close, "Cancel", MaterialTheme.colorScheme.error, onCancel),
-        )
-        Download.State.DOWNLOADED -> listOf(
-            ActionBtn(Icons.Default.Close, "Remove", MaterialTheme.colorScheme.onSurfaceVariant, onRemove),
-            ActionBtn(Icons.Default.Delete, "Delete file", MaterialTheme.colorScheme.error, onCancel),
-        )
-        else -> emptyList()
-    }
-
-    if (buttons.isEmpty()) return
-
-    // Action panel — each button in its own Surface with depth + borders
-    Column(
-        modifier = Modifier.fillMaxHeight().padding(vertical = 8.dp, horizontal = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
-    ) {
-        buttons.forEach { btn ->
-            // Each button is its own Surface with rounded corners + tonal elevation + border
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 1.dp,
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant,
-                ),
-                modifier = Modifier.combinedClickable(onClick = btn.onClick),
-            ) {
-                Box(
-                    modifier = Modifier.size(36.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        btn.icon,
-                        contentDescription = btn.label,
-                        tint = btn.tint,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-        }
-    }
-}
