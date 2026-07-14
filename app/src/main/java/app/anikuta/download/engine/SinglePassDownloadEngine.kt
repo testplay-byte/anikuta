@@ -16,6 +16,8 @@ import com.arthenica.ffmpegkit.StatisticsCallback
 import eu.kanade.tachiyomi.animesource.model.Video
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import java.io.File
@@ -176,14 +178,25 @@ class SinglePassDownloadEngine(
             }
         }
 
-        // Execute FFmpeg
+        // Execute FFmpeg using async API with statistics callback.
+        // The synchronous FFmpegKit.execute() does NOT fire statistics callbacks.
+        // Aniyomi uses executeWithArgumentsAsync with the callback passed directly.
+        // We use suspendCancellableCoroutine to make it suspend-friendly.
         download.status = Download.State.DOWNLOADING
-        FFmpegKitConfig.enableStatisticsCallback(statsCallback)
 
-        val session = try {
-            FFmpegKit.execute(cmd)
-        } finally {
-            FFmpegKitConfig.enableStatisticsCallback(null)
+        val args = FFmpegKitConfig.parseArguments(cmd)
+        Log.d(TAG, "download: executing FFmpeg async with ${args.size} args")
+
+        val session = kotlinx.coroutines.suspendCancellableCoroutine<com.arthenica.ffmpegkit.FFmpegSession> { cont ->
+            val s = com.arthenica.ffmpegkit.FFmpegKit.executeWithArgumentsAsync(
+                args,
+                { completedSession -> cont.resume(completedSession) {} },
+                null, // no log callback
+                statsCallback, // statistics callback — fires during execution
+            )
+            cont.invokeOnCancellation {
+                s.cancel()
+            }
         }
 
         val cs = cancelStates[download.id]
