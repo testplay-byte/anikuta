@@ -52,4 +52,7 @@ class PlayerEpisodePreferences(
 
     fun thumbnailPosition(): Preference<String> =
         preferenceStore.getString("player_ep_thumb_pos", "left")
+
+    fun downloadButtonPlacement(): Preference<String> =
+        preferenceStore.getString("player_ep_dl_btn_pos", "episode_row")
 }
