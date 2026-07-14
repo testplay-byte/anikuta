@@ -34,6 +34,7 @@ import app.anikuta.download.engine.DownloadEngine
 import app.anikuta.download.engine.DownloadManifest
 import app.anikuta.download.engine.HlsDownloadEngine
 import app.anikuta.download.engine.SegmentDownloadEngine
+import app.anikuta.download.engine.SinglePassDownloadEngine
 import app.anikuta.download.engine.hls.HlsPlaylistFetcher
 import app.anikuta.download.engine.hls.HlsPlaylistParser
 import app.anikuta.download.engine.hls.HlsSegmentDownloader
@@ -142,7 +143,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { DownloadManifest(get<Context>(), get<DownloadProvider>()) }
         addSingletonFactory { ProgressTracker() }
         addSingletonFactory { DownloadNotifier(get<Context>()) }
-        // Legacy FFmpeg-based engine (fallback for non-HLS / fMP4 / SAMPLE-AES)
+        // Legacy FFmpeg-based engine (fallback)
         addSingletonFactory {
             SegmentDownloadEngine(
                 get<Context>(),
@@ -152,35 +153,20 @@ class AppModule(val app: Application) : InjektModule {
                 get<ProgressTracker>(),
             )
         }
-        // HLS direct-download engine (primary — downloads .ts segments via HTTP)
-        addSingletonFactory { HlsPlaylistParser() }
+        // Single-pass FFmpeg engine (PRIMARY — mirrors aniyomi's approach exactly)
+        // Uses one FFmpeg call with the proxy URL, no -ss, no segments.
+        // FFmpeg handles HLS natively (fetches m3u8 + .ts through the proxy).
         addSingletonFactory {
-            HlsPlaylistFetcher(
-                client = get<NetworkHelper>().client,
-                parser = get(),
+            SinglePassDownloadEngine(
+                get<Context>(),
+                get<DownloadProvider>(),
+                get<DownloadVideoResolver>(),
+                get<ProgressTracker>(),
+                get(),
             )
         }
-        addSingletonFactory {
-            HlsSegmentDownloader(
-                client = get<NetworkHelper>().client,
-            )
-        }
-        addSingletonFactory {
-            HlsDownloadEngine(
-                context = get(),
-                provider = get(),
-                resolver = get(),
-                manifestManager = get(),
-                progressTracker = get(),
-                fetcher = get(),
-                segmentDownloader = get(),
-                networkHelper = get(),
-                fallbackEngine = get<SegmentDownloadEngine>(),
-                downloadPrefs = get(),
-            )
-        }
-        // Primary engine: HLS direct (falls back to SegmentDownloadEngine automatically)
-        addSingletonFactory<DownloadEngine> { get<HlsDownloadEngine>() }
+        // Primary engine: SinglePass (proven aniyomi approach)
+        addSingletonFactory<DownloadEngine> { get<SinglePassDownloadEngine>() }
         addSingletonFactory { DownloadManager(get<Context>(), get(), get()) }
 
         // AniList client
