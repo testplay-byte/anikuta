@@ -221,8 +221,9 @@ class SinglePassDownloadEngine(
             return false
         }
 
-        if (!ReturnCode.isSuccess(session.returnCode)) {
-            download.error = "FFmpeg failed (rc=${session.returnCode.value})"
+        val session = ffmpegSession
+        if (session == null || !ReturnCode.isSuccess(session.returnCode)) {
+            download.error = "FFmpeg failed (rc=${session?.returnCode?.value ?: -1})"
             Log.e(TAG, "download: ❌ ${download.error}")
             cleanupCache(download)
             return false
