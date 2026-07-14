@@ -145,15 +145,28 @@ class SinglePassDownloadEngine(
             )
         }
 
-        // Poll output file size for progress
+        // Poll output file size for progress.
+        //
+        // Estimation strategy (robust):
+        // 1. Initial estimate: quality-based bitrate × FFprobe duration
+        // 2. NEVER shrink the total estimate during the first 30% of the download
+        //    (early rate is unreliable — FFmpeg is buffering, not downloading at full speed)
+        // 3. After 30%: only refine DOWNWARD if the rate-based estimate is consistently
+        //    smaller (by at least 30%) for 5 consecutive polls
+        // 4. If file size stabilizes (8 consecutive polls with no change) and FFmpeg
+        //    hasn't finished, the real total = current file size
+        // 5. Never let the total go below the current downloaded bytes
         var lastFileSize = 0L
         var stableSizeCount = 0
         var calibratedTotal = estimatedTotalBytes
+        var shrinkVoteCount = 0 // consecutive polls where rate-based estimate was smaller
         val pollIntervalMs = 500L
         val startTime = System.currentTimeMillis()
+        val minPollsBeforeShrink = 20 // ~10 seconds (20 × 500ms) before allowing shrink
+        var pollCount = 0
 
         while (!ffmpegFinished) {
-            // Check cancellation
+            pollCount++
             val cs = cancelStates[download.id]
             if (cs?.cancelled == true || download.status == Download.State.NOT_DOWNLOADED) {
                 ffmpegSession?.cancel()
@@ -164,32 +177,51 @@ class SinglePassDownloadEngine(
                 break
             }
 
-            // Read file size
             val currentSize = if (outputFile.exists()) outputFile.length() else 0L
 
             if (currentSize > 0) {
                 download.downloadedBytes = currentSize
 
-                // Detect if file size has stabilized (FFmpeg finished writing but
-                // hasn't signaled completion yet). Re-calibrate total.
+                // Never let total go below current size
+                if (calibratedTotal < currentSize) {
+                    calibratedTotal = currentSize
+                    progressTracker.setTotalSize(download, calibratedTotal)
+                }
+
                 if (currentSize == lastFileSize) {
+                    // File not growing — maybe FFmpeg finished writing
                     stableSizeCount++
-                    if (stableSizeCount >= 4 && currentSize < calibratedTotal) {
+                    if (stableSizeCount >= 8 && currentSize < calibratedTotal) {
+                        // File stopped growing for 4 seconds — likely done
                         calibratedTotal = currentSize
                         progressTracker.setTotalSize(download, calibratedTotal)
+                        Log.d(TAG, "download: file stabilized → total=${calibratedTotal / 1024 / 1024}MB")
                     }
                 } else {
                     stableSizeCount = 0
                     lastFileSize = currentSize
 
-                    // Refine total estimate based on actual download rate.
-                    val elapsedMs = System.currentTimeMillis() - startTime
-                    if (elapsedMs > 3000 && currentSize > 0) {
-                        val bytesPerSec = currentSize.toDouble() / (elapsedMs / 1000.0)
-                        val estimatedFromRate = (bytesPerSec * (durationMs / 1000.0)).toLong()
-                        if (estimatedFromRate > 0 && estimatedFromRate < calibratedTotal) {
-                            calibratedTotal = estimatedFromRate
-                            progressTracker.setTotalSize(download, calibratedTotal)
+                    // Only consider shrinking after enough polls and if current progress > 30%
+                    val currentProgress = if (calibratedTotal > 0) currentSize.toDouble() / calibratedTotal else 0.0
+                    if (pollCount > minPollsBeforeShrink && currentProgress > 0.3) {
+                        val elapsedSec = (System.currentTimeMillis() - startTime) / 1000.0
+                        if (elapsedSec > 5) {
+                            val bytesPerSec = currentSize.toDouble() / elapsedSec
+                            val rateBasedTotal = (bytesPerSec * (durationMs / 1000.0)).toLong()
+                            // Only shrink if rate-based estimate is at least 30% smaller
+                            // AND larger than current size (sanity check)
+                            if (rateBasedTotal < calibratedTotal * 0.7 && rateBasedTotal > currentSize) {
+                                shrinkVoteCount++
+                                // Require 5 consecutive votes before shrinking
+                                if (shrinkVoteCount >= 5) {
+                                    calibratedTotal = rateBasedTotal
+                                    progressTracker.setTotalSize(download, calibratedTotal)
+                                    Log.d(TAG, "download: refined total → ${calibratedTotal / 1024 / 1024}MB (rate-based after $pollCount polls)")
+                                    shrinkVoteCount = 0
+                                }
+                            } else {
+                                shrinkVoteCount = 0
+                            }
                         }
                     }
                 }
@@ -201,7 +233,10 @@ class SinglePassDownloadEngine(
 
                 if (progress != download.progress && progress > 0) {
                     download.progress = progress
-                    Log.d(TAG, "download: progress=$progress% (${currentSize / 1024 / 1024}MB / ~${calibratedTotal / 1024 / 1024}MB)")
+                    // Log every 5% or every 10 polls
+                    if (progress % 5 == 0 || pollCount % 10 == 0) {
+                        Log.d(TAG, "download: progress=$progress% (${currentSize / 1024 / 1024}MB / ~${calibratedTotal / 1024 / 1024}MB)")
+                    }
                 }
             }
 
