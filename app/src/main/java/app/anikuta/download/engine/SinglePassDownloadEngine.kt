@@ -85,7 +85,10 @@ class SinglePassDownloadEngine(
         download.status = Download.State.DOWNLOADING
         progressTracker.resetSpeed()
 
-        try { FFmpegKitConfig.disableRedirection() } catch (_: Exception) {}
+        // NOTE: Do NOT call disableRedirection() here — it also disables statistics
+        // callbacks, which we need for progress tracking. FFmpeg logs will appear in
+        // logcat but that's acceptable for a single FFmpeg call (not 144 like the
+        // segment engine).
 
         if (!hasMinDiskSpace()) {
             download.error = "Insufficient disk space"
@@ -127,6 +130,9 @@ class SinglePassDownloadEngine(
             val processedTimeMs = stats.time // Double (microseconds of processed video)
             val processedBytes = stats.size.toLong()
 
+            // Log every callback for debugging (can remove later)
+            Log.v(TAG, "stats: time=$processedTimeMs bytes=$processedBytes bitrate=${if (processedTimeMs > 0) processedBytes / processedTimeMs else 0}")
+
             // Update downloaded bytes (for UI display)
             if (processedBytes > 0) {
                 download.downloadedBytes = processedBytes
@@ -165,6 +171,7 @@ class SinglePassDownloadEngine(
                     .coerceIn(0, 99)
                 if (progress != download.progress && progress > 0) {
                     download.progress = progress
+                    Log.d(TAG, "download: progress=$progress% (${processedBytes / 1024 / 1024}MB / ~${download.totalSize / 1024 / 1024}MB)")
                 }
             }
         }

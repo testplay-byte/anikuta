@@ -24,9 +24,21 @@ android {
         }
     }
 
+    // Fixed debug signing key — allows installing new builds without uninstalling.
+    // The keystore is committed to the repo (safe — it's a debug key, not release).
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "debug"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             isMinifyEnabled = false
