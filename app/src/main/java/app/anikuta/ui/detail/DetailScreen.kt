@@ -99,6 +99,7 @@ fun DetailScreen(
     val thumbnailPosition by (playerPrefs?.thumbnailPosition()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("left")).collectAsState()
     val animeInfoPosition by (playerPrefs?.animeInfoPosition()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("below")).collectAsState()
     val dynamicThemingEnabled by (playerPrefs?.dynamicDetailTheming()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
+    val downloadButtonPlacement by (playerPrefs?.downloadButtonPlacement()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("episode_row")).collectAsState()
 
     // Issue A: Scan filesystem for downloaded episodes when the detail page is entered.
     // This ensures the green checkmark appears for episodes that were downloaded
@@ -401,15 +402,27 @@ fun DetailScreen(
                                         dynamicColors = null,
                                     )
                                 }
-                                // Download button with live state + long-press menu (Q4)
-                                DownloadButton(
-                                    episodeUrl = episode.url,
-                                    downloadStatus = downloadStatus,
-                                    downloadProgress = downloadProgress,
-                                    downloadedOnDisk = downloadedOnDisk,
-                                    onDownload = { viewModel.onDownloadButtonClick(episode) },
-                                    onLongClick = { longPressEpisode = episode },
-                                )
+                                // Download button — placement options
+                                if (downloadButtonPlacement == "episode_row") {
+                                    DownloadButton(
+                                        episodeUrl = episode.url,
+                                        downloadStatus = downloadStatus,
+                                        downloadProgress = downloadProgress,
+                                        downloadedOnDisk = downloadedOnDisk,
+                                        onDownload = { viewModel.onDownloadButtonClick(episode) },
+                                        onLongClick = { longPressEpisode = episode },
+                                    )
+                                } else {
+                                    // "synopsis" placement: dedicated button on right side, full height
+                                    DownloadButtonSynopsis(
+                                        episodeUrl = episode.url,
+                                        downloadStatus = downloadStatus,
+                                        downloadProgress = downloadProgress,
+                                        downloadedOnDisk = downloadedOnDisk,
+                                        onDownload = { viewModel.onDownloadButtonClick(episode) },
+                                        onLongClick = { longPressEpisode = episode },
+                                    )
+                                }
                             }
                         }
                     }
@@ -533,15 +546,26 @@ fun DetailScreen(
                                                         dynamicColors = null,
                                                     )
                                                 }
-                                                // Download button with live state + long-press menu (Q4)
-                                                DownloadButton(
-                                                    episodeUrl = episode.url,
-                                                    downloadStatus = downloadStatus,
-                                                    downloadProgress = downloadProgress,
-                                                    downloadedOnDisk = downloadedOnDisk,
-                                                    onDownload = { viewModel.onDownloadButtonClick(episode) },
-                                                    onLongClick = { longPressEpisode = episode },
-                                                )
+                                                // Download button — placement options
+                                                if (downloadButtonPlacement == "episode_row") {
+                                                    DownloadButton(
+                                                        episodeUrl = episode.url,
+                                                        downloadStatus = downloadStatus,
+                                                        downloadProgress = downloadProgress,
+                                                        downloadedOnDisk = downloadedOnDisk,
+                                                        onDownload = { viewModel.onDownloadButtonClick(episode) },
+                                                        onLongClick = { longPressEpisode = episode },
+                                                    )
+                                                } else {
+                                                    DownloadButtonSynopsis(
+                                                        episodeUrl = episode.url,
+                                                        downloadStatus = downloadStatus,
+                                                        downloadProgress = downloadProgress,
+                                                        downloadedOnDisk = downloadedOnDisk,
+                                                        onDownload = { viewModel.onDownloadButtonClick(episode) },
+                                                        onLongClick = { longPressEpisode = episode },
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -913,6 +937,108 @@ private fun DownloadButton(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Download button for "synopsis" placement — a dedicated, taller button
+ * that fills the height of the episode row area.
+ *
+ * This gives it a proper "button" feel rather than just an icon.
+ * Shows the same states as [DownloadButton] but with a filled background.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun DownloadButtonSynopsis(
+    episodeUrl: String,
+    downloadStatus: Map<String, app.anikuta.download.Download.State>,
+    downloadProgress: Map<String, Int>,
+    downloadedOnDisk: Set<String>,
+    onDownload: () -> Unit,
+    onLongClick: () -> Unit = {},
+) {
+    val status = downloadStatus[episodeUrl]
+    val progress = downloadProgress[episodeUrl] ?: 0
+    val isOnDisk = downloadedOnDisk.contains(episodeUrl)
+
+    val backgroundColor = when {
+        status == app.anikuta.download.Download.State.DOWNLOADING -> MaterialTheme.colorScheme.primaryContainer
+        status == app.anikuta.download.Download.State.ERROR -> MaterialTheme.colorScheme.errorContainer
+        status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        status == app.anikuta.download.Download.State.PAUSED -> MaterialTheme.colorScheme.surfaceContainerHigh
+        status == app.anikuta.download.Download.State.RECONNECTING -> MaterialTheme.colorScheme.errorContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+
+    val iconColor = when {
+        status == app.anikuta.download.Download.State.ERROR -> MaterialTheme.colorScheme.error
+        status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> MaterialTheme.colorScheme.primary
+        status == app.anikuta.download.Download.State.RECONNECTING -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        modifier = Modifier
+            .width(48.dp)
+            .fillMaxHeight()
+            .combinedClickable(
+                onClick = onDownload,
+                onLongClick = onLongClick,
+            ),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+        color = backgroundColor,
+        tonalElevation = 1.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            when {
+                status == app.anikuta.download.Download.State.DOWNLOADING -> {
+                    CircularProgressIndicator(
+                        progress = { progress / 100f },
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                status == app.anikuta.download.Download.State.QUEUE ||
+                status == app.anikuta.download.Download.State.RESOLVING ||
+                status == app.anikuta.download.Download.State.MUXING -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                status == app.anikuta.download.Download.State.ERROR -> {
+                    Icon(Icons.Default.Error, contentDescription = "Failed", tint = iconColor, modifier = Modifier.size(24.dp))
+                }
+                status == app.anikuta.download.Download.State.PAUSED -> {
+                    Icon(Icons.Default.Download, contentDescription = "Paused", tint = iconColor, modifier = Modifier.size(24.dp))
+                }
+                status == app.anikuta.download.Download.State.RECONNECTING -> {
+                    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "reconnect_synopsis")
+                    val spinnerColor by transition.animateColor(
+                        initialValue = MaterialTheme.colorScheme.error,
+                        targetValue = androidx.compose.ui.graphics.Color(0xFFFFA000),
+                        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                            animation = androidx.compose.animation.core.tween(500),
+                            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+                        ),
+                        label = "reconnect_synopsis_color",
+                    )
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = spinnerColor,
+                    )
+                }
+                status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
+                    Icon(Icons.Default.DownloadDone, contentDescription = "Downloaded", tint = iconColor, modifier = Modifier.size(24.dp))
+                }
+                else -> {
+                    Icon(Icons.Default.Download, contentDescription = "Download", tint = iconColor, modifier = Modifier.size(24.dp))
+                }
             }
         }
     }
