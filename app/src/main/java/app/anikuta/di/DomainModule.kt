@@ -61,7 +61,7 @@ import uy.kohesive.injekt.api.get
  * Related files (edit one → check the others):
  *   - AppModule.kt           — registers the DB + handler this module depends on
  *   - PreferenceModule.kt    — registers PreferenceStore
- *   - data/.../*Impl.kt      — the repository implementations
+ *   - data/.../Impl.kt       — the repository implementations
  *   - domain/.../interactor/ — the interactors registered here
  *
  * Adaptation note: aniyomi puts this in a `DomainModule.kt` in the `:app`
