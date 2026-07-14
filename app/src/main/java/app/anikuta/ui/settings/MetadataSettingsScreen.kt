@@ -55,6 +55,7 @@ fun MetadataSettingsScreen(onBack: () -> Unit) {
     val titlePos by prefs.titlePosition().stateIn(scope).collectAsState()
     val epNumPos by prefs.episodeNumberPosition().stateIn(scope).collectAsState()
     val thumbPos by prefs.thumbnailPosition().stateIn(scope).collectAsState()
+    val dlPlacement by prefs.downloadButtonPlacement().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Metadata fetching", onBack = onBack) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -88,6 +89,7 @@ fun MetadataSettingsScreen(onBack: () -> Unit) {
                         titlePosition = titlePos,
                         episodeNumberPosition = epNumPos,
                         thumbnailPosition = thumbPos,
+                        downloadButtonPlacement = dlPlacement,
                     )
                 }
             }

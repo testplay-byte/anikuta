@@ -129,6 +129,11 @@ fun LayoutSettingsScreen(onBack: () -> Unit) {
     val showDates by prefs.showEpisodeDates().stateIn(scope).collectAsState()
     val showEpisodeNumber by prefs.showEpisodeNumber().stateIn(scope).collectAsState()
     val showAudioPills by prefs.showAudioPills().stateIn(scope).collectAsState()
+    // FIX: read downloadButtonPlacement reactively so the segmented control
+    // updates instantly when tapped. Previously used .get() which captured the
+    // value once and never recomposed — the toggle only "applied" after
+    // navigating away and back.
+    val dlPlacement by prefs.downloadButtonPlacement().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Episode layout", onBack = onBack) {
         // Column: sticky preview at top + scrollable settings below
@@ -161,6 +166,7 @@ fun LayoutSettingsScreen(onBack: () -> Unit) {
                         titlePosition = titlePos,
                         episodeNumberPosition = epNumPos,
                         thumbnailPosition = thumbPos,
+                        downloadButtonPlacement = dlPlacement,
                     )
                 }
             }
@@ -284,7 +290,6 @@ fun LayoutSettingsScreen(onBack: () -> Unit) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                         SettingsGroupCard(title = "Download button") {
                             LabeledSection("Placement", "Where the download button appears on episode rows") {
-                                val dlPlacement = prefs.downloadButtonPlacement().get()
                                 StyledSegmentedRow(
                                     options = listOf(
                                         "Episode row" to (dlPlacement == "episode_row"),

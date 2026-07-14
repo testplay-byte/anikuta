@@ -382,6 +382,13 @@ fun DetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                // Whether the download button is rendered OUTSIDE the episode
+                                // row (compact icon). For "synopsis" placement WITH a summary,
+                                // the button is rendered INSIDE the episode container (in the
+                                // synopsis area) by EpisodeRow itself, so we don't add it here.
+                                val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
+                                val showDownloadOutside = downloadButtonPlacement == "episode_row" ||
+                                    (downloadButtonPlacement == "synopsis" && !hasSummary)
                                 Box(modifier = Modifier.weight(1f)) {
                                     EpisodeRow(
                                         episode = episode,
@@ -400,21 +407,18 @@ fun DetailScreen(
                                         thumbnailPosition = thumbnailPosition,
                                         index = index,
                                         dynamicColors = null,
-                                    )
-                                }
-                                // Download button — placement options
-                                if (downloadButtonPlacement == "episode_row") {
-                                    DownloadButton(
-                                        episodeUrl = episode.url,
+                                        downloadButtonPlacement = downloadButtonPlacement,
                                         downloadStatus = downloadStatus,
                                         downloadProgress = downloadProgress,
                                         downloadedOnDisk = downloadedOnDisk,
-                                        onDownload = { viewModel.onDownloadButtonClick(episode) },
-                                        onLongClick = { longPressEpisode = episode },
+                                        onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
+                                        onDownloadLongClick = { longPressEpisode = episode },
                                     )
-                                } else {
-                                    // "synopsis" placement: dedicated button on right side, full height
-                                    DownloadButtonSynopsis(
+                                }
+                                // Download button outside the episode container — only for
+                                // "episode_row" placement, or "synopsis" with no summary (fallback)
+                                if (showDownloadOutside) {
+                                    DownloadButton(
                                         episodeUrl = episode.url,
                                         downloadStatus = downloadStatus,
                                         downloadProgress = downloadProgress,
@@ -526,6 +530,13 @@ fun DetailScreen(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
+                                                // Whether the download button is rendered OUTSIDE
+                                                // the episode row. For "synopsis" placement WITH a
+                                                // summary, the button is rendered INSIDE the episode
+                                                // container by EpisodeRow itself.
+                                                val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
+                                                val showDownloadOutside = downloadButtonPlacement == "episode_row" ||
+                                                    (downloadButtonPlacement == "synopsis" && !hasSummary)
                                                 Box(modifier = Modifier.weight(1f)) {
                                                     EpisodeRow(
                                                         episode = episode,
@@ -544,20 +555,18 @@ fun DetailScreen(
                                                         thumbnailPosition = thumbnailPosition,
                                                         index = index,
                                                         dynamicColors = null,
-                                                    )
-                                                }
-                                                // Download button — placement options
-                                                if (downloadButtonPlacement == "episode_row") {
-                                                    DownloadButton(
-                                                        episodeUrl = episode.url,
+                                                        downloadButtonPlacement = downloadButtonPlacement,
                                                         downloadStatus = downloadStatus,
                                                         downloadProgress = downloadProgress,
                                                         downloadedOnDisk = downloadedOnDisk,
-                                                        onDownload = { viewModel.onDownloadButtonClick(episode) },
-                                                        onLongClick = { longPressEpisode = episode },
+                                                        onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
+                                                        onDownloadLongClick = { longPressEpisode = episode },
                                                     )
-                                                } else {
-                                                    DownloadButtonSynopsis(
+                                                }
+                                                // Download button outside the episode container —
+                                                // only for "episode_row", or "synopsis" with no summary
+                                                if (showDownloadOutside) {
+                                                    DownloadButton(
                                                         episodeUrl = episode.url,
                                                         downloadStatus = downloadStatus,
                                                         downloadProgress = downloadProgress,
@@ -943,15 +952,16 @@ private fun DownloadButton(
 }
 
 /**
- * Download button for "synopsis" placement — a dedicated, taller button
- * that fills the height of the episode row area.
+ * Download button rendered INSIDE the synopsis area (split placement).
  *
- * This gives it a proper "button" feel rather than just an icon.
- * Shows the same states as [DownloadButton] but with a filled background.
+ * Sits on the right side of the synopsis text, sharing the synopsis's height
+ * via the parent Row's IntrinsicSize.Min. Has its own dedicated (state-coloured)
+ * background and rounded right corners so it reads as the right half of a split
+ * container. Shows the same states as [DownloadButton] but with a filled background.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun DownloadButtonSynopsis(
+private fun DownloadButtonSynopsisSplit(
     episodeUrl: String,
     downloadStatus: Map<String, app.anikuta.download.Download.State>,
     downloadProgress: Map<String, Int>,
@@ -987,7 +997,7 @@ private fun DownloadButtonSynopsis(
                 onClick = onDownload,
                 onLongClick = onLongClick,
             ),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(0.dp, 8.dp, 8.dp, 0.dp),
         color = backgroundColor,
         tonalElevation = 1.dp,
     ) {
@@ -1094,6 +1104,12 @@ private fun EpisodeRow(
     thumbnailPosition: String = "left",
     index: Int = 0,
     dynamicColors: DynamicColorScheme? = null,
+    downloadButtonPlacement: String = "episode_row",
+    downloadStatus: Map<String, app.anikuta.download.Download.State> = emptyMap(),
+    downloadProgress: Map<String, Int> = emptyMap(),
+    downloadedOnDisk: Set<String> = emptySet(),
+    onDownloadClick: () -> Unit = {},
+    onDownloadLongClick: () -> Unit = {},
 ) {
     val hasThumbnail = showThumbnails && !episode.preview_url.isNullOrBlank()
     val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
@@ -1124,6 +1140,8 @@ private fun EpisodeRow(
                 showEpisodeNumber, showAudioPills, synopsisPosition, datePosition,
                 thumbnailSize, titlePosition,
                 episodeNumberPosition, thumbnailPosition,
+                downloadButtonPlacement, downloadStatus, downloadProgress,
+                downloadedOnDisk, onDownloadClick, onDownloadLongClick,
             )
         } else {
             EpisodeRowSimple(
@@ -1318,6 +1336,12 @@ private fun EpisodeRowRich(
     titlePosition: String,
     episodeNumberPosition: String,
     thumbnailPosition: String,
+    downloadButtonPlacement: String = "episode_row",
+    downloadStatus: Map<String, app.anikuta.download.Download.State> = emptyMap(),
+    downloadProgress: Map<String, Int> = emptyMap(),
+    downloadedOnDisk: Set<String> = emptySet(),
+    onDownloadClick: () -> Unit = {},
+    onDownloadLongClick: () -> Unit = {},
 ) {
     var summaryExpanded by remember { mutableStateOf(false) }
 
@@ -1406,21 +1430,59 @@ private fun EpisodeRowRich(
     @Composable
     fun SynopsisContent() {
         if (hasSummary) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = episode.summary!!,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                        .clickable { summaryExpanded = !summaryExpanded },
-                )
+            if (downloadButtonPlacement == "synopsis") {
+                // Split the synopsis area into two side-by-side parts:
+                //  - Left:  synopsis text (reduced width, own background)
+                //  - Right: a dedicated square panel for the download button (own background)
+                // Both share the same height (IntrinsicSize.Min + fillMaxHeight) so the
+                // two panels read as a single split container with rounded outer corners.
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                ) {
+                    // Synopsis text — own background, rounded left corners
+                    Surface(
+                        shape = RoundedCornerShape(8.dp, 0.dp, 0.dp, 8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    ) {
+                        Text(
+                            text = episode.summary!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .clickable { summaryExpanded = !summaryExpanded },
+                        )
+                    }
+                    // Download button square — dedicated background, rounded right corners
+                    DownloadButtonSynopsisSplit(
+                        episodeUrl = episode.url,
+                        downloadStatus = downloadStatus,
+                        downloadProgress = downloadProgress,
+                        downloadedOnDisk = downloadedOnDisk,
+                        onDownload = onDownloadClick,
+                        onLongClick = onDownloadLongClick,
+                    )
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = episode.summary!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .clickable { summaryExpanded = !summaryExpanded },
+                    )
+                }
             }
         }
     }

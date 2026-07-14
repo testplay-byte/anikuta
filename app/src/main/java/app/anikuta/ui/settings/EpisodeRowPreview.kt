@@ -5,13 +5,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +66,7 @@ fun EpisodeRowPreview(
     titlePosition: String,
     episodeNumberPosition: String = "overlay",
     thumbnailPosition: String = "left",
+    downloadButtonPlacement: String = "episode_row",
 ) {
     val demoTitle = "The Dragon's Labyrinth"
     val demoSynopsis = "A young adventurer discovers a hidden labyrinth beneath the ancient city, where a mysterious dragon guards a long-forgotten secret that could change the fate of the realm forever."
@@ -213,21 +219,66 @@ fun EpisodeRowPreview(
     @Composable
     fun SynopsisContent() {
         if (hasSummary) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = demoSynopsis,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                        .clickable { summaryExpanded = !summaryExpanded },
-                )
+            if (downloadButtonPlacement == "synopsis") {
+                // Split the synopsis area into two parts:
+                //  - Left:  synopsis text (reduced width, own background)
+                //  - Right: a dedicated square panel for the download button (own background)
+                // Both share the same height (IntrinsicSize.Min + fillMaxHeight) so the
+                // two panels form a unified split container with rounded outer corners.
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                ) {
+                    // Synopsis text — own background, rounded left corners
+                    Surface(
+                        shape = RoundedCornerShape(8.dp, 0.dp, 0.dp, 8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    ) {
+                        Text(
+                            text = demoSynopsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .clickable { summaryExpanded = !summaryExpanded },
+                        )
+                    }
+                    // Download button square — dedicated background, rounded right corners
+                    Surface(
+                        shape = RoundedCornerShape(0.dp, 8.dp, 8.dp, 0.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 1.dp,
+                        modifier = Modifier.width(48.dp).fillMaxHeight(),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                    }
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = demoSynopsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .clickable { summaryExpanded = !summaryExpanded },
+                    )
+                }
             }
         }
     }
@@ -262,14 +313,20 @@ fun EpisodeRowPreview(
         }
     }
 
-    // The episode row card — standalone, looks exactly like a real episode row.
-    // Uses surfaceContainerLow to match the even-index card color on the detail page.
-    Surface(
+    // The episode row card — wrapped in a Row so a compact download icon can
+    // sit beside it for "episode_row" placement (matching the real detail page).
+    // For "synopsis" placement the card is full-width and the download button is
+    // rendered inside the synopsis area (see SynopsisContent above).
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Surface(
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 1.dp,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -370,6 +427,24 @@ fun EpisodeRowPreview(
                     Spacer(modifier = Modifier.height(6.dp))
                     DateAudioPillsRow()
                 }
+            }
+        }
+        }
+        // Compact download icon — only for "episode_row" placement.
+        // Matches the real DownloadButton (40dp box, 20dp icon) so the preview
+        // accounts for the download button in both placement modes.
+        if (downloadButtonPlacement == "episode_row") {
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier.size(40.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "Download",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
     }

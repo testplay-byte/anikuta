@@ -1706,3 +1706,86 @@ UNCHANGED: DownloadManager, DownloadProvider, DownloadPreferences, DownloadStore
 DownloadVideoResolver, ProgressTracker, DownloadNotifier, Download.kt, DownloadQueueScreen
 
 Build: #333 FAILED (fully-qualified names in DI), #334 SUCCESS after import fix
+
+---
+Task ID: DL-BTN-SYNOPSIS-SPLIT
+Agent: Z.ai Code (orchestrator)
+Task: Fix download button "synopsis" placement — move it INSIDE the episode container's synopsis area (split into two parts), fix settings toggle reactivity, and make all live previews account for the download button.
+
+Work Log:
+- Analyzed 3 user-reported issues:
+  1. Settings toggle (episode_row ↔ synopsis) didn't update visually on first tap
+  2. Download button still placed OUTSIDE the episode container with a background
+  3. Details page settings live preview didn't account for the download button
+
+ROOT CAUSE 1 (reactivity): LayoutSettingsScreen read dlPlacement via
+  `prefs.downloadButtonPlacement().get()` — a one-shot non-reactive read.
+  The segmented control captured this value once and never recomposed.
+  FIX: Changed to `.stateIn(scope).collectAsState()` (reactive), matching
+  all other prefs on the page.
+
+ROOT CAUSE 2 (placement): Both call sites in DetailScreen rendered the
+  download button as a SIBLING of EpisodeRow (outside the card), regardless
+  of the placement setting — just with a different visual style.
+  FIX: Threaded download params (status/progress/onDisk/clicks) through
+  EpisodeRow → EpisodeRowRich → SynopsisContent. When placement == "synopsis",
+  SynopsisContent now renders a SPLIT Row:
+    - Left:  synopsis text Surface (weight(1f), surfaceContainer bg,
+             rounded left corners)
+    - Right: DownloadButtonSynopsisSplit (width(48dp), state-coloured bg,
+             rounded right corners)
+  Both share the same height via Row(IntrinsicSize.Min) + fillMaxHeight,
+  forming a unified split container. The caller no longer renders an outside
+  button for "synopsis" (only for "episode_row", or "synopsis" w/o summary
+  as a fallback so the button is always accessible).
+
+ROOT CAUSE 3 (preview): EpisodeRowPreview had no downloadButtonPlacement
+  param and never rendered any download button. None of the 5 settings
+  screens passed the placement to their preview.
+  FIX:
+  - Added downloadButtonPlacement param to EpisodeRowPreview
+  - SynopsisContent() in the preview mirrors the real split for "synopsis"
+  - Wrapped the preview card in a Row; for "episode_row" a compact 40dp
+    download icon sits beside the card (matching the real detail page)
+  - Updated all 5 callers to read dlPlacement reactively and pass it:
+    LayoutSettingsScreen, DetailsSettingsScreen, DisplaySettingsScreen,
+    MetadataSettingsScreen, PlayerEpisodeDisplayScreen
+
+FILES MODIFIED (7):
+- LayoutSettingsScreen.kt — reactive dlPlacement + pass to preview + toggle fix
+- DetailsSettingsScreen.kt — pass downloadButtonPlacement to preview
+- DisplaySettingsScreen.kt — pass downloadButtonPlacement to preview
+- MetadataSettingsScreen.kt — pass downloadButtonPlacement to preview
+- PlayerEpisodeDisplayScreen.kt — pass downloadButtonPlacement to preview
+- EpisodeRowPreview.kt — new param + split SynopsisContent + outside icon
+- DetailScreen.kt — EpisodeRow/EpisodeRowRich accept download params;
+  SynopsisContent renders split; DownloadButtonSynopsis → DownloadButtonSynopsisSplit
+  (renamed + reshaped to RoundedCornerShape(0,8,8,0)); both call sites updated
+
+DESIGN DECISION (split container):
+- Synopsis text panel: surfaceContainer bg, RoundedCornerShape(8,0,0,8)
+  (rounded LEFT corners only), weight(1f), fillMaxHeight
+- Download button panel: state-coloured bg (primaryContainer/errorContainer/
+  surfaceContainerHigh), RoundedCornerShape(0,8,8,0) (rounded RIGHT corners
+  only), width(48dp), fillMaxHeight
+- Both inside Row(height(IntrinsicSize.Min)) → both match synopsis text height
+- No gap between panels → reads as a single split container
+- Download panel is 48dp wide × synopsis height (square-ish, "dedicated area")
+
+FALLBACK: When "synopsis" placement is selected but an episode has NO summary
+(EpisodeRowSimple), the compact DownloadButton is rendered outside the card
+(so the download button is always available regardless of placement + content).
+
+Build: Cannot compile locally (no Android SDK in sandbox). Code reviewed
+manually for brace balance, import availability, parameter matching, and
+Compose scope correctness (weight in RowScope, fillMaxHeight with
+IntrinsicSize.Min, combinedClickable event consumption inside Surface(onClick)).
+
+Stage Summary:
+- "Synopsis" placement now renders the download button INSIDE the episode
+  container, splitting the synopsis area into two dedicated-background panels
+  (text on left, download square on right) — exactly as the user requested
+- Settings toggle updates instantly (reactive state)
+- ALL 5 live previews now account for the download button in both modes
+- "episode_row" mode unchanged (compact icon outside the card)
+- No-summary fallback ensures the download button is always accessible
