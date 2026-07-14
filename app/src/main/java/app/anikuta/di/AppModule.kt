@@ -143,19 +143,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { DownloadManifest(get<Context>(), get<DownloadProvider>()) }
         addSingletonFactory { ProgressTracker() }
         addSingletonFactory { DownloadNotifier(get<Context>()) }
-        // Legacy FFmpeg-based engine (fallback)
-        addSingletonFactory {
-            SegmentDownloadEngine(
-                get<Context>(),
-                get<DownloadProvider>(),
-                get<DownloadVideoResolver>(),
-                get<DownloadManifest>(),
-                get<ProgressTracker>(),
-            )
-        }
-        // Single-pass FFmpeg engine (PRIMARY — mirrors aniyomi's approach exactly)
-        // Uses one FFmpeg call with the proxy URL, no -ss, no segments.
-        // FFmpeg handles HLS natively (fetches m3u8 + .ts through the proxy).
+        // All three download engines registered — user picks in settings
+        // 1. Single-pass (aniyomi approach — correct size/duration, no resume)
         addSingletonFactory {
             SinglePassDownloadEngine(
                 get<Context>(),
@@ -165,7 +154,46 @@ class AppModule(val app: Application) : InjektModule {
                 get(),
             )
         }
-        // Primary engine: SinglePass (proven aniyomi approach)
+        // 2. HLS direct (HTTP segments — resume, precise progress, proxy issues)
+        addSingletonFactory { HlsPlaylistParser() }
+        addSingletonFactory {
+            HlsPlaylistFetcher(
+                client = get<NetworkHelper>().client,
+                parser = get(),
+            )
+        }
+        addSingletonFactory {
+            HlsSegmentDownloader(
+                client = get<NetworkHelper>().client,
+            )
+        }
+        addSingletonFactory {
+            HlsDownloadEngine(
+                context = get(),
+                provider = get(),
+                resolver = get(),
+                manifestManager = get(),
+                progressTracker = get(),
+                fetcher = get(),
+                segmentDownloader = get(),
+                networkHelper = get(),
+                fallbackEngine = get<SegmentDownloadEngine>(),
+                downloadPrefs = get(),
+            )
+        }
+        // 3. Segment (FFmpeg -ss — resume, precise progress, wrong size for short videos)
+        addSingletonFactory {
+            SegmentDownloadEngine(
+                get<Context>(),
+                get<DownloadProvider>(),
+                get<DownloadVideoResolver>(),
+                get<DownloadManifest>(),
+                get<ProgressTracker>(),
+            )
+        }
+        // DownloadEngine interface returns whichever engine the user selected.
+        // The actual selection happens in DownloadWorker.processDownload() which
+        // reads downloadPrefs.downloadMethod() and picks the right engine.
         addSingletonFactory<DownloadEngine> { get<SinglePassDownloadEngine>() }
         addSingletonFactory { DownloadManager(get<Context>(), get(), get()) }
 

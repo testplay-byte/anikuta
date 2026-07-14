@@ -108,17 +108,34 @@ class SinglePassDownloadEngine(
         val durationMs = getVideoDurationMs(video)
         Log.d(TAG, "download: estimated duration=${durationMs}ms (${durationMs / 1000 / 60}m${(durationMs / 1000) % 60}s)")
 
-        // Progress callback — uses FFmpeg statistics (same as aniyomi)
+        // Progress callback — uses FFmpeg statistics.
+        // We track bytes processed (stats.size) and estimate progress based on
+        // the FFprobe duration. If the FFprobe duration is wrong (e.g., 24min for
+        // a 3min video), progress will be low but the download will still complete.
+        // We also update the totalSize estimate from the bitrate.
         val statsCallback = StatisticsCallback { stats ->
-            val processedTimeMs = stats.time // microseconds of processed video
+            val processedTimeMs = stats.time
+            val processedBytes = stats.size
+
+            // Update downloaded bytes (for UI display)
+            if (processedBytes > 0) {
+                download.downloadedBytes = processedBytes
+            }
+
+            // Estimate total size from bitrate if we don't have it
+            if (download.totalSize <= 0 && processedTimeMs > 0 && processedBytes > 0) {
+                val bitrate = processedBytes.toDouble() / processedTimeMs // bytes per ms
+                val estimatedTotal = (bitrate * durationMs).toLong()
+                if (estimatedTotal > 0) {
+                    progressTracker.setTotalSize(download, estimatedTotal)
+                }
+            }
+
+            // Calculate progress from time (may be inaccurate if duration is wrong)
             if (durationMs > 0 && processedTimeMs > 0) {
                 val progress = ((processedTimeMs.toDouble() / durationMs) * 100).toInt().coerceIn(0, 99)
-                if (progress != download.progress) {
+                if (progress != download.progress && progress > 0) {
                     download.progress = progress
-                    // Estimate size from progress
-                    if (download.totalSize > 0) {
-                        download.downloadedBytes = (download.totalSize * progress / 100)
-                    }
                 }
             }
         }

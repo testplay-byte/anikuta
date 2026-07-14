@@ -9,6 +9,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import app.anikuta.data.notification.Notifications
 import app.anikuta.download.engine.DownloadEngine
+import app.anikuta.download.engine.HlsDownloadEngine
 import app.anikuta.download.engine.SinglePassDownloadEngine
 import app.anikuta.download.engine.SegmentDownloadEngine
 import app.anikuta.download.progress.ProgressTracker
@@ -164,12 +165,20 @@ class DownloadWorker(
     private suspend fun processDownload(download: Download) {
         Log.d(TAG, "processDownload: → ${download.episodeName} (id=${download.id})")
 
-        val engine: DownloadEngine = Injekt.get()
+        // Pick engine based on user's download method preference
+        val method = downloadPrefs.downloadMethod().get()
+        val engine: DownloadEngine = when (method) {
+            "hls_direct" -> Injekt.get<HlsDownloadEngine>()
+            "segment" -> Injekt.get<SegmentDownloadEngine>()
+            else -> Injekt.get<SinglePassDownloadEngine>() // "single_pass" (default)
+        }
         val progressTracker: ProgressTracker = Injekt.get()
+        Log.d(TAG, "processDownload: using engine=$method for ${download.episodeName}")
 
         // Reset pause/cancel flags for this download
         when (engine) {
             is SinglePassDownloadEngine -> engine.resetFlags(download.id)
+            is HlsDownloadEngine -> engine.resetFlags(download.id)
             is SegmentDownloadEngine -> engine.resetFlags()
         }
 

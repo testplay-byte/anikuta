@@ -57,6 +57,9 @@ class DownloadsViewModel : ViewModel() {
     private val _deleteAfterWatching = MutableStateFlow(false)
     val deleteAfterWatching: StateFlow<Boolean> = _deleteAfterWatching.asStateFlow()
 
+    private val _downloadMethod = MutableStateFlow("single_pass")
+    val downloadMethod: StateFlow<String> = _downloadMethod.asStateFlow()
+
     init {
         // Migrate old single-value prefs if needed
         prefs?.migrateFromPhase6()
@@ -69,6 +72,7 @@ class DownloadsViewModel : ViewModel() {
         _audioFallback.value = AudioFallback.fromValue(prefs?.audioFallbackMode()?.get() ?: "")
         _downloadOverWifiOnly.value = prefs?.downloadOverWifiOnly()?.get() ?: true
         _deleteAfterWatching.value = prefs?.deleteAfterWatching()?.get() ?: false
+        _downloadMethod.value = prefs?.downloadMethod()?.get() ?: "single_pass"
 
         // Observe download queue
         viewModelScope.launch {
@@ -127,6 +131,11 @@ class DownloadsViewModel : ViewModel() {
     fun setDeleteAfterWatching(v: Boolean) {
         _deleteAfterWatching.value = v
         prefs?.deleteAfterWatching()?.set(v)
+    }
+
+    fun setDownloadMethod(method: String) {
+        _downloadMethod.value = method
+        prefs?.downloadMethod()?.set(method)
     }
 
     // ---- Download queue actions ----

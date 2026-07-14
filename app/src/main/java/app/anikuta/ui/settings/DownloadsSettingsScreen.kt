@@ -1,5 +1,6 @@
 package app.anikuta.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -153,6 +154,33 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            // ---- Download method ----
+            SettingsGroupCard(title = "Download method") {
+                Column {
+                    val method by viewModel.downloadMethod.collectAsState()
+                    DownloadMethodOption(
+                        label = "Single-pass (recommended)",
+                        description = "Aniyomi's approach. Correct size & duration. No resume after failure.",
+                        selected = method == "single_pass",
+                        onClick = { viewModel.setDownloadMethod("single_pass") },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    DownloadMethodOption(
+                        label = "HLS direct",
+                        description = "Downloads .ts segments via HTTP. Resume + precise progress. May not work with all sources.",
+                        selected = method == "hls_direct",
+                        onClick = { viewModel.setDownloadMethod("hls_direct") },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    DownloadMethodOption(
+                        label = "Segment (legacy)",
+                        description = "FFmpeg -ss segments. Resume + precise progress. Wrong size for short videos.",
+                        selected = method == "segment",
+                        onClick = { viewModel.setDownloadMethod("segment") },
+                    )
+                }
+            }
+
             // ---- Toggles ----
             SettingsGroupCard(title = "General") {
                 Column {
@@ -274,5 +302,36 @@ private fun ToggleRow(
             modifier = Modifier.weight(1f),
         )
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun DownloadMethodOption(
+    label: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
