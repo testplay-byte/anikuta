@@ -24,9 +24,21 @@ android {
         }
     }
 
+    // Fixed debug signing key — allows installing new builds without uninstalling.
+    // The keystore is committed to the repo (safe — it's a debug key, not release).
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "debug"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             isMinifyEnabled = false
@@ -122,6 +134,7 @@ dependencies {
     // MPVLib static initializer crashes with UnsatisfiedLinkError. aniyomi
     // declares the same dependency (gradle/aniyomi.versions.toml: ffmpeg-kit).
     implementation(libs.ffmpeg.kit)
+    implementation(libs.arthenica.smartexceptions)
 
     // WorkManager (download manager)
     implementation(libs.work.runtime)

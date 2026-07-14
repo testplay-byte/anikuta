@@ -4,10 +4,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.anikuta.download.AudioFallback
-import app.anikuta.download.DownloadEntry
+import app.anikuta.download.Download
 import app.anikuta.download.DownloadManager
 import app.anikuta.download.DownloadPreferences
-import app.anikuta.download.DownloadStatus
 import app.anikuta.download.PriorityMode
 import app.anikuta.download.DownloadStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,8 +31,8 @@ class DownloadsViewModel : ViewModel() {
     private val manager: DownloadManager? = try { Injekt.get() } catch (e: Exception) { null }
     private val prefs: DownloadPreferences? = try { Injekt.get() } catch (e: Exception) { null }
 
-    private val _queue = MutableStateFlow<List<DownloadEntry>>(emptyList())
-    val queue: StateFlow<List<DownloadEntry>> = _queue.asStateFlow()
+    private val _queue = MutableStateFlow<List<Download>>(emptyList())
+    val queue: StateFlow<List<Download>> = _queue.asStateFlow()
 
     // ---- Ordered priority lists (drag-and-drop) ----
     private val _qualityOrder = MutableStateFlow<List<String>>(emptyList())
@@ -58,6 +57,12 @@ class DownloadsViewModel : ViewModel() {
     private val _deleteAfterWatching = MutableStateFlow(false)
     val deleteAfterWatching: StateFlow<Boolean> = _deleteAfterWatching.asStateFlow()
 
+    private val _showDownloadSize = MutableStateFlow(true)
+    val showDownloadSize: StateFlow<Boolean> = _showDownloadSize.asStateFlow()
+
+    private val _downloadMethod = MutableStateFlow("single_pass")
+    val downloadMethod: StateFlow<String> = _downloadMethod.asStateFlow()
+
     init {
         // Migrate old single-value prefs if needed
         prefs?.migrateFromPhase6()
@@ -70,11 +75,13 @@ class DownloadsViewModel : ViewModel() {
         _audioFallback.value = AudioFallback.fromValue(prefs?.audioFallbackMode()?.get() ?: "")
         _downloadOverWifiOnly.value = prefs?.downloadOverWifiOnly()?.get() ?: true
         _deleteAfterWatching.value = prefs?.deleteAfterWatching()?.get() ?: false
+        _showDownloadSize.value = prefs?.showDownloadSize()?.get() ?: true
+        _downloadMethod.value = prefs?.downloadMethod()?.get() ?: "single_pass"
 
         // Observe download queue
         viewModelScope.launch {
-            store?.queue?.collect { entries ->
-                _queue.value = entries
+            manager?.queue?.collect { downloads ->
+                _queue.value = downloads
             }
         }
     }
@@ -128,6 +135,16 @@ class DownloadsViewModel : ViewModel() {
     fun setDeleteAfterWatching(v: Boolean) {
         _deleteAfterWatching.value = v
         prefs?.deleteAfterWatching()?.set(v)
+    }
+
+    fun setShowDownloadSize(v: Boolean) {
+        _showDownloadSize.value = v
+        prefs?.showDownloadSize()?.set(v)
+    }
+
+    fun setDownloadMethod(method: String) {
+        _downloadMethod.value = method
+        prefs?.downloadMethod()?.set(method)
     }
 
     // ---- Download queue actions ----

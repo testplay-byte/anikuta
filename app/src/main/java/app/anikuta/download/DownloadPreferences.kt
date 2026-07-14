@@ -74,13 +74,26 @@ class DownloadPreferences(
         preferenceStore.getString("download_audio_fallback", AudioFallback.NEXT.value)
 
     fun maxConcurrentDownloads(): Preference<Int> =
-        preferenceStore.getInt("download_max_concurrent", 2)
+        preferenceStore.getInt("download_max_concurrent", 1)
+
+    /**
+     * Download method: "single_pass", "hls_direct", or "segment".
+     * - single_pass: aniyomi's approach (one FFmpeg call, correct size/duration, no resume)
+     * - hls_direct: HTTP segment download (resume, precise progress, may not work with all proxies)
+     * - segment: FFmpeg -ss segments (resume, precise progress, wrong size for short videos)
+     */
+    fun downloadMethod(): Preference<String> =
+        preferenceStore.getString("download_method", "single_pass")
 
     fun deleteAfterWatching(): Preference<Boolean> =
         preferenceStore.getBoolean("download_delete_after_watch", false)
 
     fun downloadOverWifiOnly(): Preference<Boolean> =
-        preferenceStore.getBoolean("download_wifi_only", true)
+        preferenceStore.getBoolean("download_wifi_only", false)
+
+    /** Show download size info (downloaded/total bytes) on download cards. Default: true. */
+    fun showDownloadSize(): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_show_download_size", true)
 
     /**
      * Migrate old single-value prefs (Phase 6) to single-element ordered lists.

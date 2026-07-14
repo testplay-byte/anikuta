@@ -1,12 +1,21 @@
 package app.anikuta.player.controls
 
+import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -16,6 +25,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -72,10 +87,16 @@ fun EpisodeListView(
     val thumbnailPosition by prefs.thumbnailPosition().stateIn(scope).collectAsState()
     val synopsisPosition by prefs.synopsisPosition().stateIn(scope).collectAsState()
     val datePosition by prefs.datePosition().stateIn(scope).collectAsState()
+    // Download-button prefs + live queue state (Phase: PLAYER-DL-BTN).
+    val showDownloadButton by prefs.showDownloadButton().stateIn(scope).collectAsState()
+    val downloadButtonPlacement by prefs.downloadButtonPlacement().stateIn(scope).collectAsState()
+    val downloadStatus by viewModel.downloadStatus.collectAsState()
+    val downloadProgress by viewModel.downloadProgress.collectAsState()
+    val downloadedOnDisk by viewModel.downloadedOnDisk.collectAsState()
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         itemsIndexed(episodeList, key = { _, ep -> ep.url }) { index, episode ->
@@ -97,6 +118,16 @@ fun EpisodeListView(
                 thumbnailPosition = thumbnailPosition,
                 synopsisPosition = synopsisPosition,
                 datePosition = datePosition,
+                showDownloadButton = showDownloadButton,
+                downloadButtonPlacement = downloadButtonPlacement,
+                downloadStatus = downloadStatus,
+                downloadProgress = downloadProgress,
+                downloadedOnDisk = downloadedOnDisk,
+                // TODO: wire to a real enqueue/resume/cancel handler once the
+                // player has the anime title + source (currently a no-op stub
+                // — see PlayerViewModel.downloadManager note).
+                onDownloadClick = {},
+                onDownloadLongClick = {},
             )
         }
     }
@@ -105,6 +136,10 @@ fun EpisodeListView(
 /**
  * Inline version of PlayerEpisodeRow for use inside a LazyColumn's itemsIndexed.
  * Same design but accepts prefs directly (for use when not inside EpisodeListView).
+ *
+ * Download state is passed in by the caller (the call site collects it from
+ * PlayerViewModel). The placement + show/hide prefs are read internally from
+ * [prefs] so callers don't have to thread them through.
  */
 @Composable
 fun PlayerEpisodeRowInline(
@@ -113,7 +148,12 @@ fun PlayerEpisodeRowInline(
     isCurrent: Boolean,
     isSwitching: Boolean,
     onClick: () -> Unit,
-    prefs: PlayerEpisodePreferences?,
+    prefs: PlayerEpisodePreferences? = null,
+    downloadStatus: Map<String, app.anikuta.download.Download.State> = emptyMap(),
+    downloadProgress: Map<String, Int> = emptyMap(),
+    downloadedOnDisk: Set<String> = emptySet(),
+    onDownloadClick: () -> Unit = {},
+    onDownloadLongClick: () -> Unit = {},
 ) {
     val epPrefs = prefs ?: remember { Injekt.get() }
     val scope = rememberCoroutineScope()
@@ -129,6 +169,8 @@ fun PlayerEpisodeRowInline(
     val thumbnailPosition by epPrefs.thumbnailPosition().stateIn(scope).collectAsState()
     val synopsisPosition by epPrefs.synopsisPosition().stateIn(scope).collectAsState()
     val datePosition by epPrefs.datePosition().stateIn(scope).collectAsState()
+    val showDownloadButton by epPrefs.showDownloadButton().stateIn(scope).collectAsState()
+    val downloadButtonPlacement by epPrefs.downloadButtonPlacement().stateIn(scope).collectAsState()
 
     PlayerEpisodeRow(
         episode = episode,
@@ -148,6 +190,13 @@ fun PlayerEpisodeRowInline(
         thumbnailPosition = thumbnailPosition,
         synopsisPosition = synopsisPosition,
         datePosition = datePosition,
+        showDownloadButton = showDownloadButton,
+        downloadButtonPlacement = downloadButtonPlacement,
+        downloadStatus = downloadStatus,
+        downloadProgress = downloadProgress,
+        downloadedOnDisk = downloadedOnDisk,
+        onDownloadClick = onDownloadClick,
+        onDownloadLongClick = onDownloadLongClick,
     )
 }
 
@@ -170,6 +219,14 @@ private fun PlayerEpisodeRow(
     thumbnailPosition: String,
     synopsisPosition: String,
     datePosition: String,
+    // ---- Download button (Phase: PLAYER-DL-BTN) ----
+    showDownloadButton: Boolean = true,
+    downloadButtonPlacement: String = "episode_row",
+    downloadStatus: Map<String, app.anikuta.download.Download.State> = emptyMap(),
+    downloadProgress: Map<String, Int> = emptyMap(),
+    downloadedOnDisk: Set<String> = emptySet(),
+    onDownloadClick: () -> Unit = {},
+    onDownloadLongClick: () -> Unit = {},
 ) {
     val hasThumbnail = showThumbnails && !episode.preview_url.isNullOrBlank()
     val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
@@ -206,13 +263,21 @@ private fun PlayerEpisodeRow(
         Color.Transparent
     }
     val borderWidth = if (isCurrent) 2.dp else 0.dp
+    // The card Surface is rendered inside a Row (so a tall download button can
+    // sit beside it when needed). `weight(1f)` is applied at the call site so
+    // we keep cardModifier free of RowScope-only modifiers.
     val cardModifier = if (isCurrent) {
-        Modifier
-            .fillMaxWidth()
-            .border(borderWidth, borderColor, RoundedCornerShape(12.dp))
+        Modifier.border(borderWidth, borderColor, RoundedCornerShape(12.dp))
     } else {
-        Modifier.fillMaxWidth()
+        Modifier
     }
+
+    // Whether the tall download button renders BESIDE the card (episode_row
+    // placement, or synopsis placement with no summary to host it inside).
+    val showDownloadOutside = showDownloadButton && (
+        downloadButtonPlacement == "episode_row" ||
+            (downloadButtonPlacement == "synopsis" && !hasSummary)
+    )
 
     val (thumbWidth, thumbHeight) = when (thumbnailSize) {
         "small" -> 100.dp to 56.dp
@@ -220,14 +285,20 @@ private fun PlayerEpisodeRow(
         else -> 120.dp to 68.dp
     }
 
-    Surface(
-        modifier = cardModifier,
-        shape = RoundedCornerShape(12.dp),
-        color = finalCardColor,
-        tonalElevation = if (isCurrent) 3.dp else 0.dp,
-        shadowElevation = if (isCurrent) 4.dp else 0.dp,
-        onClick = onClick,
+    // Wrap the card Surface in a Row with IntrinsicSize.Min so the tall
+    // download button's fillMaxHeight stretches to match the card's height
+    // (mirrors the detail page's EpisodeRow + DownloadButtonTall pattern).
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
     ) {
+        Surface(
+            modifier = Modifier.weight(1f).then(cardModifier),
+            shape = RoundedCornerShape(12.dp),
+            color = finalCardColor,
+            tonalElevation = if (isCurrent) 3.dp else 0.dp,
+            shadowElevation = if (isCurrent) 4.dp else 0.dp,
+            onClick = onClick,
+        ) {
         if (isRich) {
             // Rich row (with thumbnail and/or summary)
             Column(
@@ -330,7 +401,18 @@ private fun PlayerEpisodeRow(
                         // Synopsis
                         if (hasThumbnail && synopsisPosition == "right" && hasSummary) {
                             Spacer(modifier = Modifier.height(6.dp))
-                            SynopsisContent(episode.summary!!)
+                            SynopsisContent(
+                                summary = episode.summary!!,
+                                episodeUrl = episode.url,
+                                showDownloadButton = showDownloadButton,
+                                downloadButtonPlacement = downloadButtonPlacement,
+                                downloadStatus = downloadStatus,
+                                downloadProgress = downloadProgress,
+                                downloadedOnDisk = downloadedOnDisk,
+                                onDownloadClick = onDownloadClick,
+                                onDownloadLongClick = onDownloadLongClick,
+                                index = index,
+                            )
                         }
 
                         // Date below synopsis
@@ -398,7 +480,18 @@ private fun PlayerEpisodeRow(
                     }
                     if (hasSummary && synopsisPosition == "below") {
                         Spacer(modifier = Modifier.height(8.dp))
-                        SynopsisContent(episode.summary!!)
+                        SynopsisContent(
+                            summary = episode.summary!!,
+                            episodeUrl = episode.url,
+                            showDownloadButton = showDownloadButton,
+                            downloadButtonPlacement = downloadButtonPlacement,
+                            downloadStatus = downloadStatus,
+                            downloadProgress = downloadProgress,
+                            downloadedOnDisk = downloadedOnDisk,
+                            onDownloadClick = onDownloadClick,
+                            onDownloadLongClick = onDownloadLongClick,
+                            index = index,
+                        )
                     }
                     if (datePosition == "below" && hasAnyPills) {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -480,24 +573,206 @@ private fun PlayerEpisodeRow(
         }
 
         // Current episode is indicated by the highlight color only (no text)
+        }
+        // Tall download button — beside the card (episode_row placement, or
+        // synopsis placement with no summary to host it inside).
+        if (showDownloadOutside) {
+            Spacer(modifier = Modifier.width(8.dp))
+            PlayerDownloadButtonTall(
+                episodeUrl = episode.url,
+                downloadStatus = downloadStatus,
+                downloadProgress = downloadProgress,
+                downloadedOnDisk = downloadedOnDisk,
+                onDownload = onDownloadClick,
+                onLongClick = onDownloadLongClick,
+                index = index,
+            )
+        }
     }
 }
 
 @Composable
-private fun SynopsisContent(summary: String) {
+private fun SynopsisContent(
+    summary: String,
+    episodeUrl: String,
+    showDownloadButton: Boolean,
+    downloadButtonPlacement: String,
+    downloadStatus: Map<String, app.anikuta.download.Download.State>,
+    downloadProgress: Map<String, Int>,
+    downloadedOnDisk: Set<String>,
+    onDownloadClick: () -> Unit,
+    onDownloadLongClick: () -> Unit,
+    index: Int,
+) {
+    if (showDownloadButton && downloadButtonPlacement == "synopsis") {
+        // Two separated panels side-by-side, each with its own background:
+        //  - Left:  synopsis text (reduced width, all corners rounded)
+        //  - Right: a dedicated tall button for the download (own background,
+        //           all corners rounded), with a 6dp gap between them.
+        // Both share the same height (IntrinsicSize.Min + fillMaxHeight).
+        Row(
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            PlayerDownloadButtonTall(
+                episodeUrl = episodeUrl,
+                downloadStatus = downloadStatus,
+                downloadProgress = downloadProgress,
+                downloadedOnDisk = downloadedOnDisk,
+                onDownload = onDownloadClick,
+                onLongClick = onDownloadLongClick,
+                index = index,
+            )
+        }
+    } else {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Tall download button with a dedicated (state-coloured) background and fully
+ * rounded corners. Used for BOTH placement modes in the player's episode list:
+ *  - "episode_row": rendered beside the episode card; fills the card's height
+ *    via the parent Row's IntrinsicSize.Min.
+ *  - "synopsis": rendered inside the synopsis area, beside the synopsis text
+ *    panel (with a 6dp gap); fills the synopsis height via IntrinsicSize.Min.
+ *
+ * Mirrors `DownloadButtonTall` in DetailScreen.kt — same state-coloured
+ * background logic, same alternating default background by [index], same
+ * DOWNLOADING / QUEUE / RESOLVING / MUXING / ERROR / PAUSED / RECONNECTING /
+ * DOWNLOADED / default icon set. Kept as a private copy here (rather than
+ * shared) to avoid coupling the player package to the detail page's internal
+ * composables.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PlayerDownloadButtonTall(
+    episodeUrl: String,
+    downloadStatus: Map<String, app.anikuta.download.Download.State>,
+    downloadProgress: Map<String, Int>,
+    downloadedOnDisk: Set<String>,
+    onDownload: () -> Unit,
+    onLongClick: () -> Unit = {},
+    index: Int = 0,
+) {
+    val status = downloadStatus[episodeUrl]
+    val progress = downloadProgress[episodeUrl] ?: 0
+    val isOnDisk = downloadedOnDisk.contains(episodeUrl)
+
+    // Alternating default background: contrasts with the episode card's
+    // alternating row color (even=surfaceContainerLow, odd=surfaceContainerHigh).
+    // The button uses the OPPOSITE level so it never blends into the card.
+    val defaultBg = if (index % 2 == 0) {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+
+    val backgroundColor = when {
+        status == app.anikuta.download.Download.State.DOWNLOADING -> MaterialTheme.colorScheme.primaryContainer
+        status == app.anikuta.download.Download.State.ERROR -> MaterialTheme.colorScheme.errorContainer
+        status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        status == app.anikuta.download.Download.State.PAUSED -> defaultBg
+        status == app.anikuta.download.Download.State.RECONNECTING -> MaterialTheme.colorScheme.errorContainer
+        else -> defaultBg
+    }
+
+    val iconColor = when {
+        status == app.anikuta.download.Download.State.ERROR -> MaterialTheme.colorScheme.error
+        status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> MaterialTheme.colorScheme.primary
+        status == app.anikuta.download.Download.State.RECONNECTING -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
     Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .width(48.dp)
+            .fillMaxHeight()
+            .combinedClickable(
+                onClick = onDownload,
+                onLongClick = onLongClick,
+            ),
+        shape = RoundedCornerShape(12.dp),
+        color = backgroundColor,
+        tonalElevation = 1.dp,
     ) {
-        Text(
-            text = summary,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-        )
+        Box(contentAlignment = Alignment.Center) {
+            when {
+                status == app.anikuta.download.Download.State.DOWNLOADING -> {
+                    CircularProgressIndicator(
+                        progress = { progress / 100f },
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                status == app.anikuta.download.Download.State.QUEUE ||
+                    status == app.anikuta.download.Download.State.RESOLVING ||
+                    status == app.anikuta.download.Download.State.MUXING -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                status == app.anikuta.download.Download.State.ERROR -> {
+                    Icon(Icons.Default.Error, contentDescription = "Failed", tint = iconColor, modifier = Modifier.size(24.dp))
+                }
+                status == app.anikuta.download.Download.State.PAUSED -> {
+                    Icon(Icons.Default.Download, contentDescription = "Paused", tint = iconColor, modifier = Modifier.size(24.dp))
+                }
+                status == app.anikuta.download.Download.State.RECONNECTING -> {
+                    val transition = rememberInfiniteTransition(label = "reconnect_player")
+                    val spinnerColor by transition.animateColor(
+                        initialValue = MaterialTheme.colorScheme.error,
+                        targetValue = Color(0xFFFFA000),
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(500),
+                            repeatMode = RepeatMode.Reverse,
+                        ),
+                        label = "reconnect_player_color",
+                    )
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = spinnerColor,
+                    )
+                }
+                status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
+                    Icon(Icons.Default.DownloadDone, contentDescription = "Downloaded", tint = iconColor, modifier = Modifier.size(24.dp))
+                }
+                else -> {
+                    Icon(Icons.Default.Download, contentDescription = "Download", tint = iconColor, modifier = Modifier.size(24.dp))
+                }
+            }
+        }
     }
 }
 

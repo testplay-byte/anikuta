@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -58,6 +59,8 @@ fun PlayerEpisodeDisplayScreen(onBack: () -> Unit) {
     val titlePos by prefs.titlePosition().stateIn(scope).collectAsState()
     val epNumPos by prefs.episodeNumberPosition().stateIn(scope).collectAsState()
     val thumbPos by prefs.thumbnailPosition().stateIn(scope).collectAsState()
+    val dlPlacement by prefs.downloadButtonPlacement().stateIn(scope).collectAsState()
+    val showDownloadButton by prefs.showDownloadButton().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Episode list", onBack = onBack) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -87,6 +90,8 @@ fun PlayerEpisodeDisplayScreen(onBack: () -> Unit) {
                         titlePosition = titlePos,
                         episodeNumberPosition = epNumPos,
                         thumbnailPosition = thumbPos,
+                        downloadButtonPlacement = dlPlacement,
+                        showDownloadButton = showDownloadButton,
                     )
                 }
             }
@@ -146,6 +151,14 @@ fun PlayerEpisodeDisplayScreen(onBack: () -> Unit) {
                                 subtitle = "Show SUB / DUB / HSUB tags",
                                 checked = showAudioPills,
                                 onCheckedChange = { prefs.showAudioPills().set(it) },
+                            )
+                            HorizontalDivider()
+                            SwitchSettingsRow(
+                                icon = Icons.Default.Download,
+                                title = "Download button",
+                                subtitle = "Show the download button on each episode card",
+                                checked = showDownloadButton,
+                                onCheckedChange = { prefs.showDownloadButton().set(it) },
                             )
                         }
                     }
@@ -233,6 +246,29 @@ fun PlayerEpisodeDisplayScreen(onBack: () -> Unit) {
                                         })
                                     },
                                 )
+                            }
+                        }
+                    }
+                }
+
+                // Download button placement — only shown when the download
+                // button itself is enabled (mirrors LayoutSettingsScreen's
+                // "Download button" section on the detail page).
+                if (showDownloadButton) {
+                    item {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            SettingsGroupCard(title = "Download button") {
+                                LabeledSection("Placement", "Where the download button appears on episode rows") {
+                                    StyledSegmentedRow(
+                                        options = listOf(
+                                            "Episode row" to (dlPlacement == "episode_row"),
+                                            "Synopsis" to (dlPlacement == "synopsis"),
+                                        ),
+                                        onSelect = {
+                                            prefs.downloadButtonPlacement().set(if (it == 0) "episode_row" else "synopsis")
+                                        },
+                                    )
+                                }
                             }
                         }
                     }

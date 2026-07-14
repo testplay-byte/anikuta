@@ -1,5 +1,6 @@
 package app.anikuta.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -153,6 +155,37 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            // ---- Download method ----
+            SettingsGroupCard(title = "Download method") {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    val method by viewModel.downloadMethod.collectAsState()
+                    Text(
+                        text = "Choose how episodes are downloaded",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    StyledSegmentedRow(
+                        options = listOf(
+                            "Single-pass" to (method == "single_pass"),
+                            "HLS direct" to (method == "hls_direct"),
+                        ),
+                        onSelect = {
+                            viewModel.setDownloadMethod(if (it == 0) "single_pass" else "hls_direct")
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = when (method) {
+                            "hls_direct" -> "Downloads .ts segments individually via HTTP. Supports resume + precise progress. May not work with all sources."
+                            else -> "Aniyomi's approach. Correct size & duration. Progress is estimated. No resume after failure."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             // ---- Toggles ----
             SettingsGroupCard(title = "General") {
                 Column {
@@ -168,6 +201,13 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
                         label = "Delete after watching",
                         checked = deleteAfter,
                         onCheckedChange = { viewModel.setDeleteAfterWatching(it) },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    val showSize by viewModel.showDownloadSize.collectAsState()
+                    ToggleRow(
+                        label = "Show download size",
+                        checked = showSize,
+                        onCheckedChange = { viewModel.setShowDownloadSize(it) },
                     )
                 }
             }
@@ -276,3 +316,4 @@ private fun ToggleRow(
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
+

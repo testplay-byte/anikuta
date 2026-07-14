@@ -76,6 +76,13 @@ class PlayerPreferences(
         preferenceStore.getString("pref_synopsis_position", "below")
 
     /**
+     * Download button placement: 'episode_row' = right side of episode row (default).
+     * 'synopsis' = inside episode synopsis area (right side, dedicated button).
+     */
+    fun downloadButtonPlacement(): Preference<String> =
+        preferenceStore.getString("pref_download_button_placement", "episode_row")
+
+    /**
      * Date position: 'right_below_synopsis' = right of thumbnail, below synopsis (default).
      * 'right_above_synopsis' = right of thumbnail, above synopsis (between title and synopsis).
      * 'below' = full-width below the thumbnail row.

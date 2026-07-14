@@ -25,8 +25,20 @@ import app.anikuta.ui.library.LibraryStore
 import app.anikuta.data.tracker.AniListTracker
 import app.anikuta.source.bridge.AniyomiSourceBridge
 import app.anikuta.download.DownloadPreferences
+import app.anikuta.download.DownloadProvider
 import app.anikuta.download.DownloadStore
 import app.anikuta.download.DownloadManager
+import app.anikuta.download.DownloadVideoResolver
+import app.anikuta.download.DownloadNotifier
+import app.anikuta.download.engine.DownloadEngine
+import app.anikuta.download.engine.DownloadManifest
+import app.anikuta.download.engine.HlsDownloadEngine
+import app.anikuta.download.engine.SegmentDownloadEngine
+import app.anikuta.download.engine.SinglePassDownloadEngine
+import app.anikuta.download.engine.hls.HlsPlaylistFetcher
+import app.anikuta.download.engine.hls.HlsPlaylistParser
+import app.anikuta.download.engine.hls.HlsSegmentDownloader
+import app.anikuta.download.progress.ProgressTracker
 import app.anikuta.domain.extension.anime.interactor.TrustAnimeExtension
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.CreateAnimeExtensionRepo
 import app.anikuta.domain.mihon.extensionrepo.anime.interactor.DeleteAnimeExtensionRepo
@@ -122,9 +134,67 @@ class AppModule(val app: Application) : InjektModule {
         // AniList tracker (OAuth + progress sync)
         addSingletonFactory { AniListTracker(get<PreferenceStore>()) }
 
-        // Download manager (Phase 6 Section 5)
+        // Download manager (modular architecture — Phase 1+2)
         addSingletonFactory { DownloadPreferences(get<PreferenceStore>()) }
-        addSingletonFactory { DownloadStore(get<PreferenceStore>(), get<Context>()) }
+        addSingletonFactory { DownloadStore(get<PreferenceStore>()) }
+        addSingletonFactory { DownloadProvider(get<Context>(), get<app.anikuta.storage.StorageManager>()) }
+        addSingletonFactory { DownloadVideoResolver(get<AnimeSourceManager>(), get<DownloadPreferences>()) }
+        // Engine infrastructure
+        addSingletonFactory { DownloadManifest(get<Context>(), get<DownloadProvider>()) }
+        addSingletonFactory { ProgressTracker() }
+        addSingletonFactory { DownloadNotifier(get<Context>()) }
+        // All three download engines registered — user picks in settings
+        // 1. Single-pass (aniyomi approach — correct size/duration, no resume)
+        addSingletonFactory {
+            SinglePassDownloadEngine(
+                get<Context>(),
+                get<DownloadProvider>(),
+                get<DownloadVideoResolver>(),
+                get<ProgressTracker>(),
+                get(),
+            )
+        }
+        // 2. HLS direct (HTTP segments — resume, precise progress, proxy issues)
+        addSingletonFactory { HlsPlaylistParser() }
+        addSingletonFactory {
+            HlsPlaylistFetcher(
+                client = get<NetworkHelper>().client,
+                parser = get(),
+            )
+        }
+        addSingletonFactory {
+            HlsSegmentDownloader(
+                client = get<NetworkHelper>().client,
+            )
+        }
+        addSingletonFactory {
+            HlsDownloadEngine(
+                context = get(),
+                provider = get(),
+                resolver = get(),
+                manifestManager = get(),
+                progressTracker = get(),
+                fetcher = get(),
+                segmentDownloader = get(),
+                networkHelper = get(),
+                fallbackEngine = get<SegmentDownloadEngine>(),
+                downloadPrefs = get(),
+            )
+        }
+        // 3. Segment (FFmpeg -ss — resume, precise progress, wrong size for short videos)
+        addSingletonFactory {
+            SegmentDownloadEngine(
+                get<Context>(),
+                get<DownloadProvider>(),
+                get<DownloadVideoResolver>(),
+                get<DownloadManifest>(),
+                get<ProgressTracker>(),
+            )
+        }
+        // DownloadEngine interface returns whichever engine the user selected.
+        // The actual selection happens in DownloadWorker.processDownload() which
+        // reads downloadPrefs.downloadMethod() and picks the right engine.
+        addSingletonFactory<DownloadEngine> { get<SinglePassDownloadEngine>() }
         addSingletonFactory { DownloadManager(get<Context>(), get(), get()) }
 
         // AniList client

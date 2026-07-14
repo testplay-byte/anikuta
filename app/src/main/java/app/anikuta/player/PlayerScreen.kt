@@ -110,6 +110,13 @@ internal fun PlayerScreen(
     val currentIndex by viewModel.currentEpisodeIndex.collectAsState()
     val currentEpisode = episodeList.getOrNull(currentIndex)
 
+    // ---- Download state (Phase: PLAYER-DL-BTN) ----
+    // Collected here so the inline episode rows in the LazyColumn below can
+    // render the per-episode download button with live queue state.
+    val downloadStatus by viewModel.downloadStatus.collectAsState()
+    val downloadProgress by viewModel.downloadProgress.collectAsState()
+    val downloadedOnDisk by viewModel.downloadedOnDisk.collectAsState()
+
     // ---- LazyColumn scroll state ----
     // FIX: Force-scroll to the VERY top when the episode list first loads.
     // The list loads asynchronously from disk cache (lifecycleScope.launch in
@@ -358,7 +365,20 @@ internal fun PlayerScreen(
                                             Log.d("PlayerActivity", "Video URL is localhost proxy — deferring to loadVideoIfPending for re-resolution")
                                         } else {
                                             Log.d("PlayerActivity", "Loading video (direct URL): ${url.take(80)}...")
-                                            MPVLib.command(arrayOf("loadfile", url, "replace"))
+                                            val resolvedUrl = app.anikuta.player.resolveUrlForMpv(url, ctx)
+                                            // FIX (D1): For offline playback (fd:// or content://), delay loadfile
+                                            // until the SurfaceView has a surface. MPV's vo_android_init crashes
+                                            // with "assertion WinID != 0 && WinID != -1 failed" if loadfile is
+                                            // called before surfaceCreated fires. For HTTP URLs, MPV can buffer
+                                            // without a surface, so no delay is needed.
+                                            if (resolvedUrl.startsWith("fd://") || resolvedUrl.startsWith("content://")) {
+                                                Log.d("PlayerActivity", "Offline playback — delaying loadfile 500ms for surface creation: $resolvedUrl")
+                                                view.postDelayed({
+                                                    MPVLib.command(arrayOf("loadfile", resolvedUrl, "replace"))
+                                                }, 500)
+                                            } else {
+                                                MPVLib.command(arrayOf("loadfile", resolvedUrl, "replace"))
+                                            }
                                         }
                                     } else {
                                         Log.d("PlayerActivity", "Video load delayed (prompt showing)")
@@ -451,8 +471,8 @@ internal fun PlayerScreen(
                         state = episodeListState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            start = 12.dp,
-                            end = 12.dp,
+                            start = 8.dp,
+                            end = 8.dp,
                             top = 13.dp,
                             bottom = 24.dp,
                         ),
@@ -552,6 +572,15 @@ internal fun PlayerScreen(
                             isSwitching = viewModel.isSwitchingEpisode.value && index == currentIndex,
                             onClick = { onEpisodeSwitch(index) },
                             prefs = null,  // Uses default PlayerEpisodePreferences from Injekt
+                            // Phase: PLAYER-DL-BTN — download state from PlayerViewModel.
+                            // onDownloadClick / onDownloadLongClick are no-op stubs for
+                            // now (enqueueing needs the anime title + source which live on
+                            // PlayerActivity, not the ViewModel — deferred).
+                            downloadStatus = downloadStatus,
+                            downloadProgress = downloadProgress,
+                            downloadedOnDisk = downloadedOnDisk,
+                            onDownloadClick = {},
+                            onDownloadLongClick = {},
                         )
                     }
                     } // end LazyColumn
@@ -609,7 +638,16 @@ internal fun PlayerScreen(
                                     Log.d("PlayerActivity", "Video URL is localhost proxy — deferring to loadVideoIfPending for re-resolution")
                                 } else {
                                     Log.d("PlayerActivity", "Loading video (direct URL): ${url.take(80)}...")
-                                    MPVLib.command(arrayOf("loadfile", url, "replace"))
+                                    val resolvedUrlFs = app.anikuta.player.resolveUrlForMpv(url, ctx)
+                                    // FIX (D1): For offline playback, delay loadfile until surface is created.
+                                    if (resolvedUrlFs.startsWith("fd://") || resolvedUrlFs.startsWith("content://")) {
+                                        Log.d("PlayerActivity", "Offline playback (fullscreen) — delaying loadfile 500ms for surface creation: $resolvedUrlFs")
+                                        view.postDelayed({
+                                            MPVLib.command(arrayOf("loadfile", resolvedUrlFs, "replace"))
+                                        }, 500)
+                                    } else {
+                                        MPVLib.command(arrayOf("loadfile", resolvedUrlFs, "replace"))
+                                    }
                                 }
                             }
                             view

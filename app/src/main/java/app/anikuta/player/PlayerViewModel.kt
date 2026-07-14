@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * ANI-KUTA PlayerViewModel — holds the player UI state.
@@ -391,4 +393,45 @@ class PlayerViewModel(
         super.onCleared()
         Log.d(TAG, "ViewModel cleared")
     }
+
+    // ---- Download support (Phase: PLAYER-DL-BTN) ----
+    //
+    // Mirrors DetailViewModel's wiring of the global DownloadManager so the
+    // player's episode list can render a per-episode download button that
+    // reflects the live download queue state (DOWNLOADING / QUEUE / ERROR /
+    // PAUSED / DOWNLOADED / etc.) and progress (0–100).
+    //
+    // IMPORTANT: the player does NOT have the anime's full filesystem-scan
+    // path that the detail page uses (no matchedSource / anime title here).
+    // [downloadedOnDisk] is therefore a stub that always reports an empty
+    // set. The on-disk green-checkmark for an episode that finished outside
+    // the player won't be reflected here, but the in-queue DOWNLOADED state
+    // will be — and that's enough to drive the button UI.
+    //
+    // onDownloadClick is also a no-op stub for now. Enqueueing a download
+    // requires the anime title + source (which the player only has
+    // indirectly via sourceId/anilistId on PlayerActivity). Wiring that
+    // through is intentionally deferred — the priority for this phase is to
+    // SHOW the button with correct state. The click handler is a TODO.
+
+    private val downloadManager: app.anikuta.download.DownloadManager? = try {
+        uy.kohesive.injekt.Injekt.get()
+    } catch (e: Exception) { null }
+
+    /** Live download status per episode URL (mirrors DetailViewModel.downloadStatus). */
+    val downloadStatus: kotlinx.coroutines.flow.StateFlow<Map<String, app.anikuta.download.Download.State>> =
+        downloadManager?.downloadStatusMap
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
+
+    /** Live download progress per episode URL, 0–100 (mirrors DetailViewModel.downloadProgress). */
+    val downloadProgress: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> =
+        downloadManager?.downloadProgressMap
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
+
+    /**
+     * Stub on-disk set — always empty in the player. See note above.
+     * Exposed so the same UI code path as the detail page can be reused.
+     */
+    private val _downloadedOnDisk = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
+    val downloadedOnDisk: kotlinx.coroutines.flow.StateFlow<Set<String>> = _downloadedOnDisk
 }

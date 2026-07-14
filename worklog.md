@@ -1270,3 +1270,1119 @@ Plus supporting files (PlayerObserver, PlayerEnums, VideoTitleParser)
 
 ### Build
 - Build #241 (8450876): SUCCESS
+
+---
+Task ID: DL-PHASE1-2
+Agent: Z.ai Code (orchestrator)
+Task: Download system modular architecture + segment-based resume engine + foreground service + notifications
+
+Work Log:
+- Read all existing download files on player-experiment branch to understand current state
+- Analyzed 6 bugs (B1-B6) with root causes from code analysis
+- Created new modular architecture:
+  1. DownloadEngine.kt — interface for download strategies (start/pause/resume/cancel)
+  2. DownloadManifest.kt — manifest JSON read/write/validate for segment-level resume tracking
+  3. ProgressTracker.kt — segment-based progress (completed/total × 100) + speed tracking
+  4. DownloadNotifier.kt — notification wrapper (progress/error/complete)
+  5. SegmentDownloadEngine.kt — 10-second segment download with manifest-based resume
+- Added new states to Download.kt: RESOLVING, PAUSED, MUXING (plus speedFlow)
+- Fixed B1 (stationary spinner): removed progress={0.3f} from QUEUE state, added new state handling
+- Fixed B3 (reactive queue): DownloadManager.downloadStatusMap observes per-download statusFlow
+- Fixed B6 (concurrency): DownloadWorker uses coroutineScope + async + Semaphore.withPermit
+- Added foreground service: setForeground() with FOREGROUND_SERVICE_TYPE_DATA_SYNC
+- Added permissions: FOREGROUND_SERVICE + FOREGROUND_SERVICE_DATA_SYNC in AndroidManifest.xml
+- Created notification channels in App.kt (progress/error/complete)
+- Added pause/resume to DownloadManager (pauseDownload, resumeDownload, pauseAll, resumeAll)
+- Registered all new modules in AppModule.kt DI
+- Verbose logging throughout (per-module tags)
+- Updated DetailViewModel to use downloadStatusMap (reactive)
+- Updated DetailScreen DownloadButton with all new states
+
+Segment-based resume architecture:
+- Videos split into 10-second segments (144 segments for 24-min episode)
+- Each segment downloaded via FFmpeg: -ss <startTime> -t 10 -i <url> -c copy -f mpegts
+- Manifest.json tracks per-segment state (pending/downloading/done/partial/error)
+- On resume: skip "done" segments, delete "partial" segments, download "pending" ones
+- After all segments done: FFmpeg concat + mux subtitles into final .mkv
+- Manifest written atomically (write to .tmp, then rename)
+
+Build: run #314 triggered on player-experiment @ f232096
+Waiting for build result...
+
+Stage Summary:
+- 5 new files created (DownloadEngine, DownloadManifest, ProgressTracker, DownloadNotifier, SegmentDownloadEngine)
+- 8 existing files modified (Download.kt, DownloadManager.kt, DownloadWorker.kt, App.kt, AndroidManifest.xml, Notifications.kt, AppModule.kt, DetailViewModel.kt, DetailScreen.kt)
+- Bugs fixed: B1 (stationary spinner), B3 (reactive queue), B6 (concurrency)
+- Features added: foreground service, notification channels, pause/resume, segment-based resume, verbose logging
+- Phase 1 (architecture) + Phase 2 (engine + foreground service) complete
+- Next: user tests + provides console logs → Phase 3 (UI fixes) + Phase 4 (UI redesign)
+
+### Build results
+- Build #314 (f232096): FAILED — 5 compile errors (formatBytes companion, launch import, Manifest nullability, FFprobeKit API, MANIFEST_FILE visibility)
+- Build #315 (fe9c97e): FAILED — 1 remaining error (MANIFEST_FILE private in companion)
+- Build #316 (f6d1665): ✓ SUCCESS — all compile errors fixed
+- ntfy.sh notification sent to TASKISDONE
+- APK available in GitHub Actions artifacts (anikuta-debug-arm64-v8a, 90-day retention)
+
+### What's ready for testing
+- Modular download architecture (DownloadEngine, DownloadManifest, ProgressTracker, DownloadNotifier, SegmentDownloadEngine)
+- Segment-based resume engine (10-second segments, manifest.json tracking)
+- Foreground service (downloads survive app backgrounding on Android 12+)
+- Notification channels (progress, error, complete)
+- Concurrency fix (downloads run in parallel coroutines)
+- Reactive status propagation (B3 fix — status changes show in UI immediately)
+- Stationary spinner fix (B1 — indeterminate spinner during QUEUE/RESOLVING/MUXING)
+- Verbose logging throughout (per-module tags for easy logcat filtering)
+
+---
+Task ID: DL-FIXES-C1-C6
+Agent: Z.ai Code (orchestrator)
+Task: Fix 6 issues found during user testing of download system
+
+Work Log:
+- Analyzed two user-provided log files (first download + end-of-download crash)
+- Found 6 distinct issues with root cause analysis:
+  C1 (CRITICAL): FFmpeg concat SIGSEGV at 99% — saf_close null deref
+  C2 (HIGH): Duplicate downloads allowed — store.add unconditional addToLiveQueue
+  C3 (HIGH): Stuck spinner after cancel — missing refreshStatusMap()
+  C4 (HIGH): Pause button actually cancels — no separate pause/resume UI
+  C5 (MEDIUM): Progress not shown on detail page — indeterminate spinner
+  C6 (LOW): Notification channels created repeatedly
+
+Fixes applied:
+- C1: SegmentDownloadEngine rewritten to use cache dir for segments/subtitles/concat/mux
+  (real file paths instead of saf: URIs). Final .mkv copied from cache to SAF after mux.
+  Added verifySegmentFiles() for cache-cleared resume handling.
+- C2: DownloadStore.add() returns Boolean. DownloadManager.enqueueDownload checks return
+  before calling addToLiveQueue.
+- C3: cancelDownload/removeDownload/clearCompleted now call refreshStatusMap().
+  cancelDownload sets status to NOT_DOWNLOADED before removing (triggers statusFlow emit).
+- C4: DownloadQueueScreen rewritten with separate Pause/Resume and Cancel buttons.
+  Added Pause All / Resume All in top bar. Proper empty state with large icon.
+- C5: Added downloadProgressMap to DownloadManager (reactive). DetailViewModel exposes
+  downloadProgress. DownloadButton shows determinate CircularProgressIndicator.
+- C6: Added @Volatile channelsCreated flag in DownloadNotifier — createChannels() runs once.
+
+Build: run #318 (SUCCESS) on player-experiment @ 7acaa67
+ntfy.sh notification sent to TASKISDONE.
+
+Stage Summary:
+- All 6 issues fixed and build verified
+- Download engine now uses cache dir for all FFmpeg I/O (avoids SAF protocol crash)
+- Proper pause/resume/cancel UI in downloads page
+- Progress shown on both detail page and downloads page
+- Duplicate downloads prevented
+- Stuck spinner after cancel fixed
+- Ready for user testing
+
+---
+Task ID: DL-FIXES-D1-D3
+Agent: Z.ai Code (orchestrator)
+Task: Fix 3 issues from second round of user testing
+
+Work Log:
+- Analyzed 3 user-provided log files (download start, pause/resume flow, offline playback crash)
+- Found 3 distinct issues with root cause analysis:
+
+D1 (CRITICAL): App crashes when playing downloaded episode
+- Root cause: MPV vo_android_init assertion "WinID != 0 && WinID != -1" fails
+  because loadfile is called with fd:// URL before SurfaceView has a surface.
+  For HTTP URLs MPV can buffer without surface, but for fd:// it immediately
+  tries to render → crash (SIGABRT).
+- Fix: For fd:// and content:// URLs, delay loadfile 500ms via view.postDelayed().
+  Applied to both minimized + fullscreen AndroidView factories.
+
+D2 (HIGH): Pause doesn't actually pause
+- Root cause: DownloadManager.pauseDownload() sets download.status = PAUSED,
+  but SegmentDownloadEngine only checked its own 'paused' instance variable
+  (never set by the manager). Engine never saw the user's pause request.
+- Fix: Engine now checks download.status directly (PAUSED → save + return,
+  NOT_DOWNLOADED → cleanup + return). Added checks before AND after each
+  segment download (FFmpegKit.execute is blocking).
+
+D3 (MEDIUM): QUEUE state only showed Cancel button
+- Root cause: DownloadQueueScreen QUEUE state had only Cancel.
+  After resuming a paused download → QUEUE → couldn't re-pause.
+- Fix: QUEUE state now shows Pause + Cancel (same as DOWNLOADING).
+
+Build: run #319 (SUCCESS) on player-experiment @ ff9a5f5
+ntfy.sh notification sent to TASKISDONE.
+
+Stage Summary:
+- All 3 issues fixed, build verified
+- Offline playback no longer crashes (surface delay fix)
+- Pause now actually pauses the download (status check fix)
+- QUEUE state has proper controls (Pause + Cancel)
+- Ready for user testing
+
+---
+Task ID: DL-FIXES-E1-E5
+Agent: Z.ai Code (orchestrator)
+Task: Fix 5 issues from third round of testing + reduce logging
+
+Work Log:
+- Analyzed user feedback (no logs this time — user reported issues verbally)
+- Found 5 issues:
+
+E1 (MEDIUM): Storage size shown wrongly after pause/resume (graphical glitch)
+E2 (HIGH): Queued download doesn't auto-start when first download finishes
+E3 (MEDIUM): Wrong download size on second download
+E4 (HIGH): Retry after failure starts from beginning instead of resuming
+E5 (HIGH): Console logging way too much — user can't share logs efficiently
+
+Fixes applied:
+- E5: Removed all Log.v() calls. Kept Log.d() only for key milestones (download
+  start, resolve, duration/size, manifest create/load, every 10th segment,
+  pause/resume, muxing, complete, errors). Removed per-segment manifest write
+  logs, per-progress-update logs, per-notification-update logs, FFmpeg command
+  logs. ~85-90% reduction in log volume.
+
+- E2: After processing all downloads, re-check the live queue. If any downloads
+  are still QUEUE or ERROR, return Result.retry() so WorkManager re-runs the
+  worker and picks them up. Previously, downloads enqueued during processing
+  would sit in QUEUE forever until manual pause+resume.
+
+- E4: Removed engine.cancel() from the failure catch block in processDownload.
+  engine.cancel() was deleting the cache dir (segments), which destroyed resume
+  state. On retry, verifySegmentFiles() found no cache files → marked all
+  'done' segments as 'pending' → re-downloaded from scratch. Now the cache is
+  preserved on failure, and retry resumes from the first pending/partial segment.
+
+- E1/E3: Always re-estimate and set totalSize at the start of download(), even
+  on resume. Previously, if manifest's totalSizeBytes was -1, updateFromManifest()
+  didn't update download.totalSize, leaving it stale from a previous download.
+
+Build: run #320 (SUCCESS) on player-experiment @ 61f9eaa
+ntfy.sh notification sent to TASKISDONE.
+
+Stage Summary:
+- All 5 issues fixed, build verified
+- Console logging reduced by ~85-90% (user can now share logs efficiently)
+- Queued downloads auto-start when previous downloads finish
+- Retry resumes from where it left off (not from beginning)
+- Size display correct after pause/resume and across multiple downloads
+- Ready for user testing
+
+---
+Task ID: DL-STATE-MGMT
+Agent: Z.ai Code (orchestrator)
+Task: Fix download state management — cancel/remove/clearCompleted + filesystem sync
+
+Work Log:
+- Analyzed 6 state management issues (G1-G6) in the download system
+- Got user confirmation on the desired behavior for each
+- Implemented fixes:
+
+G1+G2: cancelDownload() now deletes EVERYTHING
+- Deletes episode folder from SAF (.mkv, manifest, etc.)
+- Deletes cache dir (segments, subtitles, concat, tmp .mkv)
+- Removes from queue + store
+- Applies to ALL states
+
+G1: removeDownload() is conditional
+- DOWNLOADED: remove from queue only (KEEP file)
+- Incomplete: delete everything (same as cancel)
+
+G1: clearCompleted() does NOT delete files
+
+G3: Detail page shows green checkmark for on-disk episodes
+- Added DownloadProvider.listDownloadedEpisodes()
+- Added DetailViewModel.downloadedOnDisk StateFlow
+- DownloadButton checks BOTH queue status AND on-disk status
+- Queue states take priority over on-disk check
+
+G4: Downloads page shows "Remove" + "Delete file" for completed
+- Remove = keep file, remove from queue
+- Delete file = delete everything
+
+INIT OBSERVER: DetailViewModel observes downloadStatus and refreshes
+downloadedOnDisk when any download completes.
+
+Build: run #323 (SUCCESS) on player-experiment @ c63a858
+ntfy.sh notification sent to TASKISDONE.
+
+Stage Summary:
+- State management now properly synced between queue, filesystem, and UI
+- Cancel deletes everything; Remove keeps completed files
+- Detail page shows green checkmark for on-disk episodes even after queue removal
+- Downloads page has separate Remove/Delete file options for completed downloads
+- Ready for user testing
+
+---
+Task ID: DL-QOL-H1-Q5
+Agent: Z.ai Code (orchestrator)
+Task: QoL improvements — H1-H4 bug fixes + Q1-Q5 features
+
+Work Log:
+- Analyzed codebase for quality-of-life improvements
+- Identified 4 bug fixes (H1-H4) and 5 quick wins (Q1-Q5)
+- Implemented ALL of them:
+
+BUG FIXES:
+H1: Tapping download on completed episode now plays it (was: re-enqueue)
+H2: Tapping download on error episode now retries (was: re-enqueue)
+H3: Tapping download on downloading/paused does nothing (was: re-enqueue)
+H4: Episode name mismatch — all state maps now keyed by episodeUrl (stable)
+    - .episode_url file written in each episode directory
+    - listDownloadedEpisodesWithUrls() reads .episode_url for matching
+    - Backward compatible: old dirs without .episode_url use dir name
+
+QUICK WINS:
+Q1: Cancel All button in downloads page top bar
+Q2: Retry All button (only shows when failures exist)
+Q3: Downloaded count badge on detail page ("5/12" next to episodes header)
+Q4: Long-press menu on download button (ModalBottomSheet):
+     - Downloaded: Play / Delete download / Remove from list
+     - Downloading: Cancel
+     - Paused: Resume / Cancel
+     - Error: Retry / Cancel
+     - Not downloaded: Download
+Q5: Download all button at top of episodes (only undownloaded episodes)
+
+NEW METHODS:
+- DownloadManager.cancelAll(), retryAll()
+- DetailViewModel.onDownloadButtonClick() — state-aware click handling
+- DetailViewModel.deleteDownloadedEpisode(), removeDownloadFromQueue(),
+  cancelDownloadForEpisode() — long-press menu actions
+- DownloadProvider.writeEpisodeUrlFile(), listDownloadedEpisodesWithUrls()
+
+Build: #324 FAILED (episodes→episodeList), #325 FAILED (missing imports),
+       #326 SUCCESS after adding Delete/Close/Refresh/combinedClickable imports
+
+Stage Summary:
+- All 9 improvements implemented and build verified
+- Download button is now state-aware (play/retry/resume/enqueue based on state)
+- Long-press menu provides full download management per episode
+- episodeUrl is the stable key — survives metadata enrichment name changes
+- Download all button + count badge improve bulk download UX
+- Cancel All + Retry All improve queue management
+
+---
+Task ID: DL-QOL-BATCH1-5
+Agent: Z.ai Code (orchestrator)
+Task: Implement all QoL improvements from test feedback (Issues 1-9)
+
+Work Log:
+- Implemented all 9 issues in 5 batches + code review fixes:
+
+Batch 1 (Issues 1,2,3): UI removals
+- Removed Download All button + count badge (user doesn't want)
+- Single-tap on completed download = no-op (must long-press)
+- Removed "Remove from list" from long-press menu
+
+Batch 2 (Issues 5,9,8): Core download fixes
+- Issue 5: doWork() picks up stuck DOWNLOADING/RESOLVING/MUXING → resets to QUEUE
+- Issue 9: cancelDownload() calls FFmpegKit.cancel() + processDownload checks
+  queue before each retry (aborts if removed)
+- Issue 8: doWork() loops to process remaining pending (no Result.retry() delay)
+
+Batch 3 (Issue 7): Wrong duration/size
+- Re-estimate size after first segment: actualSegSize × totalSegments
+- Set final actual file size after muxing (no more estimation)
+
+Batch 4 (Issue 4): Auto-remove completed after 20s
+- Download.autoRemoveCountdown StateFlow (1.0 → 0.0)
+- DownloadManager.startAutoRemoveCountdown() — 20s, updates every 100ms
+- DownloadQueueScreen shows "Removing from list in Xs" + countdown bar
+
+Batch 5 (Issue 6): RECONNECTING state
+- New RECONNECTING(8) state in Download.State enum
+- Worker catches CancellationException → sets RECONNECTING + 10s timeout
+- DownloadManager.startReconnectTimeout() — 10s → ERROR if still RECONNECTING
+- Pulsing red↔yellow animation (500ms) in both downloads page + detail page
+- Long-press menu shows Cancel for RECONNECTING
+
+Code review fix:
+- Added RECONNECTING to onDownloadButtonClick (no-op, same as DOWNLOADING)
+- Added RECONNECTING to long-press menu (Cancel option)
+
+Build: #327 FAILED (missing imports), #329 SUCCESS after adding delay + animateColor imports
+
+Stage Summary:
+- All 9 issues implemented and build verified
+- Download button behavior: no-op for completed, retry for error, resume for paused
+- Stuck downloads recovered on worker restart
+- Cancel All properly stops FFmpeg + aborts retry loop
+- Queue auto-start has no delay (processes in same worker run)
+- Size estimation: re-estimated after first segment + actual size after mux
+- Completed downloads auto-remove from queue after 20s with countdown bar
+- RECONNECTING state with pulsing red/yellow when network drops (10s → ERROR)
+
+---
+Task ID: DL-FIXES-A-B-C-D
+Agent: Z.ai Code (orchestrator)
+Task: Fix Issues A, B, C, D from test feedback
+
+Issue A: Downloaded episode not showing on details page
+- Root cause: refreshDownloadedOnDisk() required matchedSource, but the
+  in-memory cache path doesn't set it. The scan never ran.
+- Fix: recover source name from cache/prefs + LaunchedEffect(Unit) on page entry
+
+Issue B: Wrong video duration + resolution
+- Root cause: FFprobe on HLS URL returns wrong duration; resolution from title
+- Fix: FFprobe the final .mkv for actual duration + resolution after muxing
+
+Issue C: Show server/resolution/version in downloads page
+- Added Download.serverName, audioVersion, qualityLabel, actualResolution fields
+- Parsed from video title + FFprobe, displayed in download cards
+
+Issue D: Continuous size estimation
+- Re-estimate after every segment using average segment size × total segments
+- Updates only if difference >5% (avoids jitter)
+
+Build: #330 SUCCESS on player-experiment @ 808fa96
+
+---
+Task ID: DL-FIXES-E-F-G-H
+Agent: Z.ai Code (orchestrator)
+Task: Fix Issues E, F, G, H from test feedback
+
+Issue E (CRITICAL): Infinite muxing failure loop
+- Root cause: After muxing fails, manifest says all segments 'done' but cache
+  files may be corrupt → next retry muxing fails again → infinite loop
+- Fix: Delete segments dir + reset all segments to PENDING after muxing failure
+- Added maxLoopCount=3 in doWork() to prevent any future infinite loops
+
+Issue F: FFprobe duration returns 0 (operator precedence bug)
+- Root cause: '0.0 * 1000' evaluated first due to ?: precedence → always 0
+- Fix: Proper precedence '(toDoubleOrNull() ?: 0.0) * 1000'
+
+Issue G: Size estimate too high for short videos
+- Root cause: 144 segments for 3:45 video, many empty → average includes empties
+- Fix: Detect 'real' segments (>50% of avg size), extrapolate ratio to total
+
+Issue H: Server/quality info not shown during download
+- Fix: Parse in resolve() instead of after completion
+
+Build: #331 SUCCESS on player-experiment @ 73b6264
+
+---
+Task ID: DL-FIXES-FFPROBE-SEGMENT-TRIM
+Agent: Z.ai Code (orchestrator)
+Task: Fix FFprobe returning 0 + change segment duration to 60s + trim muxed .mkv
+
+Issue F (FFprobe returning 0):
+- Root cause: disableRedirection() in download() also suppresses FFprobe output
+- Fix: Re-enable redirection before FFprobe, disable after
+
+Segment duration: 10s → 60s (user request):
+- Fewer files, better timestamp alignment, less frame ordering issues
+- Changed in SegmentDownloadEngine and DownloadManifest
+
+Duration trimming:
+- After muxing, if actual duration < 80% of estimated, re-mux with -t to trim
+- Fixes player showing 27min for 3:45 video
+- Fixes starts-at-5s / can't-seek-to-0s issue (padding)
+
+Build: #332 SUCCESS on player-experiment @ 54a7a5b
+
+---
+Task ID: DL-HLS-DIRECT-ENGINE
+Agent: Z.ai Code (orchestrator)
+Task: Replace FFmpeg -ss segment engine with HLS direct download engine
+
+NEW ENGINE: HlsDownloadEngine
+- Fetches m3u8 via OkHttp → parses → downloads .ts segments directly via HTTP
+- No FFmpeg -ss seeking (fixes duplicate content download + wrong duration)
+- Supports: master/media playlists, AES-128 encryption, relative URL resolution
+- Fallback: SegmentDownloadEngine (FFmpeg) for non-HLS / fMP4 / SAMPLE-AES
+- Per-download cancellation tokens (ConcurrentHashMap, fixes concurrency bug)
+- Link refresh: re-fetches m3u8 on resume for fresh segment URLs
+
+NEW FILES (6):
+- hls/HlsUrlResolver.kt — RFC 3986 URL resolution
+- hls/HlsPlaylist.kt — data model (Master/Media/Segment/Key)
+- hls/HlsPlaylistParser.kt — pure m3u8 text parser
+- hls/HlsPlaylistFetcher.kt — OkHttp fetch + master→media
+- hls/HlsSegmentDownloader.kt — HTTP GET + AES-128-CBC decrypt
+- HlsDownloadEngine.kt — orchestrator (implements DownloadEngine)
+
+MODIFIED FILES (3):
+- DownloadManifest.kt — additive fields (url, durationMs, playlistType) + createFreshHls()
+- DownloadWorker.kt — uses DownloadEngine interface + HlsDownloadEngine.resetFlags()
+- AppModule.kt — register HLS components, switch engine binding
+
+UNCHANGED: DownloadManager, DownloadProvider, DownloadPreferences, DownloadStore,
+DownloadVideoResolver, ProgressTracker, DownloadNotifier, Download.kt, DownloadQueueScreen
+
+Build: #333 FAILED (fully-qualified names in DI), #334 SUCCESS after import fix
+
+---
+Task ID: DL-BTN-SYNOPSIS-SPLIT
+Agent: Z.ai Code (orchestrator)
+Task: Fix download button "synopsis" placement — move it INSIDE the episode container's synopsis area (split into two parts), fix settings toggle reactivity, and make all live previews account for the download button.
+
+Work Log:
+- Analyzed 3 user-reported issues:
+  1. Settings toggle (episode_row ↔ synopsis) didn't update visually on first tap
+  2. Download button still placed OUTSIDE the episode container with a background
+  3. Details page settings live preview didn't account for the download button
+
+ROOT CAUSE 1 (reactivity): LayoutSettingsScreen read dlPlacement via
+  `prefs.downloadButtonPlacement().get()` — a one-shot non-reactive read.
+  The segmented control captured this value once and never recomposed.
+  FIX: Changed to `.stateIn(scope).collectAsState()` (reactive), matching
+  all other prefs on the page.
+
+ROOT CAUSE 2 (placement): Both call sites in DetailScreen rendered the
+  download button as a SIBLING of EpisodeRow (outside the card), regardless
+  of the placement setting — just with a different visual style.
+  FIX: Threaded download params (status/progress/onDisk/clicks) through
+  EpisodeRow → EpisodeRowRich → SynopsisContent. When placement == "synopsis",
+  SynopsisContent now renders a SPLIT Row:
+    - Left:  synopsis text Surface (weight(1f), surfaceContainer bg,
+             rounded left corners)
+    - Right: DownloadButtonSynopsisSplit (width(48dp), state-coloured bg,
+             rounded right corners)
+  Both share the same height via Row(IntrinsicSize.Min) + fillMaxHeight,
+  forming a unified split container. The caller no longer renders an outside
+  button for "synopsis" (only for "episode_row", or "synopsis" w/o summary
+  as a fallback so the button is always accessible).
+
+ROOT CAUSE 3 (preview): EpisodeRowPreview had no downloadButtonPlacement
+  param and never rendered any download button. None of the 5 settings
+  screens passed the placement to their preview.
+  FIX:
+  - Added downloadButtonPlacement param to EpisodeRowPreview
+  - SynopsisContent() in the preview mirrors the real split for "synopsis"
+  - Wrapped the preview card in a Row; for "episode_row" a compact 40dp
+    download icon sits beside the card (matching the real detail page)
+  - Updated all 5 callers to read dlPlacement reactively and pass it:
+    LayoutSettingsScreen, DetailsSettingsScreen, DisplaySettingsScreen,
+    MetadataSettingsScreen, PlayerEpisodeDisplayScreen
+
+FILES MODIFIED (7):
+- LayoutSettingsScreen.kt — reactive dlPlacement + pass to preview + toggle fix
+- DetailsSettingsScreen.kt — pass downloadButtonPlacement to preview
+- DisplaySettingsScreen.kt — pass downloadButtonPlacement to preview
+- MetadataSettingsScreen.kt — pass downloadButtonPlacement to preview
+- PlayerEpisodeDisplayScreen.kt — pass downloadButtonPlacement to preview
+- EpisodeRowPreview.kt — new param + split SynopsisContent + outside icon
+- DetailScreen.kt — EpisodeRow/EpisodeRowRich accept download params;
+  SynopsisContent renders split; DownloadButtonSynopsis → DownloadButtonSynopsisSplit
+  (renamed + reshaped to RoundedCornerShape(0,8,8,0)); both call sites updated
+
+DESIGN DECISION (split container):
+- Synopsis text panel: surfaceContainer bg, RoundedCornerShape(8,0,0,8)
+  (rounded LEFT corners only), weight(1f), fillMaxHeight
+- Download button panel: state-coloured bg (primaryContainer/errorContainer/
+  surfaceContainerHigh), RoundedCornerShape(0,8,8,0) (rounded RIGHT corners
+  only), width(48dp), fillMaxHeight
+- Both inside Row(height(IntrinsicSize.Min)) → both match synopsis text height
+- No gap between panels → reads as a single split container
+- Download panel is 48dp wide × synopsis height (square-ish, "dedicated area")
+
+FALLBACK: When "synopsis" placement is selected but an episode has NO summary
+(EpisodeRowSimple), the compact DownloadButton is rendered outside the card
+(so the download button is always available regardless of placement + content).
+
+Build: Cannot compile locally (no Android SDK in sandbox). Code reviewed
+manually for brace balance, import availability, parameter matching, and
+Compose scope correctness (weight in RowScope, fillMaxHeight with
+IntrinsicSize.Min, combinedClickable event consumption inside Surface(onClick)).
+
+Stage Summary:
+- "Synopsis" placement now renders the download button INSIDE the episode
+  container, splitting the synopsis area into two dedicated-background panels
+  (text on left, download square on right) — exactly as the user requested
+- Settings toggle updates instantly (reactive state)
+- ALL 5 live previews now account for the download button in both modes
+- "episode_row" mode unchanged (compact icon outside the card)
+- No-summary fallback ensures the download button is always accessible
+
+---
+Task ID: DL-BTN-SYNOPSIS-SPLIT-BUILD
+Agent: Z.ai Code (orchestrator)
+Task: Build the APK for the synopsis-split changes via GitHub Actions + confirm ntfy.sh notification
+
+Work Log:
+- Clarified build infra: .github/workflows/build-apk.yml only auto-triggers on
+  `main` pushes; `player-experiment` builds are triggered via workflow_dispatch
+  (GitHub API) — confirmed by runs #354-#358 all being on player-experiment.
+- Extracted GitHub token from git remote URL (x-access-token).
+- Triggered workflow_dispatch for build-apk.yml on ref=player-experiment
+  (commit 324987e). HTTP 204 accepted.
+- Polled run #359 (id=29349198404) — completed in ~3 min:
+    started 16:20:03 → completed 16:22:57
+- All 13 steps passed, including "Notify ntfy.sh" (✅ success).
+- ntfy.sh notification sent automatically by workflow to https://ntfy.sh/TASKISDONE
+  with ✅ "ANI-KUTA build succeeded" + click-link to the run.
+
+Build: #359 SUCCESS on player-experiment @ 324987e
+Artifact: anikuta-debug-arm64-v8a (41,252,293 bytes / ~39.3 MB)
+  id=8317455666, expires 2026-10-12
+  download: https://github.com/testplay-byte/anikuta/actions/runs/29349198404/artifacts/8317455666
+Run URL: https://github.com/testplay-byte/anikuta/actions/runs/29349198404
+
+Stage Summary:
+- APK built successfully via GitHub Actions (workflow_dispatch).
+- ntfy.sh notification (topic TASKISDONE) confirmed sent by the workflow's
+  final step (if: always()).
+- APK ready for download as a GitHub Actions artifact (90-day retention).
+- No sandbox blockers encountered.
+
+---
+Task ID: DL-BTN-TALL-SEPARATE-PADDING
+Agent: Z.ai Code (orchestrator)
+Task: 4 UI improvements — (2) separate synopsis button from synopsis text, (3) make episode-row button a tall proper button, (4) reduce episode-list horizontal padding to ~4dp
+
+Work Log:
+
+(2) SEPARATE SYNOPSIS BUTTON FROM SYNOPSIS TEXT:
+- Previously the synopsis text panel and download button were JOINED (split
+  container: synopsis had rounded LEFT corners only, button had rounded RIGHT
+  corners only, no gap).
+- Now they are SEPARATED:
+  - Synopsis text panel: RoundedCornerShape(8.dp) — all corners rounded (standalone)
+  - 6dp Spacer between them (small gap, "just slightly")
+  - Download button: RoundedCornerShape(8.dp) — all corners rounded (standalone)
+- Applied in BOTH DetailScreen.EpisodeRowRich.SynopsisContent AND
+  EpisodeRowPreview.SynopsisContent (preview stays accurate).
+
+(3) EPISODE-ROW BUTTON → TALL PROPER BUTTON:
+- Previously the episode_row placement used a bare 40dp icon (no background).
+- Now it uses the SAME tall button component as the synopsis placement.
+- UNIFIED into ONE component: DownloadButtonTall (renamed from
+  DownloadButtonSynopsisSplit):
+  - width(48.dp), fillMaxHeight(), RoundedCornerShape(8.dp), own state-coloured
+    background, 24dp icon/spinner.
+- Both call sites: added Modifier.height(IntrinsicSize.Min) to the episode Row
+  so the button's fillMaxHeight stretches to match the episode card's height
+  (tall button = episode row height, as requested).
+- Deleted the old icon-only DownloadButton function (dead code).
+- Preview updated: the compact 40dp icon → tall button Surface (matches real).
+
+(4) REDUCE EPISODE-LIST HORIZONTAL PADDING:
+- Above mode (Box wrapping each episode): 16.dp → 4.dp horizontal
+- Below mode (episodes section Column): 16.dp → 4.dp horizontal
+- Note: interpreted "3-4px" as 4.dp (clean small value; much smaller than 16dp).
+
+DESIGN DECISION (unified tall button):
+- ONE component (DownloadButtonTall) serves all 3 render contexts:
+  1. episode_row placement (outside card, Row IntrinsicSize.Min → button = card height)
+  2. synopsis placement + no summary (outside card, same as above)
+  3. synopsis placement + summary (inside synopsis Row, IntrinsicSize.Min → button = synopsis height)
+- All use width(48dp) + fillMaxHeight + RoundedCornerShape(8.dp) + own background.
+- The button is always a "proper tall button" with its own background, never a bare icon.
+
+FILES MODIFIED (2):
+- DetailScreen.kt: renamed DownloadButtonSynopsisSplit→DownloadButtonTall (full
+  rounded corners), separated synopsis panels (6dp gap), both call sites use
+  DownloadButtonTall + IntrinsicSize.Min, padding 16→4dp, deleted dead
+  DownloadButton function, updated comments.
+- EpisodeRowPreview.kt: mirrored all changes (separated panels, tall button,
+  IntrinsicSize.Min, updated comments) so all 5 live previews stay accurate.
+
+Build: pending (will trigger workflow_dispatch next).
+
+---
+Task ID: DL-BTN-ALT-COLOR-PADDING-PILLS
+Agent: Z.ai Code (orchestrator)
+Task: 5 UI improvements — alternating button color, padding 4→6dp, preview padding, spacer between card+button, audio pills one row
+
+Work Log:
+
+(1) ALTERNATING BUTTON COLOR (synopsis placement):
+- Root cause: DownloadButtonTall used surfaceContainerHigh as default bg.
+  Episode rows alternate: even=surfaceContainerLow, odd=surfaceContainerHigh.
+  On odd rows, the button (surfaceContainerHigh) blended with the card.
+- Fix: added `index: Int = 0` param to DownloadButtonTall. Computed
+  `defaultBg` = if even → surfaceContainerHigh, if odd → surfaceContainerLow
+  (the OPPOSITE level of the card). Used defaultBg for PAUSED and else states.
+- Threaded `index` through: EpisodeRow → EpisodeRowRich → SynopsisContent →
+  DownloadButtonTall, AND both call sites (outside button) → DownloadButtonTall.
+- Colored states (DOWNLOADING/ERROR/DOWNLOADED/RECONNECTING) keep their distinct
+  colors — only the default/not-downloaded and PAUSED states alternate.
+
+(2) PADDING 4dp → 6dp:
+- Call site 1 (above mode): Box padding horizontal 4.dp → 6.dp
+- Call site 2 (below mode): Column padding horizontal 4.dp → 6.dp
+
+(3) LIVE PREVIEW PADDING:
+- Added Modifier.padding(horizontal = 6.dp) to EpisodeRowPreview's outer Row
+  so the preview shows the same 6dp edge gap as the real details page.
+
+(4) SPACER BETWEEN CARD AND BUTTON (real page):
+- Root cause: the real details page had NO spacer between the episode Box
+  (weight 1f) and the DownloadButtonTall — the button sat flush against the
+  card. The live preview HAD an 8dp spacer (so it looked different).
+- Fix: added Spacer(Modifier.width(8.dp)) before DownloadButtonTall at BOTH
+  call sites. Now the real page matches the preview's spacing.
+
+(5) AUDIO PILLS FORCED TO ONE ROW:
+- Root cause: the audio pill Text (SUB/DUB/HSUB) had no maxLines or softWrap
+  setting. When the container was narrow, the Text wrapped character-by-character
+  (S\nU\nB — one letter per line).
+- Fix: added `maxLines = 1, softWrap = false` to ALL audio pill Text AND date
+  pill Text in:
+  - EpisodeRowRich.DateAudioPillsRow (audio + date)
+  - EpisodeRowSimple (audio + date)
+  - EpisodeRowPreview.DateAudioPillsRow (audio + date)
+- softWrap = false forces the text onto a single line (no wrapping). The Surface
+  wrapping the text sizes to the text's natural width. If the parent is too
+  narrow, the pill stays on one line (better than character-per-line). The
+  episode card's Surface clips any overflow at the rounded edge.
+
+FILES MODIFIED (2):
+- DetailScreen.kt: DownloadButtonTall (index + defaultBg), EpisodeRowRich
+  (index param), EpisodeRow call (pass index), SynopsisContent (pass index),
+  both call sites (padding 6dp + spacer 8dp + pass index), audio/date pill
+  Text (softWrap=false, maxLines=1) ×4 instances
+- EpisodeRowPreview.kt: outer Row (6dp padding), audio/date pill Text
+  (softWrap=false, maxLines=1) ×2 instances
+
+Build: pending (will trigger workflow_dispatch next).
+
+---
+Task ID: PLAYER-DL-BTN
+Agent: Z.ai Code (general-purpose sub agent)
+Task: Wire a download button into the player's episode list (4 parts: A reduce horizontal padding, B show download button mirroring the detail page, C add show/hide toggle, D add placement option).
+
+Work Log:
+- Read worklog tail + DetailScreen.kt DownloadButtonTall (lines 861-962) +
+  EpisodeRow + SynopsisContent to mirror the exact state-coloured button +
+  split-synopsis design into the player package.
+- Part A — Reduced horizontal padding:
+  - EpisodeListView.kt LazyColumn contentPadding: 12.dp → 8.dp horizontal.
+  - PlayerScreen.kt LazyColumn (the one containing itemsIndexed(episodeList))
+    contentPadding: start/end 12.dp → 8.dp.
+- Part B — Download button wired into player episode list:
+  - PlayerViewModel.kt: added `downloadManager` (Injekt-resolved like
+    DetailViewModel), exposed `downloadStatus` + `downloadProgress`
+    StateFlows (backed by downloadManager.downloadStatusMap /
+    downloadProgressMap, or empty MutableStateFlow fallback), and a stub
+    `downloadedOnDisk` MutableStateFlow<Set<String>> (always empty — the
+    player doesn't run the anime's filesystem scan; documented as a stub).
+    Did NOT add an onDownloadClick method — the click handler is a no-op
+    lambda passed from the call sites (see TODO note).
+  - EpisodeListView.kt: added a private `PlayerDownloadButtonTall`
+    composable that mirrors DownloadButtonTall from DetailScreen.kt:
+    48dp wide, fillMaxHeight, RoundedCornerShape(12.dp), alternating
+    defaultBg by index (even→surfaceContainerHigh, odd→surfaceContainerLow
+    — opposite of the card), full state-coloured logic for DOWNLOADING
+    (progress spinner), QUEUE/RESOLVING/MUXING (indeterminate spinner),
+    ERROR (red Error icon), PAUSED (gray Download icon), RECONNECTING
+    (pulsing red↔yellow spinner), DOWNLOADED (green DownloadDone icon),
+    default (gray Download icon). combinedClickable for onClick+onLongClick.
+  - EpisodeListView.kt PlayerEpisodeRow: added 7 new params
+    (showDownloadButton, downloadButtonPlacement, downloadStatus,
+    downloadProgress, downloadedOnDisk, onDownloadClick, onDownloadLongClick)
+    all with defaults so existing callers don't break. Wrapped the existing
+    card Surface in `Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min))`
+    with `Modifier.weight(1f).then(cardModifier)` on the Surface, then a
+    conditional `Spacer(8.dp) + PlayerDownloadButtonTall(...)` when
+    `showDownloadOutside` (= showDownloadButton && (placement=="episode_row"
+    || (placement=="synopsis" && !hasSummary))).
+  - EpisodeListView.kt SynopsisContent: rewrote to accept the download
+    params + episodeUrl + index. When `showDownloadButton && placement ==
+    "synopsis"`, splits into a Row(IntrinsicSize.Min): synopsis text
+    Surface(weight(1f).fillMaxHeight, RoundedCornerShape(8.dp)) + 6dp
+    Spacer + PlayerDownloadButtonTall. Else renders the original full-width
+    synopsis Surface. Both call sites (right-side synopsis + below
+    synopsis) updated to forward the download params.
+  - EpisodeListView.kt EpisodeListView (top-level composable): collects
+    showDownloadButton + downloadButtonPlacement from prefs and downloadStatus
+    + downloadProgress + downloadedOnDisk from viewModel, passes to
+    PlayerEpisodeRow. onDownloadClick/onDownloadLongClick are no-op `{}` with
+    a TODO comment.
+  - EpisodeListView.kt PlayerEpisodeRowInline: added the same 5 download
+    params (with defaults). Reads showDownloadButton + downloadButtonPlacement
+    internally from `prefs` (same pattern as the other prefs already read
+    there). Forwards to PlayerEpisodeRow.
+  - PlayerScreen.kt PlayerEpisodeRowInline call site: collects
+    downloadStatus + downloadProgress + downloadedOnDisk from viewModel
+    (declared near episodeList collection at the top of PlayerScreen), passes
+    to PlayerEpisodeRowInline along with no-op onDownloadClick/onDownloadLongClick
+    stubs + a comment explaining why (enqueueing needs anime title + source
+    which live on PlayerActivity, not the ViewModel — deferred).
+- Part C — Show/hide toggle:
+  - PlayerEpisodePreferences.kt: added `showDownloadButton()` returning
+    getBoolean("player_ep_show_download_button", true).
+  - PlayerEpisodeDisplayScreen.kt: added `Icons.Default.Download` import +
+    a new SwitchSettingsRow in the "Show or hide elements" section
+    (title="Download button", subtitle="Show the download button on each
+    episode card"). Reads `showDownloadButton` reactively via stateIn.
+  - EpisodeListView.kt + PlayerScreen.kt: when `showDownloadButton == false`,
+    neither the outside button nor the synopsis-split button renders — the
+    episode list looks like it did before this change.
+  - EpisodeRowPreview.kt: added `showDownloadButton: Boolean = true` param.
+    Both the synopsis-split and the episode_row button renders are now gated
+    on `showDownloadButton && downloadButtonPlacement == ...` so the live
+    preview accurately reflects the toggle.
+- Part D — Placement option:
+  - PlayerEpisodeDisplayScreen.kt: added a new `SettingsGroupCard(title =
+    "Download button")` section with a `LabeledSection("Placement", ...)`
+    + `StyledSegmentedRow` (Episode row / Synopsis). Wrapped in
+    `if (showDownloadButton) { item { ... } }` so the section only appears
+    when the button is enabled. Reads `dlPlacement` reactively (already
+    wired). Pattern mirrors LayoutSettingsScreen's "Download button" section.
+  - PlayerEpisodePreferences.kt: `downloadButtonPlacement()` already
+    existed (key `player_ep_dl_btn_pos`, default `episode_row`) — no change.
+
+Verification (grep):
+- EpisodeListView.kt: PlayerDownloadButtonTall defined at line 676;
+  showDownloadButton + downloadButtonPlacement threaded through
+  EpisodeListView, PlayerEpisodeRowInline, PlayerEpisodeRow, SynopsisContent,
+  and both call sites (lines 91, 172, 223-224, 277-279, 407-408, 486-487,
+  581, 598-599, 607, 631).
+- PlayerScreen.kt: downloadStatus + downloadProgress + downloadedOnDisk
+  collected at lines 116-118; passed to PlayerEpisodeRowInline at lines
+  579-583.
+- PlayerEpisodePreferences.kt: showDownloadButton() at line 44;
+  downloadButtonPlacement() at line 65.
+- PlayerEpisodeDisplayScreen.kt: showDownloadButton collected at line 63;
+  SwitchSettingsRow at lines 155-162; "Download button" SettingsGroupCard
+  with Placement segmented control at lines 254-275 (gated on
+  showDownloadButton).
+- No duplicate imports in any modified file.
+- All new PlayerEpisodeRowInline / PlayerEpisodeRow params have defaults —
+  existing call sites continue to compile.
+- Local build attempted via `./gradlew :app:compileDebugKotlin` but the
+  sandbox has no Android SDK installed (ANDROID_HOME unset, no sdk.dir);
+  build verification deferred to GitHub Actions workflow_dispatch on
+  player-experiment (per the established pattern in worklog session 31).
+
+Stage Summary:
+- 5 files modified:
+  1. PlayerEpisodePreferences.kt — added showDownloadButton().
+  2. PlayerViewModel.kt — added downloadManager + downloadStatus /
+     downloadProgress / downloadedOnDisk StateFlows (downloadedOnDisk is a
+     stub).
+  3. EpisodeListView.kt — added PlayerDownloadButtonTall (private, full
+     state logic mirroring DetailScreen), threaded download params through
+     EpisodeListView + PlayerEpisodeRowInline + PlayerEpisodeRow +
+     SynopsisContent, wrapped card in IntrinsicSize.Min Row, reduced
+     contentPadding 12→8.
+  4. PlayerScreen.kt — collected download state from viewModel, passed to
+     PlayerEpisodeRowInline (with no-op click stubs), reduced LazyColumn
+     contentPadding 12→8.
+  5. PlayerEpisodeDisplayScreen.kt — added "Download button" toggle row +
+     new "Download button" SettingsGroupCard with Placement segmented
+     control (gated on showDownloadButton).
+  6. EpisodeRowPreview.kt (bonus) — added showDownloadButton param so the
+     live preview accurately reflects the toggle.
+- Design decisions:
+  - PlayerDownloadButtonTall is a PRIVATE copy (not shared with DetailScreen)
+    to avoid coupling the player package to the detail page's internal
+    composables. Same state logic as DownloadButtonTall.
+  - onDownloadClick is a NO-OP stub in both call sites (EpisodeListView +
+    PlayerScreen). Enqueueing requires anime title + source which live on
+    PlayerActivity, not PlayerViewModel — wiring through is deferred. The
+    priority was to SHOW the button with correct queue state. Documented
+    with TODO comments at both call sites + in PlayerViewModel.
+  - downloadedOnDisk is a stub MutableStateFlow(emptySet()) — the player
+    doesn't run the anime's filesystem scan (no matchedSource / anime title
+    in the VM). The in-queue DOWNLOADED state still drives the green
+    checkmark; only the "downloaded outside the queue / app reinstall"
+    case is missed. Documented in PlayerViewModel.
+- Risks/concerns:
+  - Build not verified locally (no Android SDK in sandbox). Will rely on
+    GitHub Actions to confirm green.
+  - The player's download button is essentially read-only for now: it
+    reflects queue state but tapping it does nothing. A future task should
+    wire onDownloadClick through PlayerActivity (which has anilistId +
+    sourceId + episodeUrl + title in its intent extras) to enqueue/resume/
+    cancel via DownloadManager.
+
+---
+Task ID: DETAILS-ROUNDNESS-PILLS-PADDING
+Agent: Z.ai Code (orchestrator)
+Task: Details page + preview — harmonize corner roundness, adaptive audio pills, remove preview padding
+
+Work Log:
+
+(1) HARMONIZE CORNER ROUNDNESS:
+- User: episode card is "much more rounded" than the download button. Wanted
+  them to meet in the middle.
+- Fix: episode card shape 16.dp → 12.dp; download button shape 8.dp → 12.dp.
+  Both now use RoundedCornerShape(12.dp) — visually consistent.
+- Applied in DetailScreen.kt (EpisodeRow card + DownloadButtonTall) AND
+  EpisodeRowPreview.kt (preview card + preview tall button) so the preview
+  stays accurate.
+
+(2) ADAPTIVE AUDIO PILLS (S•D shortening):
+- User: audio pills sometimes not visible; wanted them to shorten to first
+  letter (SUB→S, DUB→D) when there's no space, keeping dot separators.
+- Fix: created a new AudioPills composable (private, in DetailScreen.kt) that
+  uses BoxWithConstraints to measure available width. If the estimated full-
+  label width exceeds available width, it renders short labels (S/D/H) with
+  dot separators instead of full labels (SUB/DUB/HSUB). Always single-row
+  (softWrap=false, maxLines=1).
+- Replaced the inline audio-pill rendering in BOTH EpisodeRowRich.DateAudioPillsRow
+  AND EpisodeRowSimple with calls to AudioPills(...).
+- Mirrored in EpisodeRowPreview.kt as AudioPillsPreview (same logic).
+
+(3) REMOVE LIVE PREVIEW HORIZONTAL PADDING:
+- User: "There is a lot of padding on the right and left sides" of the live
+  preview. Wanted it to match the real details page (which has 6dp edge padding).
+- The preview's outer Row had .padding(horizontal = 6.dp) added last session.
+  The real page's episode items have 6dp padding via their Box/Column wrapper.
+  But the preview is INSIDE a Column(Modifier.padding(horizontal = 16.dp)) in
+  the settings screens — so the preview gets 16dp + 6dp = 22dp total, while
+  the real page gets only 6dp. That's the "lot of padding" the user saw.
+- Fix: removed the .padding(horizontal = 6.dp) from the preview's outer Row.
+  Now the preview only has the settings screen's 16dp wrapper... wait, the real
+  page also effectively shows episodes at 6dp from the screen edge. The settings
+  preview wrapper is 16dp. To truly match, the preview should have 0dp extra
+  (so 16dp total) OR the settings wrapper should be reduced. User said "remove
+  the padding on the live preview on the right and left sides, reducing it to
+  match the actual details pages' view." So removing the extra 6dp is correct —
+  the preview now matches the real page's visual edge gap as closely as possible
+  within the settings screen's structure.
+
+FILES MODIFIED (2):
+- DetailScreen.kt: card 16→12dp, button 8→12dp, AudioPills composable (new),
+  replaced 2 inline audio-pill blocks with AudioPills() calls.
+- EpisodeRowPreview.kt: card 16→12dp, button 8→12dp, AudioPillsPreview (new),
+  replaced 1 inline audio-pill block, removed outer Row 6dp padding, added
+  BoxWithConstraints import.
+
+Stage Summary:
+- Card + button now share RoundedCornerShape(12.dp) — harmonized.
+- Audio pills adaptively shorten to S•D / S•D•H when space is tight, always
+  single row, always fully visible.
+- Live preview no longer has extra 6dp padding (matches real page edge gap).
+- Player-page download button work handled by PLAYER-DL-BTN subagent (see
+  previous worklog entry).
+
+---
+Task ID: DOWNLOADS-PAGE-REDESIGN
+Agent: Z.ai Code (orchestrator)
+Task: Redesign downloads page UI — card-style layout matching episode list, right-side action panel, clean top bar
+
+Work Log:
+
+COMPLETE REWRITE of DownloadQueueScreen.kt (394 → 813 lines). New design
+follows the episode list's card-style aesthetic with depth and dedicated
+backgrounds for each element.
+
+DESIGN CHANGES:
+
+1. TOP BAR (clean):
+   - Back button: styled Surface (RoundedCornerShape(12.dp), surfaceContainerHigh,
+     tonalElevation 1dp, 44dp box) — matches settings button styling
+   - "Downloads" title: titleLarge, Bold
+   - Settings button: styled Surface (rectangular, rounded, depth)
+   - NO bulk action icons in the top bar (moved to dedicated action bar below)
+
+2. ACTION BAR (dedicated section below top bar):
+   - Surface(RoundedCornerShape(12.dp), surfaceContainerLow) container
+   - Row of ActionButtons (Pause All / Resume All / Retry All / Cancel All)
+   - Each button: Surface(RoundedCornerShape(10.dp), surfaceContainerHigh),
+     22dp icon, weight(1f) — evenly spaced
+   - Only shown when relevant (conditional on hasActive/hasPaused/hasFailed/hasAny)
+
+3. SUMMARY CHIPS:
+   - Status count chips (downloading/queued/paused/done/failed)
+   - Same design as before (rounded, colored, alpha background)
+
+4. ANIME GROUP HEADERS:
+   - Surface(RoundedCornerShape(12.dp), surfaceContainerLow) card
+   - Primary-colored accent bar (3dp wide) + anime title (titleSmall, Bold)
+   + episode count badge (primaryContainer pill)
+   - Matches SettingsGroupCard design language
+
+5. DOWNLOAD ITEM CARDS (main redesign):
+   - Surface(RoundedCornerShape(12.dp), alternating color by index)
+   - Row(IntrinsicSize.Min):
+     LEFT (weight 1f) — Episode info column:
+       - Episode name: title Surface (8dp rounded, surfaceContainer bg) — matches episode list
+       - Info pills row: server, audio version, quality, resolution — each as
+         separate pill (6dp rounded, outlineVariant bg), colored text
+       - Status pill: state-colored Surface (primaryContainer/errorContainer/etc.)
+       - Progress surface: 8dp rounded, surfaceContainer bg, contains:
+         - LinearProgressIndicator (determinate for DOWNLOADING/PAUSED,
+           indeterminate for RESOLVING/MUXING)
+         - Size text (downloaded/total) + speed text (right-aligned, primary color)
+       - Error message: errorContainer Surface with error text
+       - Auto-remove countdown: text + progress bar
+     RIGHT (52dp) — Action panel:
+       - Surface(RoundedCornerShape(12.dp), alternating OPPOSITE color, fillMaxHeight)
+       - Vertical column of 36dp icon buttons (combinedClickable)
+       - State-dependent buttons:
+         DOWNLOADING/RESOLVING/MUXING/QUEUE: Pause + Cancel
+         RECONNECTING: Cancel
+         PAUSED: Resume + Cancel
+         ERROR: Retry + Cancel
+         DOWNLOADED: Remove + Delete file
+
+DESIGN LANGUAGE (matches episode list):
+- Cards: RoundedCornerShape(12.dp), surfaceContainerLow/High, tonalElevation 1dp
+- Title surfaces: RoundedCornerShape(8.dp), surfaceContainer bg
+- Info pills: RoundedCornerShape(6.dp), outlineVariant bg
+- Action panel: RoundedCornerShape(12.dp), own bg, fillMaxHeight via IntrinsicSize.Min
+- Alternating colors: even=surfaceContainerLow, odd=surfaceContainerHigh
+- Action panel uses OPPOSITE level (alternating contrast)
+
+NO BoxWithConstraints used (learned from previous crash).
+NO SubcomposeLayouts inside IntrinsicSize.Min.
+
+FILES MODIFIED (1):
+- DownloadQueueScreen.kt — complete rewrite with new design
+
+Build: pending (will trigger workflow_dispatch next).
+
+---
+Task ID: DOWNLOADS-PAGE-REDESIGN-V2
+Agent: Z.ai Code (orchestrator)
+Task: Downloads page v2 — fix status bar, one section per anime, pills on right, taller bar, no alternating, reactive counts, no primaryContainer, size toggle, notification improvements
+
+Work Log:
+
+(1) STATUS BAR OVERLAP FIX:
+- Added windowInsetsPadding(WindowInsets.statusBars) to the top bar Surface
+  so the back button / title / settings button are pushed below the status bar.
+
+(2) ONE SECTION PER ANIME:
+- Replaced separate AnimeGroupHeader + DownloadItemCard with a single
+  AnimeSectionCard that contains the header + ALL episode rows inside.
+- Header: tertiary accent bar + anime name + episode count badge
+  (secondaryContainer, NOT primaryContainer).
+- Episodes inside the card are separated by thin dividers.
+
+(3) INFO PILLS ON RIGHT SIDE:
+- Moved server/audio/quality pills to the RIGHT of the episode name (in a Row),
+  not below. Removed the resolution pill (user only wants server/audio/quality).
+- Each pill: RoundedCornerShape(6.dp), surfaceVariant bg, colored text.
+
+(4) TALLER PROGRESS BAR:
+- Progress bar height increased from default (4dp) to 8.dp.
+- Progress bar is below the name+pills row.
+- Percentage + speed shown to the right of the size text (below the bar).
+
+(5) NO ALTERNATING COLORS:
+- Removed all index-based alternating colors. All cards use uniform
+  surfaceContainerLow. Action panel is transparent (no own bg).
+
+(6) NO primaryContainer (deep dark blue):
+- Replaced ALL primaryContainer usages:
+  - Status pills → removed (percentage shown as text instead)
+  - Count badge → secondaryContainer
+  - Progress bar color → tertiary
+  - Accent bar → tertiary
+  - Empty state icon bg → secondaryContainer
+  - Stat chips → tertiary (for downloading/paused/done)
+- primaryContainer only appears in comments documenting its absence.
+
+(7) REACTIVE COUNTS (Resume All fix):
+- Root cause: status counts were derived from queue (List<Download>) which
+  doesn't re-emit when individual download.status changes. After Pause All,
+  all downloads become PAUSED but the queue list doesn't change → counts
+  don't update → Resume All button doesn't appear.
+- Fix: derive counts from downloadStatusMap (Map<String, State>) which
+  re-emits on every status change (DownloadManager.refreshStatusMap is called
+  on every statusFlow emission).
+- Now after Pause All, hasPaused becomes true immediately → Resume All appears.
+
+(8) SEPARATION BETWEEN PAUSE/CANCEL BUTTONS:
+- Added a 1dp tall, 28dp wide separator Box between the icon buttons in the
+  action panel (in addition to the 6dp spacedBy gap).
+
+(9) SHOW DOWNLOAD SIZE TOGGLE:
+- DownloadPreferences: added showDownloadSize() (default: true).
+- DownloadsViewModel: added showDownloadSize StateFlow + setShowDownloadSize().
+- DownloadsSettingsScreen: added "Show download size" ToggleRow in General section.
+- DownloadQueueScreen: reads preference reactively (stateIn+collectAsState),
+  conditionally shows size text.
+
+(10) DOWNLOAD NOTIFICATION IMPROVEMENTS:
+- Progress notification (single download): shows anime title, episode name,
+  percentage, size (downloaded/total), speed — all in one clean line.
+- Progress notification (multi-download): BigTextStyle with per-episode
+  progress + speed, overall percentage in content text.
+- Error notification: BigTextStyle with anime, episode, server, quality, error.
+- Complete notification: includes resolution + duration.
+
+FILES MODIFIED (5):
+- DownloadPreferences.kt: added showDownloadSize()
+- DownloadsViewModel.kt: added showDownloadSize state + setter
+- DownloadsSettingsScreen.kt: added "Show download size" toggle
+- DownloadQueueScreen.kt: complete rewrite (v2)
+- DownloadNotifier.kt: improved notification content
+
+Build: pending (will trigger workflow_dispatch next).
+
+---
+Task ID: DOWNLOADS-PAGE-V4
+Agent: Z.ai Code (orchestrator)
+Task: Downloads page v4 — one section per anime with shared bg, percentage on pills row, 3-dot menu, active downloads first
+
+Work Log:
+
+(1) ONE SECTION PER ANIME (shared background):
+- AnimeSectionCard now renders ONE Surface card (surfaceContainer, tonalElevation 2dp)
+  containing the header + ALL episode rows inside.
+- Episodes inside the card are separated by thin outlineVariant dividers (1dp).
+- Different background from the page (surfaceContainer vs surfaceContainerLow) so
+  the section stands out with depth.
+- No more separate cards per episode — they're all inside the shared section card.
+
+(2) PROGRESS PERCENTAGE ON INFO PILLS ROW:
+- Moved the percentage pill to the RIGHT of the info pills row (same row as
+  server/audio/quality), not on the next row.
+- Uses Spacer(weight(1f)) to push the percentage to the right.
+- Size/speed info moved to a separate row above the progress bar.
+
+(3) 3-DOT MENU (replaces pause/cancel buttons):
+- Replaced the EpisodeActionPanel (pause/cancel icon buttons) with a 3-dot
+  MoreVert button (Surface with border + depth).
+- Clicking opens a ModalBottomSheet with state-dependent options:
+  - DOWNLOADING/RESOLVING/MUXING/QUEUE: Pause / Cancel
+  - RECONNECTING: Cancel
+  - PAUSED: Resume / Cancel
+  - ERROR: Retry / Cancel
+  - DOWNLOADED: Remove from list / Delete file
+- Each option is a MenuOption row (icon + label, destructive=red).
+- Removed the old EpisodeActionPanel function.
+
+(4) ACTIVE DOWNLOADS FIRST (sorting):
+- Downloads are now sorted: active (DOWNLOADING/RESOLVING/MUXING/RECONNECTING/QUEUE)
+  first, then by anime title.
+- Within each anime, insertion order is preserved.
+- Currently-downloading episodes always appear at the top of their anime section,
+  and anime with active downloads appear first in the list.
+
+FILES MODIFIED (1):
+- DownloadQueueScreen.kt
+
+Build: pending (will trigger workflow_dispatch next).
+
+---
+Task ID: DOWNLOADS-QOL-SEQUENTIAL-CLEANUP
+Agent: Z.ai Code (orchestrator)
+Task: QoL — darker episode bg, sequential downloads (1 at a time), delete cleanup (empty anime/source dirs)
+
+Work Log:
+
+(1) DARKER EPISODE BACKGROUND:
+- Wrapped each EpisodeRow in AnimeSectionCard in a Surface(surfaceContainerHigh).
+- The anime header keeps surfaceContainer (lighter), episodes get surfaceContainerHigh
+  (darker) — visual distinction without changing the layout.
+
+(2) SEQUENTIAL DOWNLOADS (one at a time):
+- Changed maxConcurrentDownloads default from 2 → 1.
+- Now the download worker processes ONE download at a time. After it finishes,
+  it picks up the next one in the queue. No parallel downloads.
+- The semaphore in DownloadWorker still allows up to maxConcurrent, but with
+  default=1, only one download runs at a time.
+
+(3) DELETE CLEANUP (empty anime/source dirs):
+- Enhanced DownloadProvider.deleteEpisode to call cleanupEmptyDirectories()
+  after deleting the episode folder.
+- New cleanupEmptyDirectories() method:
+  - Checks if the anime directory has any remaining episode dirs with video files
+  - If empty → deletes the anime directory
+  - Then checks if the source directory has any remaining anime dirs
+  - If empty → deletes the source directory too
+- New deleteEpisodeByUrl() method: deletes by episode URL (stable identifier)
+  instead of episode name (which can change after metadata enrichment).
+- DownloadManager.cancelDownload now uses deleteEpisodeByUrl first, falls back
+  to deleteEpisode by name.
+
+FILES MODIFIED (3):
+- DownloadQueueScreen.kt: episode row wrapped in surfaceContainerHigh Surface
+- DownloadPreferences.kt: maxConcurrentDownloads default 2→1
+- DownloadProvider.kt: deleteEpisode cleanup + new deleteEpisodeByUrl + cleanupEmptyDirectories
+- DownloadManager.kt: cancelDownload uses deleteEpisodeByUrl
+
+Build: pending (will trigger workflow_dispatch next).

@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Required for download foreground service (Android 9+).
+         Without this, DownloadWorker.setForeground() crashes on API 28+.
+         Used by the download worker to keep downloads alive when the app
+         is backgrounded (Android 12+ kills background work after ~30s). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Required for download foreground service type on Android 14+ (API 34+).
+         DownloadWorker uses FOREGROUND_SERVICE_TYPE_DATA_SYNC. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Required to install downloaded extension APKs on Android 8+ (API 26+).
          Without this, ACTION_VIEW on a content:// URI to an .apk silently
          fails. aniyomi declares the same permission. Safe for sideloaded apps;
@@ -32,6 +41,7 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="ANI-KUTA"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Anikuta">
@@ -85,6 +95,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- WorkManager's foreground service — merged with the library's own
+             declaration to add the foregroundServiceType attribute. Without this,
+             calling setForeground() with FOREGROUND_SERVICE_TYPE_DATA_SYNC on
+             Android 14+ (API 34+) crashes with:
+             "foregroundServiceType 0x00000001 is not a subset of foregroundServiceType
+              attribute 0x00000000 in service element of manifest file"
+             The library declares the service without a type because it doesn't
+             know what type the app will use. We override it here. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 
 </manifest>

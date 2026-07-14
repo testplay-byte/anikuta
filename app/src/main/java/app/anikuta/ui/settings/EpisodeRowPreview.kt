@@ -5,13 +5,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +66,8 @@ fun EpisodeRowPreview(
     titlePosition: String,
     episodeNumberPosition: String = "overlay",
     thumbnailPosition: String = "left",
+    downloadButtonPlacement: String = "episode_row",
+    showDownloadButton: Boolean = true,
 ) {
     val demoTitle = "The Dragon's Labyrinth"
     val demoSynopsis = "A young adventurer discovers a hidden labyrinth beneath the ancient city, where a mysterious dragon guards a long-forgotten secret that could change the fate of the realm forever."
@@ -166,45 +173,14 @@ fun EpisodeRowPreview(
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            maxLines = 1,
+                            softWrap = false,
                         )
                     }
                 }
-                // Audio pills — combined in one Surface with dot separators
+                // Audio pills — adaptive (shortens to S•D when space is tight)
                 if (showAudioPills && (hasSub || hasDub || hasHsub)) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            val audioParts = mutableListOf<String>()
-                            if (hasSub) audioParts.add("SUB")
-                            if (hasDub) audioParts.add("DUB")
-                            if (hasHsub) audioParts.add("HSUB")
-                            audioParts.forEachIndexed { idx, label ->
-                                if (idx > 0) {
-                                    // Circular dot separator
-                                    Box(
-                                        modifier = Modifier
-                                            .size(3.dp)
-                                            .background(
-                                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                                CircleShape,
-                                            ),
-                                    )
-                                }
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
+                    AudioPillsPreview(hasSub = hasSub, hasDub = hasDub, hasHsub = hasHsub)
                 }
             }
         }
@@ -213,21 +189,68 @@ fun EpisodeRowPreview(
     @Composable
     fun SynopsisContent() {
         if (hasSummary) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = demoSynopsis,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                        .clickable { summaryExpanded = !summaryExpanded },
-                )
+            if (showDownloadButton && downloadButtonPlacement == "synopsis") {
+                // Two separated panels side-by-side, each with its own background:
+                //  - Left:  synopsis text (reduced width, all corners rounded)
+                //  - Right: a dedicated tall button for the download (own background,
+                //           all corners rounded), with a small gap between them.
+                // Both share the same height (IntrinsicSize.Min + fillMaxHeight).
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                ) {
+                    // Synopsis text — own background, all corners rounded (standalone panel)
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    ) {
+                        Text(
+                            text = demoSynopsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .clickable { summaryExpanded = !summaryExpanded },
+                        )
+                    }
+                    // Small gap between the two panels (separated, not joined)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    // Download button — dedicated background, all corners rounded (standalone)
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 1.dp,
+                        modifier = Modifier.width(48.dp).fillMaxHeight(),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                    }
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = demoSynopsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .clickable { summaryExpanded = !summaryExpanded },
+                    )
+                }
             }
         }
     }
@@ -262,14 +285,20 @@ fun EpisodeRowPreview(
         }
     }
 
-    // The episode row card — standalone, looks exactly like a real episode row.
-    // Uses surfaceContainerLow to match the even-index card color on the detail page.
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp,
+    // The episode row card — wrapped in a Row so a tall download button can
+    // sit beside it for "episode_row" placement (matching the real detail page).
+    // For "synopsis" placement the card is full-width and the download button is
+    // rendered inside the synopsis area (see SynopsisContent above).
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Surface(
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 1.dp,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -370,6 +399,88 @@ fun EpisodeRowPreview(
                     Spacer(modifier = Modifier.height(6.dp))
                     DateAudioPillsRow()
                 }
+            }
+        }
+        }
+        // Tall download button — only for "episode_row" placement.
+        // Matches the real DownloadButtonTall (48dp wide, fills card height,
+        // own background, fully rounded) so the preview accounts for the
+        // download button in both placement modes.
+        if (showDownloadButton && downloadButtonPlacement == "episode_row") {
+            Spacer(modifier = Modifier.width(8.dp))
+            // Tall button — dedicated background, all corners rounded, fills card height
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 1.dp,
+                modifier = Modifier.width(48.dp).fillMaxHeight(),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Download",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Audio pills (SUB / DUB / HSUB) — ADAPTIVE: keeps everything on ONE row.
+ *
+ * Heuristic: 2+ versions → short labels (S•D), 1 version → full label (SUB).
+ * Mirrors the detail page's AudioPills. Does NOT use BoxWithConstraints
+ * (crashes inside Row(IntrinsicSize.Min)).
+ */
+@Composable
+private fun AudioPillsPreview(
+    hasSub: Boolean,
+    hasDub: Boolean,
+    hasHsub: Boolean,
+) {
+    if (!hasSub && !hasDub && !hasHsub) return
+
+    data class Audio(val full: String, val short: String)
+    val parts = buildList {
+        if (hasSub) add(Audio("SUB", "S"))
+        if (hasDub) add(Audio("DUB", "D"))
+        if (hasHsub) add(Audio("HSUB", "H"))
+    }
+
+    // Heuristic: 2+ versions → short labels (S•D), 1 version → full label (SUB)
+    val useShort = parts.size >= 2
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            parts.forEachIndexed { idx, audio ->
+                if (idx > 0) {
+                    Box(
+                        modifier = Modifier
+                            .size(3.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                CircleShape,
+                            ),
+                    )
+                }
+                Text(
+                    text = if (useShort) audio.short else audio.full,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
         }
     }
