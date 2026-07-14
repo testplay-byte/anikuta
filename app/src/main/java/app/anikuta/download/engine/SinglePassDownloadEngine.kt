@@ -119,13 +119,13 @@ class SinglePassDownloadEngine(
         //
         // We also track bytes (stats.size) for the UI size display, and estimate total size
         // from the bitrate (bytes/ms × duration).
-        var lastProcessedTime = 0L
+        var lastProcessedTime = 0.0
         var stableTimeCount = 0 // how many consecutive callbacks had the same time
-        var calibratedDurationMs = durationMs // will be reduced if FFmpeg finishes early
+        var calibratedDurationMs = durationMs.toDouble() // will be reduced if FFmpeg finishes early
 
         val statsCallback = StatisticsCallback { stats ->
-            val processedTimeMs = stats.time
-            val processedBytes = stats.size
+            val processedTimeMs = stats.time // Double (microseconds of processed video)
+            val processedBytes = stats.size.toLong()
 
             // Update downloaded bytes (for UI display)
             if (processedBytes > 0) {
@@ -160,7 +160,7 @@ class SinglePassDownloadEngine(
 
             // Calculate progress from calibrated duration
             if (calibratedDurationMs > 0 && processedTimeMs > 0) {
-                val progress = ((processedTimeMs.toDouble() / calibratedDurationMs) * 100)
+                val progress = ((processedTimeMs / calibratedDurationMs) * 100)
                     .toInt()
                     .coerceIn(0, 99)
                 if (progress != download.progress && progress > 0) {
