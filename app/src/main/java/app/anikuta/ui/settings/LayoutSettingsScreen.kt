@@ -278,6 +278,26 @@ fun LayoutSettingsScreen(onBack: () -> Unit) {
                         }
                     }
                 }
+
+                // Section 6: Download button placement
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        SettingsGroupCard(title = "Download button") {
+                            LabeledSection("Placement", "Where the download button appears on episode rows") {
+                                val dlPlacement = prefs.downloadButtonPlacement().get()
+                                StyledSegmentedRow(
+                                    options = listOf(
+                                        "Episode row" to (dlPlacement == "episode_row"),
+                                        "Synopsis" to (dlPlacement == "synopsis"),
+                                    ),
+                                    onSelect = {
+                                        prefs.downloadButtonPlacement().set(if (it == 0) "episode_row" else "synopsis")
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

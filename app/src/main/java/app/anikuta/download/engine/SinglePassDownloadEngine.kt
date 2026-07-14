@@ -112,22 +112,17 @@ class SinglePassDownloadEngine(
         val durationMs = getVideoDurationMs(video)
         Log.d(TAG, "download: estimated duration=${durationMs}ms (${durationMs / 1000 / 60}m${(durationMs / 1000) % 60}s)")
 
-        // Get actual video bitrate from FFprobe for accurate size estimation.
-        // Falls back to quality-based estimate if FFprobe fails.
-        val probedBitrate = getVideoBitrate(video)
-        val bitrateBytesPerSec = if (probedBitrate > 0) {
-            probedBitrate / 8 // bits per second → bytes per second
-        } else {
-            // Fallback: quality-based estimate
-            when {
-                download.qualityLabel.contains("1080") -> 400 * 1024
-                download.qualityLabel.contains("720") -> 150 * 1024
-                else -> 50 * 1024 // 360p or unknown
-            }
+        // Size estimate: quality-based bitrate × duration.
+        // This is the proven method that worked well. FFprobe bitrate was unreliable
+        // (returned 1MB for some sources) so we stick with the quality-based approach.
+        val bitrateBytesPerSec = when {
+            download.qualityLabel.contains("1080") -> 400 * 1024
+            download.qualityLabel.contains("720") -> 150 * 1024
+            else -> 50 * 1024 // 360p or unknown
         }
         var estimatedTotalBytes = (durationMs / 1000 * bitrateBytesPerSec).toLong().coerceAtLeast(1_000_000)
         progressTracker.setTotalSize(download, estimatedTotalBytes)
-        Log.d(TAG, "download: estimated total size=${estimatedTotalBytes / 1024 / 1024}MB (bitrate=${bitrateBytesPerSec / 1024}KB/s, probed=${probedBitrate > 0})")
+        Log.d(TAG, "download: estimated total size=${estimatedTotalBytes / 1024 / 1024}MB (bitrate=${bitrateBytesPerSec / 1024}KB/s)")
 
         // Start FFmpeg async
         download.status = Download.State.DOWNLOADING
