@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -432,9 +431,9 @@ fun EpisodeRowPreview(
 /**
  * Audio pills (SUB / DUB / HSUB) — ADAPTIVE: keeps everything on ONE row.
  *
- * When there isn't enough horizontal space for the full labels, they
- * automatically shorten to their first letter (SUB→S, DUB→D, HSUB→H) while
- * keeping the dot separators, e.g. "S•D". Mirrors the detail page's AudioPills.
+ * Heuristic: 2+ versions → short labels (S•D), 1 version → full label (SUB).
+ * Mirrors the detail page's AudioPills. Does NOT use BoxWithConstraints
+ * (crashes inside Row(IntrinsicSize.Min)).
  */
 @Composable
 private fun AudioPillsPreview(
@@ -451,40 +450,37 @@ private fun AudioPillsPreview(
         if (hasHsub) add(Audio("HSUB", "H"))
     }
 
-    BoxWithConstraints {
-        val fullChars = parts.sumOf { it.full.length } + (parts.size - 1)
-        val estimatedFullWidthDp = fullChars * 6 + 16
-        val useShort = maxWidth < estimatedFullWidthDp.dp
+    // Heuristic: 2+ versions → short labels (S•D), 1 version → full label (SUB)
+    val useShort = parts.size >= 2
 
-        Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.outlineVariant,
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                parts.forEachIndexed { idx, audio ->
-                    if (idx > 0) {
-                        Box(
-                            modifier = Modifier
-                                .size(3.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.onSurfaceVariant,
-                                    CircleShape,
-                                ),
-                        )
-                    }
-                    Text(
-                        text = if (useShort) audio.short else audio.full,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        softWrap = false,
+            parts.forEachIndexed { idx, audio ->
+                if (idx > 0) {
+                    Box(
+                        modifier = Modifier
+                            .size(3.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                CircleShape,
+                            ),
                     )
                 }
+                Text(
+                    text = if (useShort) audio.short else audio.full,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
         }
     }

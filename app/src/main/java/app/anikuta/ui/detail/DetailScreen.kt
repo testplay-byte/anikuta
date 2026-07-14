@@ -1608,15 +1608,15 @@ private fun cleanHtmlTags(text: String): String {
 /**
  * Audio pills (SUB / DUB / HSUB) — ADAPTIVE: keeps everything on ONE row.
  *
- * When there isn't enough horizontal space for the full labels with dot
- * separators, the labels automatically shorten to their first letter
- * (SUB→S, DUB→D, HSUB→H) while keeping the dot separators, e.g. "S•D".
- * This guarantees the pills are always fully visible on a single row
- * regardless of available width (fixes the character-per-line wrap issue).
+ * Heuristic: when there are 2+ audio versions, the labels shorten to their
+ * first letter (SUB→S, DUB→D, HSUB→H) with dot separators, e.g. "S•D".
+ * With only 1 version, the full label is shown (always fits). This guarantees
+ * the pills are always fully visible on a single row regardless of available
+ * width (fixes the character-per-line wrap issue).
  *
- * Uses BoxWithConstraints to measure the available width and picks the
- * representation that fits. The pill Surface sizes to its content's natural
- * width, so there's never any clipping or overflow.
+ * NOTE: Does NOT use BoxWithConstraints — that is a SubcomposeLayout which
+ * crashes when placed inside a Row(height(IntrinsicSize.Min)) because
+ * intrinsic measurement of SubcomposeLayouts is not supported.
  *
  * @param hasSub / hasDub / hasHsub  which audio versions are available
  */
@@ -1637,50 +1637,38 @@ private fun AudioPills(
         if (hasHsub) add(Audio("HSUB", "H"))
     }
 
-    BoxWithConstraints {
-        val maxWidthPx = maxWidth
-        // Heuristic threshold: if the available width is less than a full
-        // representation would need (roughly: sum of label widths + dot
-        // separators + padding), use the short form. We estimate ~7dp per
-        // character at labelSmall, plus 4dp per separator + 16dp padding.
-        // Full form chars = sum of full label lengths + (n-1) dots.
-        // Short form chars = n letters + (n-1) dots.
-        val fullChars = parts.sumOf { it.full.length } + (parts.size - 1)
-        // Rough px-per-char estimate for labelSmall (SemiBold). On a typical
-        // 3×-density screen, ~6dp per char is safe. Convert dp→px.
-        val estimatedFullWidthDp = fullChars * 6 + 16 // +16 for padding
-        val useShort = maxWidthPx < estimatedFullWidthDp.dp
+    // Heuristic: 2+ versions → short labels (S•D), 1 version → full label (SUB)
+    val useShort = parts.size >= 2
 
-        Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.outlineVariant,
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                parts.forEachIndexed { idx, audio ->
-                    if (idx > 0) {
-                        // Circular dot separator
-                        Box(
-                            modifier = Modifier
-                                .size(3.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.onSurfaceVariant,
-                                    androidx.compose.foundation.shape.CircleShape,
-                                ),
-                        )
-                    }
-                    Text(
-                        text = if (useShort) audio.short else audio.full,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        softWrap = false,
+            parts.forEachIndexed { idx, audio ->
+                if (idx > 0) {
+                    // Circular dot separator
+                    Box(
+                        modifier = Modifier
+                            .size(3.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                androidx.compose.foundation.shape.CircleShape,
+                            ),
                     )
                 }
+                Text(
+                    text = if (useShort) audio.short else audio.full,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
         }
     }
