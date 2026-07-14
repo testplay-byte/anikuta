@@ -974,10 +974,25 @@ class DetailViewModel(
 
     /**
      * Enqueue a single episode for download. Resolves the source + anime title
-     * from the current state.
+     * from the current state. Recovers matchedSource from cache if needed.
      */
     fun downloadEpisode(episode: app.anikuta.source.api.model.SEpisode) {
-        val source = matchedSource ?: return
+        // Try to recover matchedSource from cache if not set (fixes: download button
+        // not working after navigating away and back without refreshing)
+        if (matchedSource == null) {
+            val cachedSourceName = episodeCache[anilistId]?.second
+                ?: preferenceStore?.getString("ext_match_$anilistId", "")?.get()
+            if (cachedSourceName != null && cachedSourceName.isNotBlank()) {
+                val mgr = try { uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>() } catch (e: Exception) { null }
+                matchedSource = mgr?.getCatalogueSources()?.find { it.name == cachedSourceName }
+                Log.d(TAG, "downloadEpisode: recovered matchedSource from cache: ${matchedSource?.name}")
+            }
+        }
+
+        val source = matchedSource ?: run {
+            Log.w(TAG, "downloadEpisode: matchedSource is null — cannot enqueue")
+            return
+        }
         val title = getAnimeTitle()
         downloadManager?.enqueueDownload(
             anilistId = anilistId,

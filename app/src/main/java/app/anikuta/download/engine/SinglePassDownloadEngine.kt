@@ -114,15 +114,19 @@ class SinglePassDownloadEngine(
 
         // Progress tracking via file-size polling.
         //
-        // FFmpegKit's statistics callback doesn't fire reliably in our setup (the aniyomi
-        // fork may behave differently). Instead, we poll the output file size on disk
-        // every 500ms. This is more reliable and mirrors what users see in file managers.
+        // FFmpegKit's statistics callback doesn't fire reliably in our setup. Instead,
+        // we poll the output file size on disk every 500ms.
         //
-        // We estimate total size from the FFprobe duration × typical bitrate (250 KB/s for 360p).
-        // As the file grows, we refine the estimate based on actual download speed.
-        val estimatedTotalBytes = (durationMs * 250 / 1000).toLong().coerceAtLeast(1_000_000) // at least 1MB
+        // Initial estimate: 360p ≈ 50 KB/s, 720p ≈ 150 KB/s, 1080p ≈ 400 KB/s
+        // We use 100 KB/s as a middle ground, refined as the file grows.
+        val bitrateBytesPerSec = when {
+            download.qualityLabel.contains("1080") -> 400 * 1024
+            download.qualityLabel.contains("720") -> 150 * 1024
+            else -> 50 * 1024 // 360p or unknown
+        }
+        var estimatedTotalBytes = (durationMs / 1000 * bitrateBytesPerSec).toLong().coerceAtLeast(1_000_000)
         progressTracker.setTotalSize(download, estimatedTotalBytes)
-        Log.d(TAG, "download: estimated total size=${estimatedTotalBytes / 1024 / 1024}MB")
+        Log.d(TAG, "download: estimated total size=${estimatedTotalBytes / 1024 / 1024}MB (bitrate=${bitrateBytesPerSec / 1024}KB/s)")
 
         // Start FFmpeg async
         download.status = Download.State.DOWNLOADING
@@ -171,7 +175,6 @@ class SinglePassDownloadEngine(
                 if (currentSize == lastFileSize) {
                     stableSizeCount++
                     if (stableSizeCount >= 4 && currentSize < calibratedTotal) {
-                        // File stopped growing — likely done
                         calibratedTotal = currentSize
                         progressTracker.setTotalSize(download, calibratedTotal)
                     }
@@ -179,15 +182,11 @@ class SinglePassDownloadEngine(
                     stableSizeCount = 0
                     lastFileSize = currentSize
 
-                    // Refine total estimate based on elapsed time and current size.
-                    // If we're downloading at X bytes/sec, and the video is Y seconds long,
-                    // total ≈ X * Y. But we don't know the real duration — so we use
-                    // the FFprobe duration as an upper bound and refine downward.
+                    // Refine total estimate based on actual download rate.
                     val elapsedMs = System.currentTimeMillis() - startTime
-                    if (elapsedMs > 2000 && currentSize > 0) {
-                        val bytesPerMs = currentSize.toDouble() / elapsedMs
-                        val estimatedFromRate = (bytesPerMs * durationMs).toLong()
-                        // Use the smaller of: rate-based estimate or current calibrated total
+                    if (elapsedMs > 3000 && currentSize > 0) {
+                        val bytesPerSec = currentSize.toDouble() / (elapsedMs / 1000.0)
+                        val estimatedFromRate = (bytesPerSec * (durationMs / 1000.0)).toLong()
                         if (estimatedFromRate > 0 && estimatedFromRate < calibratedTotal) {
                             calibratedTotal = estimatedFromRate
                             progressTracker.setTotalSize(download, calibratedTotal)
