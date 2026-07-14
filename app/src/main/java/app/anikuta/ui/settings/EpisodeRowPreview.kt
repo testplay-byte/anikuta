@@ -172,6 +172,8 @@ fun EpisodeRowPreview(
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            maxLines = 1,
+                            softWrap = false,
                         )
                     }
                 }
@@ -207,6 +209,8 @@ fun EpisodeRowPreview(
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
                                 )
                             }
                         }
@@ -320,7 +324,7 @@ fun EpisodeRowPreview(
     // For "synopsis" placement the card is full-width and the download button is
     // rendered inside the synopsis area (see SynopsisContent above).
     Row(
-        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(

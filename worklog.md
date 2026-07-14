@@ -1874,3 +1874,61 @@ FILES MODIFIED (2):
   IntrinsicSize.Min, updated comments) so all 5 live previews stay accurate.
 
 Build: pending (will trigger workflow_dispatch next).
+
+---
+Task ID: DL-BTN-ALT-COLOR-PADDING-PILLS
+Agent: Z.ai Code (orchestrator)
+Task: 5 UI improvements — alternating button color, padding 4→6dp, preview padding, spacer between card+button, audio pills one row
+
+Work Log:
+
+(1) ALTERNATING BUTTON COLOR (synopsis placement):
+- Root cause: DownloadButtonTall used surfaceContainerHigh as default bg.
+  Episode rows alternate: even=surfaceContainerLow, odd=surfaceContainerHigh.
+  On odd rows, the button (surfaceContainerHigh) blended with the card.
+- Fix: added `index: Int = 0` param to DownloadButtonTall. Computed
+  `defaultBg` = if even → surfaceContainerHigh, if odd → surfaceContainerLow
+  (the OPPOSITE level of the card). Used defaultBg for PAUSED and else states.
+- Threaded `index` through: EpisodeRow → EpisodeRowRich → SynopsisContent →
+  DownloadButtonTall, AND both call sites (outside button) → DownloadButtonTall.
+- Colored states (DOWNLOADING/ERROR/DOWNLOADED/RECONNECTING) keep their distinct
+  colors — only the default/not-downloaded and PAUSED states alternate.
+
+(2) PADDING 4dp → 6dp:
+- Call site 1 (above mode): Box padding horizontal 4.dp → 6.dp
+- Call site 2 (below mode): Column padding horizontal 4.dp → 6.dp
+
+(3) LIVE PREVIEW PADDING:
+- Added Modifier.padding(horizontal = 6.dp) to EpisodeRowPreview's outer Row
+  so the preview shows the same 6dp edge gap as the real details page.
+
+(4) SPACER BETWEEN CARD AND BUTTON (real page):
+- Root cause: the real details page had NO spacer between the episode Box
+  (weight 1f) and the DownloadButtonTall — the button sat flush against the
+  card. The live preview HAD an 8dp spacer (so it looked different).
+- Fix: added Spacer(Modifier.width(8.dp)) before DownloadButtonTall at BOTH
+  call sites. Now the real page matches the preview's spacing.
+
+(5) AUDIO PILLS FORCED TO ONE ROW:
+- Root cause: the audio pill Text (SUB/DUB/HSUB) had no maxLines or softWrap
+  setting. When the container was narrow, the Text wrapped character-by-character
+  (S\nU\nB — one letter per line).
+- Fix: added `maxLines = 1, softWrap = false` to ALL audio pill Text AND date
+  pill Text in:
+  - EpisodeRowRich.DateAudioPillsRow (audio + date)
+  - EpisodeRowSimple (audio + date)
+  - EpisodeRowPreview.DateAudioPillsRow (audio + date)
+- softWrap = false forces the text onto a single line (no wrapping). The Surface
+  wrapping the text sizes to the text's natural width. If the parent is too
+  narrow, the pill stays on one line (better than character-per-line). The
+  episode card's Surface clips any overflow at the rounded edge.
+
+FILES MODIFIED (2):
+- DetailScreen.kt: DownloadButtonTall (index + defaultBg), EpisodeRowRich
+  (index param), EpisodeRow call (pass index), SynopsisContent (pass index),
+  both call sites (padding 6dp + spacer 8dp + pass index), audio/date pill
+  Text (softWrap=false, maxLines=1) ×4 instances
+- EpisodeRowPreview.kt: outer Row (6dp padding), audio/date pill Text
+  (softWrap=false, maxLines=1) ×2 instances
+
+Build: pending (will trigger workflow_dispatch next).

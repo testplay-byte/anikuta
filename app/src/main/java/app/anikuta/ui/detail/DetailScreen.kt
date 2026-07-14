@@ -377,7 +377,7 @@ fun DetailScreen(
                     // Each episode gets 16dp horizontal padding (to align with the
                     // header) and 4dp vertical padding (so 8dp total between episodes).
                     itemsIndexed(loadedEpisodes.episodeList, key = { _, it -> it.url }) { index, episode ->
-                        Box(modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+                        Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -418,6 +418,7 @@ fun DetailScreen(
                                 // Download button outside the episode container — only for
                                 // "episode_row" placement, or "synopsis" with no summary (fallback)
                                 if (showDownloadOutside) {
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     DownloadButtonTall(
                                         episodeUrl = episode.url,
                                         downloadStatus = downloadStatus,
@@ -425,6 +426,7 @@ fun DetailScreen(
                                         downloadedOnDisk = downloadedOnDisk,
                                         onDownload = { viewModel.onDownloadButtonClick(episode) },
                                         onLongClick = { longPressEpisode = episode },
+                                        index = index,
                                     )
                                 }
                             }
@@ -434,7 +436,7 @@ fun DetailScreen(
                     // Below mode OR not-yet-loaded: episodes in a section with an
                     // inner scrollable container (max height) when loaded.
                     item(key = "episodes") {
-                        Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)) {
+                        Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.fillMaxWidth(),
@@ -566,6 +568,7 @@ fun DetailScreen(
                                                 // Download button outside the episode container —
                                                 // only for "episode_row", or "synopsis" with no summary
                                                 if (showDownloadOutside) {
+                                                    Spacer(modifier = Modifier.width(8.dp))
                                                     DownloadButtonTall(
                                                         episodeUrl = episode.url,
                                                         downloadStatus = downloadStatus,
@@ -573,6 +576,7 @@ fun DetailScreen(
                                                         downloadedOnDisk = downloadedOnDisk,
                                                         onDownload = { viewModel.onDownloadButtonClick(episode) },
                                                         onLongClick = { longPressEpisode = episode },
+                                                        index = index,
                                                     )
                                                 }
                                             }
@@ -861,18 +865,28 @@ private fun DownloadButtonTall(
     downloadedOnDisk: Set<String>,
     onDownload: () -> Unit,
     onLongClick: () -> Unit = {},
+    index: Int = 0,
 ) {
     val status = downloadStatus[episodeUrl]
     val progress = downloadProgress[episodeUrl] ?: 0
     val isOnDisk = downloadedOnDisk.contains(episodeUrl)
 
+    // Alternating default background: contrasts with the episode card's
+    // alternating row color (even=surfaceContainerLow, odd=surfaceContainerHigh).
+    // The button uses the OPPOSITE level so it never blends into the card.
+    val defaultBg = if (index % 2 == 0) {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+
     val backgroundColor = when {
         status == app.anikuta.download.Download.State.DOWNLOADING -> MaterialTheme.colorScheme.primaryContainer
         status == app.anikuta.download.Download.State.ERROR -> MaterialTheme.colorScheme.errorContainer
         status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-        status == app.anikuta.download.Download.State.PAUSED -> MaterialTheme.colorScheme.surfaceContainerHigh
+        status == app.anikuta.download.Download.State.PAUSED -> defaultBg
         status == app.anikuta.download.Download.State.RECONNECTING -> MaterialTheme.colorScheme.errorContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+        else -> defaultBg
     }
 
     val iconColor = when {
@@ -1035,6 +1049,7 @@ private fun EpisodeRow(
                 episodeNumberPosition, thumbnailPosition,
                 downloadButtonPlacement, downloadStatus, downloadProgress,
                 downloadedOnDisk, onDownloadClick, onDownloadLongClick,
+                index = index,
             )
         } else {
             EpisodeRowSimple(
@@ -1161,6 +1176,8 @@ private fun EpisodeRowSimple(
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            maxLines = 1,
+                            softWrap = false,
                         )
                     }
                 }
@@ -1195,6 +1212,8 @@ private fun EpisodeRowSimple(
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
                                 )
                             }
                         }
@@ -1235,6 +1254,7 @@ private fun EpisodeRowRich(
     downloadedOnDisk: Set<String> = emptySet(),
     onDownloadClick: () -> Unit = {},
     onDownloadLongClick: () -> Unit = {},
+    index: Int = 0,
 ) {
     var summaryExpanded by remember { mutableStateOf(false) }
 
@@ -1275,6 +1295,8 @@ private fun EpisodeRowRich(
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            maxLines = 1,
+                            softWrap = false,
                         )
                     }
                 }
@@ -1310,6 +1332,8 @@ private fun EpisodeRowRich(
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
                                 )
                             }
                         }
@@ -1359,6 +1383,7 @@ private fun EpisodeRowRich(
                         downloadedOnDisk = downloadedOnDisk,
                         onDownload = onDownloadClick,
                         onLongClick = onDownloadLongClick,
+                        index = index,
                     )
                 }
             } else {
