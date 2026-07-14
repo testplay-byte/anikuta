@@ -475,7 +475,8 @@ private fun AnimeSectionCard(
             }
 
             // Episode rows — inside the SAME card, separated by thin dividers.
-            // Each episode row has its own subtle background for distinction.
+            // Each episode row has its own darker background for distinction
+            // from the header (surfaceContainerHigh vs surfaceContainer).
             downloads.forEachIndexed { index, download ->
                 if (index > 0) {
                     // Thin divider between episodes
@@ -487,15 +488,20 @@ private fun AnimeSectionCard(
                             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                     )
                 }
-                EpisodeRow(
-                    download = download,
-                    showDownloadSize = showDownloadSize,
-                    onPause = { onPause(download.id) },
-                    onResume = { onResume(download.id) },
-                    onCancel = { onCancel(download.id) },
-                    onRetry = { onRetry(download.id) },
-                    onRemove = { onRemove(download.id) },
-                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ) {
+                    EpisodeRow(
+                        download = download,
+                        showDownloadSize = showDownloadSize,
+                        onPause = { onPause(download.id) },
+                        onResume = { onResume(download.id) },
+                        onCancel = { onCancel(download.id) },
+                        onRetry = { onRetry(download.id) },
+                        onRemove = { onRemove(download.id) },
+                    )
+                }
             }
         }
     }

@@ -163,14 +163,84 @@ class DownloadProvider(
 
     /**
      * Delete a downloaded episode.
+     *
+     * After deleting the episode directory, cleans up empty parent directories:
+     * - If the anime directory has no more episode directories (with video files),
+     *   the anime directory is deleted.
+     * - If the source directory has no more anime directories, the source directory
+     *   is deleted too.
+     * This prevents orphaned empty folders from accumulating in the downloads root.
      */
     fun deleteEpisode(episodeName: String, animeTitle: String, sourceName: String): Boolean {
         val episodeDir = findEpisodeDir(episodeName, animeTitle, sourceName) ?: return true
         return try {
             episodeDir.delete()
+            // Clean up empty parent directories
+            cleanupEmptyDirectories(animeTitle, sourceName)
+            true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to delete episode dir", e)
             false
+        }
+    }
+
+    /**
+     * Delete an episode directory by its URL (stable identifier).
+     * Uses the .episode_url file to find the correct directory even after
+     * metadata enrichment changes the episode name.
+     *
+     * After deleting, cleans up empty parent directories (anime + source).
+     */
+    fun deleteEpisodeByUrl(episodeUrl: String, animeTitle: String, sourceName: String): Boolean {
+        val animeDir = getAnimeDir(animeTitle, sourceName) ?: return true
+        // Find the episode directory that has this URL in its .episode_url file
+        val episodeDir = animeDir.listFiles()?.find { dir ->
+            dir.isDirectory && readEpisodeUrlFile(dir) == episodeUrl
+        } ?: run {
+            // Fallback: try to find by name (old downloads without .episode_url)
+            val dirName = DiskUtil.buildValidFilename(episodeUrl.substringAfterLast("/").ifBlank { episodeUrl })
+            animeDir.findFile(dirName)
+        } ?: return true
+
+        return try {
+            episodeDir.delete()
+            cleanupEmptyDirectories(animeTitle, sourceName)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete episode dir by URL", e)
+            false
+        }
+    }
+
+    /**
+     * Remove the anime directory and source directory if they are empty
+     * (no remaining episode directories with video files).
+     */
+    private fun cleanupEmptyDirectories(animeTitle: String, sourceName: String) {
+        try {
+            val animeDir = getAnimeDir(animeTitle, sourceName) ?: return
+            // Check if any episode directories with video files remain
+            val hasEpisodes = animeDir.listFiles()?.any { dir ->
+                dir.isDirectory && dir.listFiles()?.any { file ->
+                    val name = file.name?.lowercase() ?: ""
+                    name.endsWith(".mkv") || name.endsWith(".mp4")
+                } ?: false
+            } ?: false
+
+            if (!hasEpisodes) {
+                Log.d(TAG, "cleanupEmptyDirectories: anime dir is empty — deleting: ${animeDir.name}")
+                animeDir.delete()
+
+                // Also check if the source directory is now empty
+                val sourceDir = getSourceDir(sourceName) ?: return
+                val hasAnimes = sourceDir.listFiles()?.any { it.isDirectory } ?: false
+                if (!hasAnimes) {
+                    Log.d(TAG, "cleanupEmptyDirectories: source dir is empty — deleting: ${sourceDir.name}")
+                    sourceDir.delete()
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "cleanupEmptyDirectories: could not clean up: ${e.message}")
         }
     }
 }

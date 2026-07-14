@@ -182,10 +182,15 @@ class DownloadManager(
             }
 
             // 1. Delete the episode folder from SAF (includes .mkv, manifest, etc.)
+            //    Uses episodeUrl (stable) first, falls back to episodeName.
+            //    Also cleans up empty anime/source directories.
             try {
                 val provider = Injekt.get<DownloadProvider>()
-                provider.deleteEpisode(download.episodeName, download.animeTitle, download.sourceName)
-                Log.d(TAG, "cancelDownload: ✓ deleted SAF folder")
+                val deleted = provider.deleteEpisodeByUrl(download.episodeUrl, download.animeTitle, download.sourceName)
+                if (!deleted) {
+                    provider.deleteEpisode(download.episodeName, download.animeTitle, download.sourceName)
+                }
+                Log.d(TAG, "cancelDownload: ✓ deleted SAF folder (+ cleanup empty dirs)")
             } catch (e: Exception) {
                 Log.w(TAG, "cancelDownload: ⚠ could not delete SAF folder: ${e.message}")
             }

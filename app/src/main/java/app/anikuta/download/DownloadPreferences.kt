@@ -74,7 +74,7 @@ class DownloadPreferences(
         preferenceStore.getString("download_audio_fallback", AudioFallback.NEXT.value)
 
     fun maxConcurrentDownloads(): Preference<Int> =
-        preferenceStore.getInt("download_max_concurrent", 2)
+        preferenceStore.getInt("download_max_concurrent", 1)
 
     /**
      * Download method: "single_pass", "hls_direct", or "segment".

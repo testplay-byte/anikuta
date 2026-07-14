@@ -2346,3 +2346,43 @@ FILES MODIFIED (1):
 - DownloadQueueScreen.kt
 
 Build: pending (will trigger workflow_dispatch next).
+
+---
+Task ID: DOWNLOADS-QOL-SEQUENTIAL-CLEANUP
+Agent: Z.ai Code (orchestrator)
+Task: QoL — darker episode bg, sequential downloads (1 at a time), delete cleanup (empty anime/source dirs)
+
+Work Log:
+
+(1) DARKER EPISODE BACKGROUND:
+- Wrapped each EpisodeRow in AnimeSectionCard in a Surface(surfaceContainerHigh).
+- The anime header keeps surfaceContainer (lighter), episodes get surfaceContainerHigh
+  (darker) — visual distinction without changing the layout.
+
+(2) SEQUENTIAL DOWNLOADS (one at a time):
+- Changed maxConcurrentDownloads default from 2 → 1.
+- Now the download worker processes ONE download at a time. After it finishes,
+  it picks up the next one in the queue. No parallel downloads.
+- The semaphore in DownloadWorker still allows up to maxConcurrent, but with
+  default=1, only one download runs at a time.
+
+(3) DELETE CLEANUP (empty anime/source dirs):
+- Enhanced DownloadProvider.deleteEpisode to call cleanupEmptyDirectories()
+  after deleting the episode folder.
+- New cleanupEmptyDirectories() method:
+  - Checks if the anime directory has any remaining episode dirs with video files
+  - If empty → deletes the anime directory
+  - Then checks if the source directory has any remaining anime dirs
+  - If empty → deletes the source directory too
+- New deleteEpisodeByUrl() method: deletes by episode URL (stable identifier)
+  instead of episode name (which can change after metadata enrichment).
+- DownloadManager.cancelDownload now uses deleteEpisodeByUrl first, falls back
+  to deleteEpisode by name.
+
+FILES MODIFIED (3):
+- DownloadQueueScreen.kt: episode row wrapped in surfaceContainerHigh Surface
+- DownloadPreferences.kt: maxConcurrentDownloads default 2→1
+- DownloadProvider.kt: deleteEpisode cleanup + new deleteEpisodeByUrl + cleanupEmptyDirectories
+- DownloadManager.kt: cancelDownload uses deleteEpisodeByUrl
+
+Build: pending (will trigger workflow_dispatch next).
