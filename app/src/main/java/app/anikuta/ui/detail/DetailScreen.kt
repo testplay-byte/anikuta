@@ -113,11 +113,13 @@ fun DetailScreen(
         val req = playRequest ?: return@LaunchedEffect
         when (req) {
             is PlayRequest.Play -> {
-                // Get cover color from the current anime (if loaded)
+                // Get cover color + cover URL + anime title from the current anime (if loaded)
                 val anime = (detailState as? DetailState.Success)?.anime
                 val coverColorInt = anime?.coverImage?.color?.let {
                     try { android.graphics.Color.parseColor(it) } catch (e: Exception) { 0 }
                 } ?: 0
+                val coverUrlStr = anime?.coverImage?.extraLarge ?: anime?.coverImage?.large ?: ""
+                val animeTitleStr = anime?.title?.preferred() ?: ""
                 val intent = app.anikuta.player.PlayerActivity.newIntent(
                     context = context,
                     videoUrl = req.url,
@@ -127,6 +129,8 @@ fun DetailScreen(
                     episodeNumber = req.episodeNumber,
                     videoHeaders = req.videoHeaders,
                     coverColor = coverColorInt,
+                    coverUrl = coverUrlStr,
+                    animeTitle = animeTitleStr,
                     sourceId = req.sourceId,
                     videoServer = req.videoServer,
                     videoAudio = req.videoAudio,

@@ -102,6 +102,8 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_EPISODE_NUMBER = "app.anikuta.player.EPISODE_NUMBER"
         const val EXTRA_VIDEO_HEADERS = "app.anikuta.player.VIDEO_HEADERS"
         const val EXTRA_COVER_COLOR = "app.anikuta.player.COVER_COLOR"
+        const val EXTRA_COVER_URL = "app.anikuta.player.COVER_URL"
+        const val EXTRA_ANIME_TITLE = "app.anikuta.player.ANIME_TITLE"
         // ---- Episode switching: current video metadata + source ID ----
         // These allow the player to re-resolve videos for a different episode
         // using the SAME server / audio version / quality as the current video.
@@ -252,6 +254,8 @@ class PlayerActivity : ComponentActivity() {
             episodeNumber: Float = -1f,
             videoHeaders: String = "",
             coverColor: Int = 0,
+            coverUrl: String = "",
+            animeTitle: String = "",
             sourceId: Long = -1L,
             videoServer: String = "",
             videoAudio: String = "",
@@ -262,6 +266,8 @@ class PlayerActivity : ComponentActivity() {
                 putExtra(EXTRA_TITLE, title)
                 if (anilistId > 0) putExtra(EXTRA_ANILIST_ID, anilistId)
                 if (coverColor != 0) putExtra(EXTRA_COVER_COLOR, coverColor)
+                if (coverUrl.isNotBlank()) putExtra(EXTRA_COVER_URL, coverUrl)
+                if (animeTitle.isNotBlank()) putExtra(EXTRA_ANIME_TITLE, animeTitle)
                 if (episodeUrl.isNotBlank()) putExtra(EXTRA_EPISODE_URL, episodeUrl)
                 if (episodeNumber > 0) putExtra(EXTRA_EPISODE_NUMBER, episodeNumber)
                 if (videoHeaders.isNotBlank()) putExtra(EXTRA_VIDEO_HEADERS, videoHeaders)
@@ -331,6 +337,10 @@ class PlayerActivity : ComponentActivity() {
     @Volatile private var currentEpisodeVideos: List<eu.kanade.tachiyomi.animesource.model.Video> = emptyList()
     /** Parsed videos for the current episode (cached for fast switching). */
     @Volatile private var currentParsedVideos: List<app.anikuta.ui.detail.ParsedVideo> = emptyList()
+    /** Anime cover URL — passed from DetailScreen, saved into WatchProgressStore for History covers. */
+    private var coverUrl: String = ""
+    /** Anime title — passed from DetailScreen, saved into WatchProgressStore for History display. */
+    private var animeTitle: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -341,6 +351,8 @@ class PlayerActivity : ComponentActivity() {
         episodeUrl = intent.getStringExtra(EXTRA_EPISODE_URL) ?: ""
         vmEpisodeNumber = intent.getFloatExtra(EXTRA_EPISODE_NUMBER, -1f).takeIf { it > 0 }
         val coverColor = intent.getIntExtra(EXTRA_COVER_COLOR, 0)
+        coverUrl = intent.getStringExtra(EXTRA_COVER_URL) ?: ""
+        animeTitle = intent.getStringExtra(EXTRA_ANIME_TITLE) ?: ""
         // Episode switching metadata
         sourceId = intent.getLongExtra(EXTRA_SOURCE_ID, -1L)
         currentVideoServer = intent.getStringExtra(EXTRA_VIDEO_SERVER) ?: ""
@@ -794,7 +806,16 @@ class PlayerActivity : ComponentActivity() {
         val pos = vm.position.value
         val dur = vm.duration.value
         if (dur > 0 && pos < dur - 2) {  // don't save if basically finished
-            store.save(anilistId, episodeUrl, pos, dur, vm.title)
+            store.save(
+                anilistId = anilistId,
+                episodeUrl = episodeUrl,
+                positionSeconds = pos,
+                durationSeconds = dur,
+                title = vm.title,
+                coverUrl = coverUrl.ifBlank { null },
+                animeTitle = animeTitle.ifBlank { null },
+                episodeNumber = vmEpisodeNumber ?: -1f,
+            )
             Log.d(TAG, "Saved progress: ${pos}s / ${dur}s")
         } else if (dur > 0 && pos >= dur - 2) {
             // Finished — clear the progress so next time we start from 0.

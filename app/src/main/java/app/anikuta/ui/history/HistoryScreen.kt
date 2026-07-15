@@ -22,11 +22,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil3.compose.AsyncImage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -300,17 +302,20 @@ private fun ContinueWatchingRow(
 }
 
 /**
- * Continue-watching card — colored placeholder (WatchProgressStore doesn't
- * store cover URLs, so a hue-derived color + the title initials stand in for
- * the cover image), title, "X min left", and a linear progress bar overlay.
+ * Continue-watching card — shows the anime cover image (or a hue-derived
+ * placeholder when no cover URL is available), with a gradient overlay,
+ * title, "X min left", and a linear progress bar.
+ *
+ * Phase 2 revamp: now uses real cover images via Coil AsyncImage. Falls back
+ * to a hue-derived placeholder + title initials for legacy entries (before
+ * cover URLs were saved to WatchProgressStore).
  */
 @Composable
 private fun ContinueWatchingCard(
     entry: HistoryEntry,
     onResume: (Int, String, String) -> Unit,
 ) {
-    // Derive a stable hue from the anilistId so each anime gets a
-    // consistent-but-varied placeholder color.
+    // Derive a stable hue from the anilistId — fallback placeholder color.
     val placeholderColor = remember(entry.anilistId) {
         val hue = (entry.anilistId * 47) % 360
         val argb = android.graphics.Color.HSVToColor(floatArrayOf(hue.toFloat(), 0.55f, 0.55f))
@@ -333,20 +338,28 @@ private fun ContinueWatchingCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Colored placeholder — fills the card, with the title's first
-            // letters as a poster-style visual marker.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(placeholderColor),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = entry.title.take(2).uppercase(),
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.85f),
+            // Real cover image (if available) or hue-derived placeholder.
+            if (!entry.coverUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = entry.coverUrl,
+                    contentDescription = entry.animeTitle ?: entry.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
                 )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(placeholderColor),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = entry.title.take(2).uppercase(),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.85f),
+                    )
+                }
             }
             // Bottom gradient for text readability
             Box(
@@ -395,8 +408,13 @@ private fun ContinueWatchingCard(
 }
 
 /**
- * A history list row — Surface card with a play icon, the episode title,
- * a relative timestamp, and a percentage readout.
+ * A history list row — Surface card with a 16:9 episode thumbnail (or anime
+ * cover fallback), the episode title, a relative timestamp, and a percentage
+ * readout.
+ *
+ * Phase 2 revamp: replaced the play-icon circle with a real thumbnail image.
+ * Uses [HistoryEntry.thumbnailUrl] if available, falls back to
+ * [HistoryEntry.coverUrl], then to a hue-derived placeholder.
  *
  * Long-press triggers [onLongPress] (with haptic feedback) so the user can
  * remove a single entry without affecting the rest of their history.
@@ -409,6 +427,15 @@ private fun HistoryEntryRow(
     onLongPress: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
+    // Fallback placeholder color (for entries without any image URL).
+    val placeholderColor = remember(entry.anilistId) {
+        val hue = (entry.anilistId * 47) % 360
+        val argb = android.graphics.Color.HSVToColor(floatArrayOf(hue.toFloat(), 0.45f, 0.45f))
+        Color(argb)
+    }
+    // Best available image: episode thumbnail → anime cover → placeholder.
+    val imageUrl = entry.thumbnailUrl ?: entry.coverUrl
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -425,23 +452,33 @@ private fun HistoryEntryRow(
         tonalElevation = 1.dp,
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Play icon in a tonal circle — visual marker + tap affordance
+            // 16:9 episode thumbnail (or anime cover fallback) — 72dp wide.
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .width(72.dp)
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (imageUrl.isNullOrBlank()) placeholderColor else Color.Transparent),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(20.dp),
-                )
+                if (!imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = entry.animeTitle ?: entry.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
