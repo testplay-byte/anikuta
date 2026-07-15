@@ -192,17 +192,14 @@ fun SearchScreen(
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable { showFilterSheet = true },
                     shape = RoundedCornerShape(percent = 50),
-                    color = if (activeFilterCount > 0)
-                        MaterialTheme.colorScheme.primaryContainer
-                    else
-                        MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Filled.FilterList,
                             contentDescription = "Filters",
                             tint = if (activeFilterCount > 0)
-                                MaterialTheme.colorScheme.onPrimaryContainer
+                                MaterialTheme.colorScheme.primary
                             else
                                 MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp),
