@@ -187,7 +187,6 @@ class SearchViewModel : ViewModel() {
         _searchMode.value = mode
         val q = _query.value.trim()
         if (mode == SearchMode.RECENT) {
-            // Recent mode: just show recent searches (clear query + reset state)
             _query.value = ""
             _state.value = SearchState.Idle
             return
@@ -198,8 +197,31 @@ class SearchViewModel : ViewModel() {
             }
         } else if (mode == SearchMode.SOURCES) {
             loadExtensionBrowse()
-        } else {
-            _state.value = SearchState.Idle
+        } else if (mode == SearchMode.ANILIST) {
+            // AniList with no query → show trending/popular results
+            loadAniListBrowse()
+        }
+    }
+
+    /** Load trending anime from AniList (Phase I — AniList browse mode). */
+    private fun loadAniListBrowse() {
+        val repo = anilistRepo ?: return
+        viewModelScope.launch {
+            _state.value = SearchState.Loading
+            try {
+                // Use browseByGenre with a popular genre as a proxy for "trending"
+                // AniList doesn't have a direct "trending" endpoint, but we can
+                // search with sort=POPULARITY_DESC and empty query
+                val data = repo.searchAnime("", page = 1, perPage = 25)
+                _state.value = if (data.isEmpty()) {
+                    SearchState.Empty
+                } else {
+                    SearchState.Success(anime = data, hasMore = data.size >= 25, isLoadingMore = false)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "AniList browse failed", e)
+                _state.value = SearchState.Error(e.message ?: "Unknown error")
+            }
         }
     }
 

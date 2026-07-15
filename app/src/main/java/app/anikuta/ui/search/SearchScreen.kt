@@ -220,8 +220,8 @@ fun SearchScreen(
 
         // --- Body ----------------------------------------------------------
         when {
-            // RECENT mode or no query in AniList mode → show recent searches
-            (searchMode == SearchMode.RECENT || (query.isBlank() && searchMode == SearchMode.ANILIST)) -> {
+            // RECENT mode → show recent searches
+            searchMode == SearchMode.RECENT -> {
                 RecentSearchesSection(
                     recent = recent,
                     onSelect = { term ->
