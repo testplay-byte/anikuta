@@ -82,6 +82,7 @@ fun SearchScreen(
             onDismissRequest = { showFilterSheet = false },
         ) {
             FilterSheetContent(
+                searchMode = searchMode,
                 availableGenres = availableGenres,
                 availableYears = viewModel.availableYears,
                 availableFormats = viewModel.availableFormats,
@@ -106,11 +107,27 @@ fun SearchScreen(
             .fillMaxSize()
             .statusBarsPadding(),
     ) {
-        // --- Search bar + filter button (Phase 5 part 3) -------------------
+        // --- Source toggle (Phase G) — ABOVE the search bar ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SearchMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = searchMode == mode,
+                    onClick = { viewModel.setSearchMode(mode) },
+                    label = { Text(mode.label) },
+                )
+            }
+        }
+
+        // --- Search bar + filter button ---
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -126,7 +143,7 @@ fun SearchScreen(
             Box {
                 Surface(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(44.dp)
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable { showFilterSheet = true },
                     shape = RoundedCornerShape(percent = 50),
@@ -143,6 +160,7 @@ fun SearchScreen(
                                 MaterialTheme.colorScheme.onPrimaryContainer
                             else
                                 MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
@@ -155,22 +173,6 @@ fun SearchScreen(
                         Text(activeFilterCount.toString(), style = MaterialTheme.typography.labelSmall)
                     }
                 }
-            }
-        }
-
-        // Phase 5 part 4 — Source toggle (AniList vs Extensions)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SearchMode.entries.forEach { mode ->
-                FilterChip(
-                    selected = searchMode == mode,
-                    onClick = { viewModel.setSearchMode(mode) },
-                    label = { Text(mode.label) },
-                )
             }
         }
 
@@ -252,7 +254,7 @@ private fun SearchBarField(
         onValueChange = onQueryChange,
         modifier = modifier.focusRequester(focusRequester),
         placeholder = {
-            Text("Search anime by title…")
+            Text("Search your anime")
         },
         leadingIcon = {
             Icon(
@@ -636,6 +638,7 @@ private fun ErrorState(message: String, onRetry: () -> Unit = {}) {
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun FilterSheetContent(
+    searchMode: SearchMode,
     availableGenres: List<String>,
     availableYears: List<Int>,
     availableFormats: List<String>,
@@ -655,11 +658,23 @@ private fun FilterSheetContent(
     ) {
         item {
             Text(
-                "Filters",
+                if (searchMode == SearchMode.ANILIST) "AniList Filters" else "Extension Filters",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(vertical = 12.dp),
             )
+        }
+        // Extension mode: show additional info about source-dependent filters
+        if (searchMode == SearchMode.SOURCES) {
+            item {
+                Text(
+                    "Note: Genre, season, language, and rating filters depend on the installed extensions. " +
+                        "Sort, year, type, and status filters are applied client-side.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
         }
         // Genre
         item {
@@ -731,6 +746,37 @@ private fun FilterSheetContent(
                             onClick = { onYearSelected(if (selectedYear == year) null else year) },
                             label = { Text(year.toString()) },
                         )
+                    }
+                }
+            }
+        }
+        // Extension mode: additional filter sections
+        if (searchMode == SearchMode.SOURCES) {
+            // Sort
+            item {
+                Text("Sort", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+            }
+            item {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    listOf("Relevance", "Popularity", "Latest", "A-Z").forEach { sort ->
+                        FilterChip(selected = false, onClick = { /* TODO: wire to source sort */ }, label = { Text(sort) })
+                    }
+                }
+            }
+            // Status
+            item {
+                Text("Status", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+            }
+            item {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    listOf("Airing", "Completed", "Upcoming", "Cancelled").forEach { status ->
+                        FilterChip(selected = false, onClick = { /* TODO: wire to source status filter */ }, label = { Text(status) })
                     }
                 }
             }
