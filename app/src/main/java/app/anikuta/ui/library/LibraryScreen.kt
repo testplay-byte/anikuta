@@ -77,23 +77,31 @@ fun LibraryScreen(
 
     // Phase H: track scroll for the gradient blur effect at the top
     val gridState = rememberLazyGridState()
-    val isScrolled by remember {
-        derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 50 }
+    // Smooth gradient alpha: 0 when at top, ramps up as user scrolls
+    val gradientAlpha by remember {
+        derivedStateOf {
+            val offset = gridState.firstVisibleItemScrollOffset.toFloat()
+            val itemIndex = gridState.firstVisibleItemIndex
+            if (itemIndex > 0) 1f else (offset / 200f).coerceIn(0f, 1f)
+        }
     }
     val scope = rememberCoroutineScope()
 
     // Phase H: when settings sheet opens, scroll the grid up to hide the top bar
-    // + categories + count header. The first card row should be at the top.
+    // + categories + count header. Reduce by 20dp so it doesn't scroll too far.
+    // When sheet closes, scroll back to the top.
     androidx.compose.runtime.LaunchedEffect(showSettingsSheet) {
         if (showSettingsSheet) {
             // Scroll past: topbar (index 0) + category_pills (index 1) + count_header (index 2)
-            // → land on index 3 (first anime card) with offset 0
+            // → land on index 3 (first anime card) with a small offset so it doesn't go too far
             try {
-                gridState.animateScrollToItem(3, 0)
+                gridState.animateScrollToItem(3, -20) // -20 to reduce scroll by ~20dp
             } catch (_: Exception) {
-                // If there aren't enough items, scroll to whatever is available
                 try { gridState.animateScrollToItem(2, 0) } catch (_: Exception) {}
             }
+        } else {
+            // Sheet closed → scroll back to top
+            try { gridState.animateScrollToItem(0, 0) } catch (_: Exception) {}
         }
     }
 
@@ -129,6 +137,7 @@ fun LibraryScreen(
     if (showSettingsSheet) {
         androidx.compose.material3.ModalBottomSheet(
             onDismissRequest = { showSettingsSheet = false },
+            dragHandle = null, // removes the empty area + white line at the top
         ) {
             LibrarySettingsSheet(
                 sortMode = sortMode,
@@ -175,15 +184,14 @@ fun LibraryScreen(
                 )
             }
 
-            // Phase H: Category pills (below the top bar, above the grid)
-            if (categories.size > 1) {
-                item(key = "category_pills", span = { GridItemSpan(maxLineSpan) }) {
-                    LibraryCategoryPills(
-                        categories = categories,
-                        selectedId = selectedCategoryId,
-                        onSelect = { viewModel.selectCategory(it) },
-                    )
-                }
+            // Phase H: Category pills (below the top bar, above the grid) — always shown
+            item(key = "category_pills", span = { GridItemSpan(maxLineSpan) }) {
+                LibraryCategoryPills(
+                    categories = categories,
+                    selectedId = selectedCategoryId,
+                    onSelect = { viewModel.selectCategory(it) },
+                    onAddClick = { showCreateCategoryDialog = true },
+                )
             }
 
             when (val s = state) {
@@ -241,16 +249,18 @@ fun LibraryScreen(
             }
         }
         // Phase H: gradient blur + darkening at the top when scrolling
-        if (isScrolled) {
+        // Smooth: alpha ramps from 0→1 as user scrolls. Stronger: 0.98 alpha at top.
+        if (gradientAlpha > 0.01f) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(80.dp)
+                    .height(90.dp)
                     .align(Alignment.TopCenter)
                     .background(
                         Brush.verticalGradient(
-                            0f to MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
-                            0.5f to MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
+                            0f to MaterialTheme.colorScheme.background.copy(alpha = 0.98f * gradientAlpha),
+                            0.4f to MaterialTheme.colorScheme.background.copy(alpha = 0.9f * gradientAlpha),
+                            0.7f to MaterialTheme.colorScheme.background.copy(alpha = 0.5f * gradientAlpha),
                             1f to MaterialTheme.colorScheme.background.copy(alpha = 0f),
                         ),
                     ),
@@ -526,9 +536,9 @@ private fun LibraryRichCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                 ) {
-                    // Title in a surfaceContainer Surface — matches EpisodeRow pattern
+                    // Title in a surfaceContainer pill-shaped container — matches EpisodeRow
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -537,18 +547,41 @@ private fun LibraryRichCard(
                         Text(
                             text = anime.title.preferred(),
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.titleSmall,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
-                            maxLines = settings.titleMaxLines,
+                            maxLines = 1, // single line — user requested
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
-                    // Metadata row + audio pills — matches EpisodeRow's DateAudioPillsRow
+                    // Metadata pills row — matches EpisodeRow's DateAudioPillsRow
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        // Rating pill
+                        if (settings.showRating && anime.averageScore != null) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("★", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text(
+                                        anime.averageScore.toString(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                    )
+                                }
+                            }
+                        }
                         // Year pill
                         if (settings.showYear && anime.seasonYear != null) {
                             Surface(
@@ -680,18 +713,13 @@ private fun LibraryListCard(
     } else {
         MaterialTheme.colorScheme.surfaceContainerHigh
     }
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale),
-        shape = RoundedCornerShape(cornerRadius.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = cardColor,
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 1.dp,
-            pressedElevation = 3.dp,
-        ),
+        shape = RoundedCornerShape(12.dp),
+        color = cardColor,
+        tonalElevation = 1.dp,
         interactionSource = interactionSource,
         onClick = onClick,
     ) {
@@ -714,12 +742,12 @@ private fun LibraryListCard(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
-                // Unwatched badge (top-start, small)
-                if (unwatchedCount > 0) {
+                // Unwatched badge (top-start) — black overlay like grid cards
+                if (settings.showUnwatchedBadge && unwatchedCount > 0) {
                     Surface(
                         modifier = Modifier.align(Alignment.TopStart),
                         shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.primary,
+                        color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f),
                     ) {
                         Text(
                             text = unwatchedCount.toString(),
@@ -727,50 +755,58 @@ private fun LibraryListCard(
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp),
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = androidx.compose.ui.graphics.Color.White,
                         )
                     }
                 }
             }
-            // Metadata (right)
+            // Metadata (right) — title in surfaceContainer pill + metadata pills
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 12.dp),
             ) {
-                Text(
-                    text = anime.title.preferred(),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
+                // Title in surfaceContainer — matches EpisodeRow + grid card
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                ) {
+                    Text(
+                        text = anime.title.preferred(),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                // Metadata pills row
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (anime.averageScore != null) {
-                        Text(
-                            "★ ${anime.averageScore}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium,
-                        )
+                    if (settings.showRating && anime.averageScore != null) {
+                        Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.outlineVariant) {
+                            Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("★", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(anime.averageScore.toString(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+                            }
+                        }
                     }
-                    if (anime.seasonYear != null) {
-                        Text(
-                            "· ${anime.seasonYear}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    if (settings.showYear && anime.seasonYear != null) {
+                        Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.outlineVariant) {
+                            Text(anime.seasonYear.toString(), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+                        }
                     }
                     if (anime.format != null) {
-                        Text(
-                            "· ${formatLabel(anime.format)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.outlineVariant) {
+                            Text(formatLabel(anime.format), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+                        }
+                    }
+                    if (settings.showSubDub && subDubInfo != null && (subDubInfo.hasSub || subDubInfo.hasDub)) {
+                        LibraryAudioPills(hasSub = subDubInfo.hasSub, hasDub = subDubInfo.hasDub)
                     }
                 }
             }
@@ -1116,6 +1152,7 @@ private fun LibraryCategoryPills(
     categories: List<CategoryStore.Category>,
     selectedId: Long,
     onSelect: (Long) -> Unit,
+    onAddClick: () -> Unit,
 ) {
     LazyRow(
         modifier = Modifier
@@ -1138,6 +1175,23 @@ private fun LibraryCategoryPills(
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+        // "New" pill for creating categories
+        item {
+            Surface(
+                modifier = Modifier.clickable { onAddClick() },
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "New category", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("New", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
             }
         }
     }
