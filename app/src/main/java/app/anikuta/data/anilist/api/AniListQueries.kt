@@ -165,4 +165,25 @@ object AniListQueries {
           }
         }
     """.trimIndent()
+
+    /** Search including adult results (isAdult: true). */
+    val searchAnimeWithAdult = """
+        query SearchAnimeWithAdult(${'$'}search: String!, ${'$'}page: Int = 1, ${'$'}perPage: Int = 25) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            media(type: ANIME, search: ${'$'}search, sort: SEARCH_MATCH, isAdult: true) {
+              id
+              title { romaji english native }
+              coverImage { extraLarge large medium color }
+              bannerImage
+              averageScore
+              episodes
+              genres
+              season
+              seasonYear
+              format
+              status
+            }
+          }
+        }
+    """.trimIndent()
 }

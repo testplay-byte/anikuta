@@ -1,21 +1,18 @@
 # Extension-to-AniList Linking Architecture
 
 > How the app handles anime from extension sources.
-> Last updated: Session 31 (Phase I).
+> Last updated: Session 31 (Phase I — revised).
 
 ---
 
 ## Overview
 
 When a user discovers anime through extension sources (search or browse),
-the app needs to decide how to show the detail page. There are two scenarios:
+the app links the extension entry to an AniList entry so the full detail
+page (episodes, player, downloads, tracking) can be used.
 
-1. **The anime exists on AniList** → show the full AniList detail page (with
-   episodes, player, downloads, tracking, etc.)
-2. **The anime does NOT exist on AniList** → show a source-only detail page
-   (episodes + playback from the extension, but no AniList data)
-
-The linking system handles both cases transparently.
+If the anime is NOT on AniList, the linking screen shows search results
+and a manual search field so the user can pick the right entry.
 
 ---
 
@@ -37,16 +34,26 @@ Navigate to  Show SourceLinkingScreen
 DetailScreen  (cover + "Processing...")
 (anilistId)         │
               Search AniList by title
+              (Step 1: without adult filter)
                     │
               ┌─────┴─────┐
               │           │
            Found       Not Found
               │           │
               ▼           ▼
-          Cache link   Navigate to
-          Navigate to  SourceDetailScreen
-          DetailScreen (extension-only:
-                        episodes + playback)
+          Cache link   Retry with adult filter ON
+          Navigate to       │
+          DetailScreen  ┌───┴───┐
+                        │       │
+                     Found   Not Found
+                        │       │
+                        ▼       ▼
+                   Cache link  Show NotFound screen:
+                   Navigate to  - "Did you mean?" results list
+                   DetailScreen   (if any results from either search)
+                                - Manual search field
+                                - User taps a result → link + navigate
+                                - User types different title → re-search
 ```
 
 ---
@@ -56,79 +63,55 @@ DetailScreen  (cover + "Processing...")
 | File | Role |
 |------|------|
 | `ExtensionLinkStore.kt` | SharedPreferences cache: `sourceId:animeUrl` → AniList ID |
-| `SourceLinkingScreen.kt` | Loading card + AniList search + auto-link |
-| `SourceDetailScreen.kt` | Fallback detail page (episodes + playback from extension) |
-| `AnikutaNavGraph.kt` | Routes: `source-link/{...}` and `source-detail-fallback/{...}` |
+| `SourceLinkingScreen.kt` | Loading card + AniList search (with/without adult) + results list + manual search |
+| `AnikutaNavGraph.kt` | Route: `source-link/{sourceId}/{animeUrl}/{title}/{thumbnailUrl}` + cache check |
 | `SearchScreen.kt` | Constructs the `source-link` route when extension results are tapped |
+| `AniListRepository.kt` | `searchAnime()` (no adult) + `searchAnimeWithAdult()` (isAdult: true) |
+| `AniListQueries.kt` | `searchAnime` + `searchAnimeWithAdult` GraphQL queries |
 
 ---
 
-## ExtensionLinkStore
+## SourceLinkingScreen States
 
-- **Key format:** `"$sourceId:$animeUrl"` → AniList ID (Int)
-- **Persistence:** SharedPreferences (survives app restart)
-- **Methods:**
-  - `getAniListId(sourceId, animeUrl): Int?` — check if linked
-  - `link(sourceId, animeUrl, anilistId)` — cache a link
-  - `unlink(sourceId, animeUrl)` — remove a link
-- **Reactive:** `changes` Flow for observing link updates
+| State | What happens |
+|-------|-------------|
+| `Searching` | Shows cover + "Processing... Just wait a moment" + "Searching AniList for [title]" |
+| `Linked` | Auto-match found → caches link → navigates to DetailScreen |
+| `NotFound(results)` | Auto-match failed. Shows: "Did you mean?" results list (if any) + manual search field. User can tap a result or type a different title. |
 
 ---
 
-## SourceLinkingScreen
+## Search Strategy
 
-Shown when the user taps an extension anime that is NOT yet linked.
+The linking screen searches AniList in this order:
+1. **Without adult filter** (`searchAnime`) — most anime are non-adult
+2. **With adult filter** (`searchAnimeWithAdult`) — if step 1 returned nothing
+3. **Show results + manual search** — if both searches returned nothing
 
-**UI:**
-1. Anime cover (from the extension search result)
-2. Anime name (from the extension search result)
-3. Source name ("From: [extension name]")
-4. "Processing... Just wait a moment" + spinner
-5. "Searching AniList for '[title]'"
-
-**Logic:**
-1. Searches AniList by the anime title (`repo.searchAnime(title)`)
-2. AniList's `SEARCH_MATCH` sort returns best matches first
-3. Picks the first result
-4. Caches the link via `ExtensionLinkStore.link()`
-5. Navigates to `detail/$anilistId` (the normal AniList DetailScreen)
-
-**On failure (AniList search returns no results):**
-1. Shows "Not found on AniList. Opening extension details..."
-2. Navigates to `source-detail-fallback/{sourceId}/{animeUrl}/{title}/{thumbnailUrl}`
+The manual search field also tries both filters (without → with adult).
 
 ---
 
-## SourceDetailScreen (Fallback)
+## What happens when the user selects a result
 
-Shown when AniList search fails — the anime exists in the extension but not on AniList.
-
-**UI:**
-1. Anime cover, title, genres, status, description (from `source.getAnimeDetails()`)
-2. Episode list (from `source.getEpisodeList()`)
-   - Alternating bg (surfaceContainerLow/High)
-   - Episode thumbnail (if available)
-   - Episode name + number
-   - Loading spinner while resolving videos
-3. Tapping an episode:
-   - Resolves videos via `source.getVideoList(episode)` or `source.getHosterList()` fallback
-   - Launches `PlayerActivity` with the first video URL
-
-**What it does NOT have (vs the AniList DetailScreen):**
-- No AniList score, season year, format
-- No library bookmark (can't save to library without AniList ID)
-- No AniList tracking
-- No downloads (requires AniList ID for storage path)
-- No watch progress persistence (WatchProgressStore is AniList-keyed)
+1. `linkStore.link(sourceId, animeUrl, anilistId)` — caches the link
+2. `_state.value = SourceLinkingState.Linked(anilistId)`
+3. `LaunchedEffect` detects the `Linked` state → calls `onLinked(anilistId)`
+4. NavGraph navigates to `detail/$anilistId`
+5. Future taps on the same extension anime → cache hit → goes directly to DetailScreen
 
 ---
 
-## Future Improvements
+## What happens when NO result is found at all
 
-- **Re-link option:** If the AniList match was wrong, the user should be able to
-  search again and pick a different match (currently the link is permanent)
-- **Manual search:** Let the user manually search AniList and pick the right entry
-  instead of auto-selecting the first result
-- **SourceDetailScreen enhancements:** Add watch progress (keyed by sourceId+url
-  instead of AniList ID), downloads, etc.
-- **Backup:** Decide how extension-linked anime are handled in the backup system
+The `NotFound` state shows:
+- "No matches found on AniList. Try searching manually below."
+- An `OutlinedTextField` for manual search
+- The user types a different title → `manualSearch(query)` → searches again (both filters)
+- If results are found → they appear in the "Did you mean?" list
+- The user taps one → links + navigates
+
+This handles:
+- Misidentified titles (the extension title doesn't match AniList's)
+- Adult anime (excluded by default, included with the adult filter)
+- Different transliterations (user can type the correct title)

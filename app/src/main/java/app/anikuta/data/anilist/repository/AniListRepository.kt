@@ -134,6 +134,10 @@ class AniListRepository(
     suspend fun searchAnime(query: String, page: Int = 1, perPage: Int = 25): List<AniListAnime> =
         graphqlRequest(AniListQueries.searchAnime, mapOf("search" to query, "page" to page, "perPage" to perPage)) { parseMediaList(it) }
 
+    /** Search including adult results (isAdult: true). */
+    suspend fun searchAnimeWithAdult(query: String, page: Int = 1, perPage: Int = 25): List<AniListAnime> =
+        graphqlRequest(AniListQueries.searchAnimeWithAdult, mapOf("search" to query, "page" to page, "perPage" to perPage)) { parseMediaList(it) }
+
     suspend fun getAnimeDetails(id: Int): AniListAnime = withContext(Dispatchers.IO) {
         val jsonBody = buildJsonObject {
             put("query", AniListQueries.animeDetails)
