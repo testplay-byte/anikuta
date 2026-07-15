@@ -133,6 +133,7 @@ fun HistoryScreen(
                 continueWatching = s.continueWatching,
                 groups = s.groups,
                 onResume = onResume,
+                onOpenDetail = onOpenDetail,
                 onClearAllClick = { showClearAllDialog = true },
                 onEntryLongPress = { entry -> entryToDelete = entry },
             )
@@ -146,6 +147,7 @@ private fun HistoryContent(
     continueWatching: List<HistoryEntry>,
     groups: List<HistoryGroup>,
     onResume: (Int, String, String) -> Unit,
+    onOpenDetail: (Int) -> Unit,
     onClearAllClick: () -> Unit,
     onEntryLongPress: (HistoryEntry) -> Unit,
 ) {
