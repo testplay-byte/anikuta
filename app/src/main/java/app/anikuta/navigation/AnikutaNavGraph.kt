@@ -188,6 +188,9 @@ fun AnikutaNavGraph() {
                     onAnimeClick = { anilistId ->
                         navController.navigate("detail/$anilistId")
                     },
+                    onSourceResultClick = { route ->
+                        navController.navigate(route)
+                    },
                 )
             }
             composable(Screen.More.route) {
@@ -214,6 +217,24 @@ fun AnikutaNavGraph() {
                 DetailScreen(
                     anilistId = anilistId,
                     autoPlayUrl = autoPlayUrl,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            // Phase D — Source-based detail (from extension search results)
+            composable(
+                route = "source-detail/{sourceId}/{animeUrl}",
+                arguments = listOf(
+                    navArgument("sourceId") { type = NavType.LongType },
+                    navArgument("animeUrl") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val sourceId = backStackEntry.arguments?.getLong("sourceId") ?: -1L
+                val animeUrl = backStackEntry.arguments?.getString("animeUrl")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+                app.anikuta.ui.detail.SourceDetailScreen(
+                    sourceId = sourceId,
+                    animeUrl = animeUrl,
                     onBack = { navController.popBackStack() },
                 )
             }

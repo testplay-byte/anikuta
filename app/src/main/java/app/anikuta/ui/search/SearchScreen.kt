@@ -57,6 +57,7 @@ import app.anikuta.ui.theme.AnikutaSprings
 @Composable
 fun SearchScreen(
     onAnimeClick: (Int) -> Unit,
+    onSourceResultClick: (String) -> Unit = {},
 ) {
     val viewModel: SearchViewModel = viewModel()
     val query by viewModel.query.collectAsState()
@@ -197,9 +198,13 @@ fun SearchScreen(
                         }
                         is SearchState.Success -> {
                             if (searchMode == SearchMode.SOURCES) {
-                                // Phase 5 part 4 — source results grid
+                                // Phase 5 part 4 — source results grid (Phase D: clickable)
                                 SourceResultsGrid(
                                     results = sourceResults,
+                                    onResultClick = { result ->
+                                        val encodedUrl = java.net.URLEncoder.encode(result.url, "UTF-8")
+                                        onSourceResultClick("source-detail/${result.sourceId}/$encodedUrl")
+                                    },
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             } else if (s.anime.isEmpty()) {
@@ -754,6 +759,7 @@ private fun FilterSheetContent(
 private fun SourceResultsGrid(
     results: List<app.anikuta.source.bridge.SourceSearchResult>,
     modifier: Modifier = Modifier,
+    onResultClick: (app.anikuta.source.bridge.SourceSearchResult) -> Unit = {},
 ) {
     if (results.isEmpty()) {
         Box(
@@ -780,13 +786,16 @@ private fun SourceResultsGrid(
             key = { "${it.sourceName}:${it.url}" },
             contentType = { "source_result_card" },
         ) { result ->
-            SourceResultCard(result)
+            SourceResultCard(result, onClick = { onResultClick(result) })
         }
     }
 }
 
 @Composable
-private fun SourceResultCard(result: app.anikuta.source.bridge.SourceSearchResult) {
+private fun SourceResultCard(
+    result: app.anikuta.source.bridge.SourceSearchResult,
+    onClick: () -> Unit = {},
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -794,6 +803,7 @@ private fun SourceResultCard(result: app.anikuta.source.bridge.SourceSearchResul
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        onClick = onClick,
     ) {
         Column {
             if (!result.thumbnailUrl.isNullOrBlank()) {
