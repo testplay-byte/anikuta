@@ -153,7 +153,7 @@ class LibraryViewModel : ViewModel() {
     fun setShowYear(show: Boolean) = displayPrefs?.setShowYear(show) ?: Unit
     fun setShowEpisodes(show: Boolean) = displayPrefs?.setShowEpisodes(show) ?: Unit
     fun setShowSubDub(show: Boolean) = displayPrefs?.setShowSubDub(show) ?: Unit
-    fun setShowUnwatchedBadge(show: Boolean) = displayPrefs?.setShowUnwatched(show) ?: Unit
+    fun setShowUnwatchedBadge(show: Boolean) = displayPrefs?.setShowUnwatchedBadge(show) ?: Unit
     fun setCardBorder(border: LibraryDisplayPrefs.CardBorder) = displayPrefs?.setCardBorder(border) ?: Unit
 
     /** Select a category tab. Re-filters the anime list. */

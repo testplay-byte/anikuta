@@ -2,7 +2,7 @@ package app.anikuta.ui.library
 
 import app.anikuta.core.preference.PreferenceStore
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
 /**
@@ -49,56 +49,41 @@ class LibraryDisplayPrefs(
     private val showUnwatchedPref = preferenceStore.getBoolean("lib_show_unwatched", true)
     private val cardBorderPref = preferenceStore.getString("lib_card_border", "THIN")
 
-    /** Reactive stream of all display settings. */
-    val changes: Flow<Settings> = combine(
-        displayModePref.changes(),
-        gridColumnsPref.changes(),
-        titlePositionPref.changes(),
-        titleMaxLinesPref.changes(),
-        showRatingPref.changes(),
-        showYearPref.changes(),
-        showEpisodesPref.changes(),
-        showSubDubPref.changes(),
-        showUnwatchedPref.changes(),
-        cardBorderPref.changes(),
-    ) { values ->
-        Settings(
-            displayMode = DisplayMode.valueOf(values[0] ?: "GRID"),
-            gridColumns = values[1] as Int,
-            titlePosition = TitlePosition.valueOf(values[2] ?: "BELOW"),
-            titleMaxLines = values[3] as Int,
-            showRating = values[4] as Boolean,
-            showYear = values[5] as Boolean,
-            showEpisodes = values[6] as Boolean,
-            showSubDub = values[7] as Boolean,
-            showUnwatchedBadge = values[8] as Boolean,
-            cardBorder = CardBorder.valueOf(values[9] ?: "THIN"),
-        )
-    }
+    /**
+     * Reactive stream of all display settings.
+     *
+     * Uses a MutableStateFlow that we update on each setter call (simpler than
+     * combine() for 10+ flows of different types — Kotlin's combine only
+     * supports up to 5 typed flows; vararg requires same type).
+     */
+    private val _settings = MutableStateFlow(getSettings())
+    val changes: Flow<Settings> = _settings
+
+    private fun refresh() { _settings.value = getSettings() }
 
     fun getSettings(): Settings = Settings(
-        displayMode = DisplayMode.valueOf(displayModePref.get()),
+        displayMode = runCatching { DisplayMode.valueOf(displayModePref.get()) }.getOrDefault(DisplayMode.GRID),
         gridColumns = gridColumnsPref.get(),
-        titlePosition = TitlePosition.valueOf(titlePositionPref.get()),
+        titlePosition = runCatching { TitlePosition.valueOf(titlePositionPref.get()) }.getOrDefault(TitlePosition.BELOW),
         titleMaxLines = titleMaxLinesPref.get(),
         showRating = showRatingPref.get(),
         showYear = showYearPref.get(),
         showEpisodes = showEpisodesPref.get(),
         showSubDub = showSubDubPref.get(),
         showUnwatchedBadge = showUnwatchedPref.get(),
-        cardBorder = CardBorder.valueOf(cardBorderPref.get()),
+        cardBorder = runCatching { CardBorder.valueOf(cardBorderPref.get()) }.getOrDefault(CardBorder.THIN),
     )
 
-    fun setDisplayMode(mode: DisplayMode) = displayModePref.set(mode.name)
-    fun setGridColumns(columns: Int) = gridColumnsPref.set(columns.coerceIn(2, 5))
-    fun setTitlePosition(pos: TitlePosition) = titlePositionPref.set(pos.name)
-    fun setTitleMaxLines(lines: Int) = titleMaxLinesPref.set(lines.coerceIn(1, 3))
-    fun setShowRating(show: Boolean) = showRatingPref.set(show)
-    fun setShowYear(show: Boolean) = showYearPref.set(show)
-    fun setShowEpisodes(show: Boolean) = showEpisodesPref.set(show)
-    fun setShowSubDub(show: Boolean) = showSubDubPref.set(show)
-    fun setShowUnwatchedBadge(show: Boolean) = showUnwatchedPref.set(show)
-    fun setCardBorder(border: CardBorder) = cardBorderPref.set(border.name)
+    fun setDisplayMode(mode: DisplayMode) { displayModePref.set(mode.name); refresh() }
+    fun setGridColumns(columns: Int) { gridColumnsPref.set(columns.coerceIn(2, 5)); refresh() }
+    fun setTitlePosition(pos: TitlePosition) { titlePositionPref.set(pos.name); refresh() }
+    fun setTitleMaxLines(lines: Int) { titleMaxLinesPref.set(lines.coerceIn(1, 3)); refresh() }
+    fun setShowRating(show: Boolean) { showRatingPref.set(show); refresh() }
+    fun setShowYear(show: Boolean) { showYearPref.set(show); refresh() }
+    fun setShowEpisodes(show: Boolean) { showEpisodesPref.set(show); refresh() }
+    fun setShowSubDub(show: Boolean) { showSubDubPref.set(show); refresh() }
+    fun setShowUnwatchedBadge(show: Boolean) { showUnwatchedPref.set(show); refresh() }
+    fun setCardBorder(border: CardBorder) { cardBorderPref.set(border.name); refresh() }
 
     data class Settings(
         val displayMode: DisplayMode,
