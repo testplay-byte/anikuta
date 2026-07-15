@@ -838,6 +838,7 @@ class PlayerActivity : ComponentActivity() {
                 coverUrl = coverUrl.ifBlank { null },
                 animeTitle = animeTitle.ifBlank { null },
                 episodeNumber = vmEpisodeNumber ?: -1f,
+                thumbnailUrl = vm.episodeList.value.getOrNull(vm.currentEpisodeIndex.value)?.preview_url,
             )
             Log.d(TAG, "Saved progress: ${pos}s / ${dur}s")
 

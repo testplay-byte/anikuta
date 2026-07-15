@@ -319,7 +319,6 @@ private fun ContinueWatchingCard(
     entry: HistoryEntry,
     onResume: (Int, String, String) -> Unit,
 ) {
-    // Derive a stable hue from the anilistId — fallback placeholder color.
     val placeholderColor = remember(entry.anilistId) {
         val hue = (entry.anilistId * 47) % 360
         val argb = android.graphics.Color.HSVToColor(floatArrayOf(hue.toFloat(), 0.55f, 0.55f))
@@ -329,11 +328,13 @@ private fun ContinueWatchingCard(
         val remaining = (entry.durationSeconds - entry.positionSeconds).coerceAtLeast(0)
         ((remaining + 59) / 60).coerceAtLeast(1)
     }
+    // Phase F: prioritize episode thumbnail, fall back to anime cover
+    val imageUrl = entry.thumbnailUrl ?: entry.coverUrl
 
     Card(
         modifier = Modifier
-            .width(160.dp)
-            .height(220.dp)
+            .width(200.dp)
+            .aspectRatio(16f / 9f)  // proper 16:9 ratio (was 160×220dp portrait)
             .clickable { onResume(entry.anilistId, entry.episodeUrl, entry.title) },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -342,10 +343,10 @@ private fun ContinueWatchingCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Real cover image (if available) or hue-derived placeholder.
-            if (!entry.coverUrl.isNullOrBlank()) {
+            // Episode thumbnail → anime cover → hue placeholder
+            if (!imageUrl.isNullOrBlank()) {
                 AsyncImage(
-                    model = entry.coverUrl,
+                    model = imageUrl,
                     contentDescription = entry.animeTitle ?: entry.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,

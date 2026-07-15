@@ -171,12 +171,40 @@ fun AnikutaNavGraph() {
             }
             composable(Screen.History.route) {
                 HistoryScreen(
-                    onResume = { anilistId, episodeUrl, _ ->
-                        // Navigate to detail with autoPlayUrl — the detail page
-                        // will resolve the video and launch the player at the
-                        // saved position.
-                        val encoded = java.net.URLEncoder.encode(episodeUrl, "UTF-8")
-                        navController.navigate("detail/$anilistId?autoPlayUrl=$encoded")
+                    onResume = { anilistId, episodeUrl, title ->
+                        // Phase F — direct resume: check PlaybackStateStore for a saved
+                        // video URL. If found, launch the player directly (skips the
+                        // "Resolving video" step on the detail page). If not found,
+                        // fall back to the detail page with autoPlayUrl.
+                        val context = navController.context
+                        try {
+                            val pbStore = uy.kohesive.injekt.Injekt.get<app.anikuta.player.PlaybackStateStore>()
+                            val saved = pbStore.get(anilistId, episodeUrl)
+                            if (saved != null && saved.videoUrl.isNotBlank()) {
+                                // Direct launch with the saved video URL + server + audio + quality
+                                val intent = app.anikuta.player.PlayerActivity.newIntent(
+                                    context = context,
+                                    videoUrl = saved.videoUrl,
+                                    title = title,
+                                    anilistId = anilistId,
+                                    episodeUrl = episodeUrl,
+                                    videoHeaders = saved.videoHeaders,
+                                    sourceId = saved.sourceId,
+                                    videoServer = saved.videoServer,
+                                    videoAudio = saved.videoAudio,
+                                    videoQuality = saved.videoQuality,
+                                )
+                                context.startActivity(intent)
+                            } else {
+                                // No saved state — fall back to detail with autoPlayUrl
+                                val encoded = java.net.URLEncoder.encode(episodeUrl, "UTF-8")
+                                navController.navigate("detail/$anilistId?autoPlayUrl=$encoded")
+                            }
+                        } catch (e: Exception) {
+                            // PlaybackStateStore not available — fall back to detail
+                            val encoded = java.net.URLEncoder.encode(episodeUrl, "UTF-8")
+                            navController.navigate("detail/$anilistId?autoPlayUrl=$encoded")
+                        }
                     },
                     onOpenDetail = { anilistId ->
                         navController.navigate("detail/$anilistId")
