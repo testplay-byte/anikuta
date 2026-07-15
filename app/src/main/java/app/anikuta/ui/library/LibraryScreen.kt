@@ -59,6 +59,7 @@ fun LibraryScreen(
     val displayMode by viewModel.displayMode.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val selectedCategoryId by viewModel.selectedCategoryId.collectAsState()
+    val unwatchedCounts by viewModel.unwatchedCounts.collectAsState()
     var showCreateCategoryDialog by remember { mutableStateOf(false) }
 
     // Create-category dialog
@@ -164,7 +165,11 @@ fun LibraryScreen(
                         key = { it.id },
                         contentType = { "anime_card" },
                     ) { anime ->
-                        LibraryCard(anime = anime, onClick = { onAnimeClick(anime.id) })
+                        LibraryCard(
+                            anime = anime,
+                            unwatchedCount = unwatchedCounts[anime.id] ?: 0,
+                            onClick = { onAnimeClick(anime.id) },
+                        )
                     }
                 }
             }
@@ -285,9 +290,12 @@ private fun LibraryTopBar(
  * M3 Expressive library card — spring-based press feedback + corner morph,
  * matching HomeScreen's ExpressiveAnimeCard. On press: scale 1 → 0.96,
  * corner radius 16dp → 20dp.
+ *
+ * Phase 4 part 3: shows an unwatched-episode count badge in the top-start
+ * corner of the cover when [unwatchedCount] > 0.
  */
 @Composable
-private fun LibraryCard(anime: AniListAnime, onClick: () -> Unit) {
+private fun LibraryCard(anime: AniListAnime, unwatchedCount: Int, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -319,15 +327,35 @@ private fun LibraryCard(anime: AniListAnime, onClick: () -> Unit) {
         onClick = onClick,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = anime.coverImage.best(),
-                contentDescription = anime.title.preferred(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(190.dp)
-                    .clip(RoundedCornerShape(topStart = cornerRadius.dp, topEnd = cornerRadius.dp)),
-                contentScale = ContentScale.Crop,
-            )
+            Box {
+                AsyncImage(
+                    model = anime.coverImage.best(),
+                    contentDescription = anime.title.preferred(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(190.dp)
+                        .clip(RoundedCornerShape(topStart = cornerRadius.dp, topEnd = cornerRadius.dp)),
+                    contentScale = ContentScale.Crop,
+                )
+                // Unwatched count badge (top-start corner)
+                if (unwatchedCount > 0) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                    ) {
+                        Text(
+                            text = unwatchedCount.toString(),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                }
+            }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

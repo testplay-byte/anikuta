@@ -67,6 +67,14 @@ class LibraryViewModel : ViewModel() {
     private val _categories = MutableStateFlow<List<CategoryStore.Category>>(emptyList())
     val categories: StateFlow<List<CategoryStore.Category>> = _categories.asStateFlow()
 
+    /**
+     * Unwatched episode counts per anime (Phase 4 part 3).
+     * Key = AniList ID, value = number of episodes with progress below 85%.
+     * Updated reactively from WatchProgressStore.changes.
+     */
+    private val _unwatchedCounts = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    val unwatchedCounts: StateFlow<Map<Int, Int>> = _unwatchedCounts.asStateFlow()
+
     /** Currently selected category tab (id). Default = 0 (the "Default" category). */
     private val _selectedCategoryId = MutableStateFlow(0L)
     val selectedCategoryId: StateFlow<Long> = _selectedCategoryId.asStateFlow()
@@ -153,6 +161,28 @@ class LibraryViewModel : ViewModel() {
                 _categories.value = state.categories
                 categoryAssignments = state.assignments
                 applyFilterAndSort()
+            }
+        }
+        // Phase 4 part 3 — collect watch progress to compute unwatched counts.
+        // An episode is "unwatched" if its progress fraction < 0.85 (the
+        // watched threshold). Count per anime, expose as Map<anilistId, count>.
+        viewModelScope.launch {
+            val progressStore = watchProgressStore ?: return@launch
+            progressStore.changes.collect { all ->
+                val counts = HashMap<Int, Int>()
+                for ((key, progress) in all) {
+                    val anilistId = key.substringBefore(':').toIntOrNull() ?: continue
+                    val fraction = if (progress.durationSeconds > 0) {
+                        (progress.positionSeconds.toFloat() / progress.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                    // Below 85% = unwatched (in progress). Count it.
+                    if (fraction < 0.85f) {
+                        counts[anilistId] = (counts[anilistId] ?: 0) + 1
+                    }
+                }
+                _unwatchedCounts.value = counts
             }
         }
     }
