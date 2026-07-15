@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Search
@@ -77,6 +78,7 @@ fun SearchScreen(
             query = query,
             onQueryChange = viewModel::setQuery,
             onClear = { viewModel.setQuery("") },
+            onSubmit = viewModel::onSubmit,
             focusRequester = focusRequester,
             modifier = Modifier
                 .fillMaxWidth()
@@ -122,7 +124,7 @@ fun SearchScreen(
                             }
                         }
                         is SearchState.Empty -> EmptyState(query)
-                        is SearchState.Error -> ErrorState(s.message)
+                        is SearchState.Error -> ErrorState(s.message, onRetry = viewModel::retry)
                     }
                 }
             }
@@ -141,6 +143,7 @@ private fun SearchBarField(
     query: String,
     onQueryChange: (String) -> Unit,
     onClear: () -> Unit,
+    onSubmit: () -> Unit,
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
@@ -177,6 +180,12 @@ private fun SearchBarField(
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
         textStyle = MaterialTheme.typography.bodyLarge,
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+            imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+        ),
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+            onSearch = { onSubmit() },
+        ),
     )
 }
 
@@ -459,7 +468,7 @@ private fun EmptyState(query: String) {
 }
 
 @Composable
-private fun ErrorState(message: String) {
+private fun ErrorState(message: String, onRetry: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -473,5 +482,15 @@ private fun ErrorState(message: String) {
             color = MaterialTheme.colorScheme.error,
             textAlign = TextAlign.Center,
         )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onRetry) {
+            Icon(
+                Icons.Default.Refresh,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Retry")
+        }
     }
 }

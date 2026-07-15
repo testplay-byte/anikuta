@@ -121,26 +121,10 @@ class SearchViewModel : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
-        // Wire debounce → search. distinctUntilChanged prevents redundant
-        // searches when the user pastes the same text or hits a key that
-        // doesn't change the value (e.g. cursor move).
-        observeQuery()
-    }
-
-    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-    private fun observeQuery() {
-        viewModelScope.launch {
-            _query
-                .debounce(DEBOUNCE_MS)
-                .distinctUntilChanged()
-                .collectLatest { q ->
-                    if (q.isBlank()) {
-                        _state.value = SearchState.Idle
-                    } else {
-                        doSearch(q)
-                    }
-                }
-        }
+        // Phase 5 revamp: auto-search debounce REMOVED.
+        // Search now fires only on explicit submit (keyboard Enter / search button).
+        // The user requested: "remove that and wire the Enter button of the keyboard
+        // with the actual search."
     }
 
     private suspend fun doSearch(q: String) {
@@ -192,16 +176,27 @@ class SearchViewModel : ViewModel() {
     /** Tapped a recent-search chip — fills the bar and immediately triggers search. */
     fun selectRecent(term: String) {
         _query.value = term
+        viewModelScope.launch { doSearch(term) }
     }
 
     /**
      * Called when the user presses the keyboard's search/submit button.
-     * Saves the query to recent searches immediately (even before results
-     * come back) so the user sees it in recent searches right away.
+     * Triggers the actual search (Phase 5 revamp: was previously a no-op that
+     * only saved to recents — now it fires the search).
      */
     fun onSubmit() {
         val term = _query.value.trim()
-        if (term.isNotBlank()) saveRecent(term)
+        if (term.isNotBlank()) {
+            viewModelScope.launch { doSearch(term) }
+        }
+    }
+
+    /** Retry the last search (used by the error-state retry button). Phase 5. */
+    fun retry() {
+        val term = _query.value.trim()
+        if (term.isNotBlank()) {
+            viewModelScope.launch { doSearch(term) }
+        }
     }
 
     /** Wipe all recent searches. */
