@@ -67,11 +67,11 @@ fun SearchScreen(
     val state by viewModel.state.collectAsState()
     val recent by viewModel.recentSearches.collectAsState()
     val availableGenres by viewModel.availableGenres.collectAsState()
-    val selectedGenre by viewModel.selectedGenre.collectAsState()
+    val selectedGenres by viewModel.selectedGenres.collectAsState()
     val selectedYear by viewModel.selectedYear.collectAsState()
-    val selectedFormat by viewModel.selectedFormat.collectAsState()
-    val selectedSeason by viewModel.selectedSeason.collectAsState()
-    val selectedStatus by viewModel.selectedStatus.collectAsState()
+    val selectedFormats by viewModel.selectedFormats.collectAsState()
+    val selectedSeasons by viewModel.selectedSeasons.collectAsState()
+    val selectedStatuses by viewModel.selectedStatuses.collectAsState()
     val selectedSort by viewModel.selectedSort.collectAsState()
     val showAdult by viewModel.showAdult.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
@@ -84,7 +84,8 @@ fun SearchScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
 
     // Active filter count (for the badge on the filter button)
-    val activeFilterCount = listOf(selectedGenre, selectedYear, selectedFormat, selectedSeason, selectedStatus, selectedSort).count { it != null }
+    val activeFilterCount = selectedGenres.size + selectedFormats.size + selectedSeasons.size + selectedStatuses.size +
+        (if (selectedYear != null) 1 else 0) + (if (selectedSort != null) 1 else 0)
 
     // Phase I — Tabbed filter bottom sheet (redesigned)
     if (showFilterSheet) {
@@ -100,18 +101,18 @@ fun SearchScreen(
                 availableSeasons = viewModel.availableSeasons,
                 availableStatuses = viewModel.availableStatuses,
                 availableSorts = viewModel.availableSorts,
-                selectedGenre = selectedGenre,
+                selectedGenres = selectedGenres,
                 selectedYear = selectedYear,
-                selectedFormat = selectedFormat,
-                selectedSeason = selectedSeason,
-                selectedStatus = selectedStatus,
+                selectedFormats = selectedFormats,
+                selectedSeasons = selectedSeasons,
+                selectedStatuses = selectedStatuses,
                 selectedSort = selectedSort,
                 showAdult = showAdult,
-                onGenreSelected = { viewModel.setGenreFilter(it) },
+                onGenreToggle = { viewModel.toggleGenre(it) },
                 onYearSelected = { viewModel.setYearFilter(it) },
-                onFormatSelected = { viewModel.setFormatFilter(it) },
-                onSeasonSelected = { viewModel.setSeasonFilter(it) },
-                onStatusSelected = { viewModel.setStatusFilter(it) },
+                onFormatToggle = { viewModel.toggleFormat(it) },
+                onSeasonToggle = { viewModel.toggleSeason(it) },
+                onStatusToggle = { viewModel.toggleStatus(it) },
                 onSortSelected = { viewModel.setSortFilter(it) },
                 onShowAdultChanged = { viewModel.setShowAdult(it) },
                 onClearAll = { viewModel.clearFilters() },
@@ -999,7 +1000,7 @@ private fun SourceResultCard(
                     text = result.title,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
@@ -1157,7 +1158,7 @@ private fun SourceBrowseCard(
                     text = result.title,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
@@ -1189,18 +1190,18 @@ private fun FilterSheetTabbed(
     availableSeasons: List<String>,
     availableStatuses: List<String>,
     availableSorts: List<String>,
-    selectedGenre: String?,
+    selectedGenres: Set<String>,
     selectedYear: Int?,
-    selectedFormat: String?,
-    selectedSeason: String?,
-    selectedStatus: String?,
+    selectedFormats: Set<String>,
+    selectedSeasons: Set<String>,
+    selectedStatuses: Set<String>,
     selectedSort: String?,
     showAdult: Boolean,
-    onGenreSelected: (String?) -> Unit,
+    onGenreToggle: (String) -> Unit,
     onYearSelected: (Int?) -> Unit,
-    onFormatSelected: (String?) -> Unit,
-    onSeasonSelected: (String?) -> Unit,
-    onStatusSelected: (String?) -> Unit,
+    onFormatToggle: (String) -> Unit,
+    onSeasonToggle: (String) -> Unit,
+    onStatusToggle: (String) -> Unit,
     onSortSelected: (String?) -> Unit,
     onShowAdultChanged: (Boolean) -> Unit,
     onClearAll: () -> Unit,
@@ -1219,7 +1220,7 @@ private fun FilterSheetTabbed(
             .heightIn(max = 450.dp)
             .navigationBarsPadding(),
     ) {
-        // Top row: title + Apply button
+        // Top row: title + Clear/Apply buttons in a shared container
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1232,10 +1233,23 @@ private fun FilterSheetTabbed(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onClearAll) { Text("Clear") }
-                Spacer(modifier = Modifier.width(4.dp))
-                Button(onClick = onApply) { Text("Apply") }
+            // Clear + Apply in a shared surfaceContainer container
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = onClearAll) { Text("Clear", style = MaterialTheme.typography.labelMedium) }
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Button(
+                        onClick = onApply,
+                        shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    ) { Text("Apply", style = MaterialTheme.typography.labelMedium) }
+                }
             }
         }
 
@@ -1271,19 +1285,15 @@ private fun FilterSheetTabbed(
                     } else {
                         FlowRowFilterChips(
                             items = availableGenres,
-                            selected = listOfNotNull(selectedGenre),
-                            onToggle = { item ->
-                                onGenreSelected(if (selectedGenre == item) null else item)
-                            },
+                            selected = selectedGenres.toList(),
+                            onToggle = onGenreToggle,
                         )
                     }
                 }
                 "Format" -> FlowRowFilterChips(
                     items = availableFormats,
-                    selected = listOfNotNull(selectedFormat),
-                    onToggle = { item ->
-                        onFormatSelected(if (selectedFormat == item) null else item)
-                    },
+                    selected = selectedFormats.toList(),
+                    onToggle = onFormatToggle,
                 )
                 "Year" -> FlowRowFilterChips(
                     items = availableYears.map { it.toString() },
@@ -1294,17 +1304,13 @@ private fun FilterSheetTabbed(
                 )
                 "Season" -> FlowRowFilterChips(
                     items = availableSeasons,
-                    selected = listOfNotNull(selectedSeason),
-                    onToggle = { item ->
-                        onSeasonSelected(if (selectedSeason == item) null else item)
-                    },
+                    selected = selectedSeasons.toList(),
+                    onToggle = onSeasonToggle,
                 )
                 "Status" -> FlowRowFilterChips(
                     items = availableStatuses,
-                    selected = listOfNotNull(selectedStatus),
-                    onToggle = { item ->
-                        onStatusSelected(if (selectedStatus == item) null else item)
-                    },
+                    selected = selectedStatuses.toList(),
+                    onToggle = onStatusToggle,
                 )
                 "Sort" -> FlowRowFilterChips(
                     items = availableSorts,
@@ -1315,7 +1321,7 @@ private fun FilterSheetTabbed(
                 )
             }
 
-            // Adult toggle (AniList only)
+            // Adult toggle (AniList only, Sort tab)
             if (searchMode == SearchMode.ANILIST && currentTab == "Sort") {
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(

@@ -249,27 +249,27 @@ class SearchViewModel : ViewModel() {
         }
     }
 
-    /** Selected genre filter (null = no filter). */
-    private val _selectedGenre = MutableStateFlow<String?>(null)
-    val selectedGenre: StateFlow<String?> = _selectedGenre.asStateFlow()
+    /** Selected genres (multi-select). Empty = no filter. */
+    private val _selectedGenres = MutableStateFlow<Set<String>>(emptySet())
+    val selectedGenres: StateFlow<Set<String>> = _selectedGenres.asStateFlow()
 
     /** Selected year filter (null = no filter). */
     private val _selectedYear = MutableStateFlow<Int?>(null)
     val selectedYear: StateFlow<Int?> = _selectedYear.asStateFlow()
 
-    /** Selected format filter (null = no filter). TV / MOVIE / OVA / ONA / SPECIAL / MUSIC. */
-    private val _selectedFormat = MutableStateFlow<String?>(null)
-    val selectedFormat: StateFlow<String?> = _selectedFormat.asStateFlow()
+    /** Selected formats (multi-select). Empty = no filter. */
+    private val _selectedFormats = MutableStateFlow<Set<String>>(emptySet())
+    val selectedFormats: StateFlow<Set<String>> = _selectedFormats.asStateFlow()
 
-    /** Selected season filter (Phase I). WINTER / SPRING / SUMMER / FALL. */
-    private val _selectedSeason = MutableStateFlow<String?>(null)
-    val selectedSeason: StateFlow<String?> = _selectedSeason.asStateFlow()
+    /** Selected seasons (multi-select). Empty = no filter. */
+    private val _selectedSeasons = MutableStateFlow<Set<String>>(emptySet())
+    val selectedSeasons: StateFlow<Set<String>> = _selectedSeasons.asStateFlow()
 
-    /** Selected status filter (Phase I). RELEASING / FINISHED / NOT_YET_RELEASED / CANCELLED. */
-    private val _selectedStatus = MutableStateFlow<String?>(null)
-    val selectedStatus: StateFlow<String?> = _selectedStatus.asStateFlow()
+    /** Selected statuses (multi-select). Empty = no filter. */
+    private val _selectedStatuses = MutableStateFlow<Set<String>>(emptySet())
+    val selectedStatuses: StateFlow<Set<String>> = _selectedStatuses.asStateFlow()
 
-    /** Selected sort method (Phase I). POPULARITY / SCORE / NEWEST / TRENDING. */
+    /** Selected sort method (single-select). null = no sort. */
     private val _selectedSort = MutableStateFlow<String?>(null)
     val selectedSort: StateFlow<String?> = _selectedSort.asStateFlow()
 
@@ -299,19 +299,39 @@ class SearchViewModel : ViewModel() {
             return (current downTo current - 20).toList()
         }
 
-    fun setGenreFilter(genre: String?) { _selectedGenre.value = genre; applyFilters() }
+    fun toggleGenre(genre: String) {
+        val current = _selectedGenres.value.toMutableSet()
+        if (current.contains(genre)) current.remove(genre) else current.add(genre)
+        _selectedGenres.value = current
+        applyFilters()
+    }
+    fun toggleFormat(format: String) {
+        val current = _selectedFormats.value.toMutableSet()
+        if (current.contains(format)) current.remove(format) else current.add(format)
+        _selectedFormats.value = current
+        applyFilters()
+    }
+    fun toggleSeason(season: String) {
+        val current = _selectedSeasons.value.toMutableSet()
+        if (current.contains(season)) current.remove(season) else current.add(season)
+        _selectedSeasons.value = current
+        applyFilters()
+    }
+    fun toggleStatus(status: String) {
+        val current = _selectedStatuses.value.toMutableSet()
+        if (current.contains(status)) current.remove(status) else current.add(status)
+        _selectedStatuses.value = current
+        applyFilters()
+    }
     fun setYearFilter(year: Int?) { _selectedYear.value = year; applyFilters() }
-    fun setFormatFilter(format: String?) { _selectedFormat.value = format; applyFilters() }
-    fun setSeasonFilter(season: String?) { _selectedSeason.value = season; applyFilters() }
-    fun setStatusFilter(status: String?) { _selectedStatus.value = status; applyFilters() }
     fun setSortFilter(sort: String?) { _selectedSort.value = sort; applyFilters() }
     fun setShowAdult(show: Boolean) { _showAdult.value = show; applyFilters() }
     fun clearFilters() {
-        _selectedGenre.value = null
+        _selectedGenres.value = emptySet()
         _selectedYear.value = null
-        _selectedFormat.value = null
-        _selectedSeason.value = null
-        _selectedStatus.value = null
+        _selectedFormats.value = emptySet()
+        _selectedSeasons.value = emptySet()
+        _selectedStatuses.value = emptySet()
         _selectedSort.value = null
         _showAdult.value = false
         applyFilters()
@@ -319,17 +339,17 @@ class SearchViewModel : ViewModel() {
 
     /** Apply the current filters to [allResults] and update the state. */
     private fun applyFilters() {
-        val genre = _selectedGenre.value
+        val genres = _selectedGenres.value
         val year = _selectedYear.value
-        val format = _selectedFormat.value
-        val season = _selectedSeason.value
-        val status = _selectedStatus.value
+        val formats = _selectedFormats.value
+        val seasons = _selectedSeasons.value
+        val statuses = _selectedStatuses.value
         val filtered = allResults.filter { anime ->
-            (genre == null || anime.genres?.contains(genre) == true) &&
+            (genres.isEmpty() || anime.genres?.any { it in genres } == true) &&
             (year == null || anime.seasonYear == year) &&
-            (format == null || anime.format == format) &&
-            (season == null || anime.season == season) &&
-            (status == null || anime.status == status)
+            (formats.isEmpty() || anime.format in formats) &&
+            (seasons.isEmpty() || anime.season in seasons) &&
+            (statuses.isEmpty() || anime.status in statuses)
         }
         _state.value = if (filtered.isEmpty() && allResults.isNotEmpty()) {
             SearchState.Empty
@@ -427,9 +447,9 @@ class SearchViewModel : ViewModel() {
      */
     fun onSubmit() {
         val term = _query.value.trim()
-        val hasActiveFilters = _selectedGenre.value != null || _selectedYear.value != null ||
-            _selectedFormat.value != null || _selectedSeason.value != null ||
-            _selectedStatus.value != null || _selectedSort.value != null
+        val hasActiveFilters = _selectedGenres.value.isNotEmpty() || _selectedYear.value != null ||
+            _selectedFormats.value.isNotEmpty() || _selectedSeasons.value.isNotEmpty() ||
+            _selectedStatuses.value.isNotEmpty() || _selectedSort.value != null
         // If in RECENT mode, auto-switch to AniList for the search
         if (_searchMode.value == SearchMode.RECENT) {
             _searchMode.value = SearchMode.ANILIST
