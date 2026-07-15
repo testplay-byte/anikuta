@@ -133,22 +133,39 @@ fun SearchScreen(
             .fillMaxSize()
             .statusBarsPadding(),
     ) {
-        // --- Source toggle (Phase I) — CENTERED above the search bar ---
+        // --- Source toggle — AniList (left), Recent (center, icon), Extensions (right) ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SearchMode.entries.forEachIndexed { index, mode ->
-                if (index > 0) Spacer(modifier = Modifier.width(8.dp))
-                FilterChip(
-                    selected = searchMode == mode,
-                    onClick = { viewModel.setSearchMode(mode) },
-                    label = { Text(mode.label) },
+            // AniList (left)
+            FilterChip(
+                selected = searchMode == SearchMode.ANILIST,
+                onClick = { viewModel.setSearchMode(SearchMode.ANILIST) },
+                label = { Text("AniList") },
+            )
+            // Recent (center — icon only, no text)
+            Surface(
+                modifier = Modifier.clickable { viewModel.setSearchMode(SearchMode.RECENT) },
+                shape = RoundedCornerShape(16.dp),
+                color = if (searchMode == SearchMode.RECENT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                Icon(
+                    Icons.Filled.History,
+                    contentDescription = "Recent searches",
+                    modifier = Modifier.padding(10.dp).size(20.dp),
+                    tint = if (searchMode == SearchMode.RECENT) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            // Extensions (right)
+            FilterChip(
+                selected = searchMode == SearchMode.SOURCES,
+                onClick = { viewModel.setSearchMode(SearchMode.SOURCES) },
+                label = { Text("Extensions") },
+            )
         }
 
         // --- Search bar + filter button ---
