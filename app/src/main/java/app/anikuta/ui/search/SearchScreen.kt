@@ -1090,8 +1090,10 @@ private fun SourceResultRow(
             .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        androidx.compose.foundation.lazy.items(results) { result ->
-            SourceBrowseCard(result, onClick = { onResultClick(result) })
+        results.forEach { result ->
+            item(key = "${result.sourceName}:${result.url}") {
+                SourceBrowseCard(result, onClick = { onResultClick(result) })
+            }
         }
     }
 }
