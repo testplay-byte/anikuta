@@ -43,6 +43,13 @@ class LibraryViewModel : ViewModel() {
         Log.e(TAG, "❌ Failed to get WatchProgressStore from DI", e); null
     }
 
+    // Phase 4 — categories
+    private val categoryStore: CategoryStore? = try {
+        Injekt.get<CategoryStore>()
+    } catch (e: Exception) {
+        Log.e(TAG, "❌ Failed to get CategoryStore from DI", e); null
+    }
+
     private val _state = MutableStateFlow<LibraryState>(LibraryState.Loading)
     val state: StateFlow<LibraryState> = _state.asStateFlow()
 
@@ -56,6 +63,20 @@ class LibraryViewModel : ViewModel() {
     private val _displayMode = MutableStateFlow(DisplayMode.GRID_2)
     val displayMode: StateFlow<DisplayMode> = _displayMode.asStateFlow()
 
+    /** Categories (Default + user-created). Phase 4. */
+    private val _categories = MutableStateFlow<List<CategoryStore.Category>>(emptyList())
+    val categories: StateFlow<List<CategoryStore.Category>> = _categories.asStateFlow()
+
+    /** Currently selected category tab (id). Default = 0 (the "Default" category). */
+    private val _selectedCategoryId = MutableStateFlow(0L)
+    val selectedCategoryId: StateFlow<Long> = _selectedCategoryId.asStateFlow()
+
+    /** Anime→category assignments (AniList ID → set of category IDs). */
+    private var categoryAssignments: Map<String, Set<Long>> = emptyMap()
+
+    /** The full unfiltered anime list (before category filtering). */
+    private var allAnime: List<AniListAnime> = emptyList()
+
     /** Toggle the display mode (GRID_2 → GRID_3 → LIST → GRID_2). */
     fun cycleDisplayMode() {
         _displayMode.value = when (_displayMode.value) {
@@ -65,11 +86,55 @@ class LibraryViewModel : ViewModel() {
         }
     }
 
+    /** Select a category tab. Re-filters the anime list. */
+    fun selectCategory(id: Long) {
+        _selectedCategoryId.value = id
+        applyFilterAndSort()
+    }
+
+    /** Create a new category. Returns the new category's id. */
+    fun createCategory(name: String): Long {
+        return categoryStore?.createCategory(name) ?: -1L
+    }
+
+    /** Rename a category. */
+    fun renameCategory(id: Long, newName: String) {
+        categoryStore?.renameCategory(id, newName)
+    }
+
+    /** Delete a category. Can't delete Default (id=0). */
+    fun deleteCategory(id: Long) {
+        categoryStore?.deleteCategory(id)
+        if (_selectedCategoryId.value == id) {
+            _selectedCategoryId.value = 0L
+        }
+    }
+
+    /** Apply the current category filter + sort to [allAnime] and push to [_state]. */
+    private fun applyFilterAndSort() {
+        val selected = _selectedCategoryId.value
+        val filtered = if (selected == 0L) {
+            // Default category = show all (anime not assigned to any custom category
+            // OR assigned to Default). For simplicity, "Default" shows everything.
+            allAnime
+        } else {
+            allAnime.filter { anime ->
+                val cats = categoryAssignments[anime.id.toString()] ?: emptySet()
+                cats.contains(selected)
+            }
+        }
+        _state.value = if (filtered.isEmpty() && allAnime.isNotEmpty()) {
+            LibraryState.Empty
+        } else if (filtered.isEmpty()) {
+            LibraryState.Empty
+        } else {
+            LibraryState.Success(sort(filtered))
+        }
+    }
+
     init {
         // Collect from LibraryStore.changes so the Library page updates in
         // real time when the user saves/removes an anime on the detail page.
-        // Previously this loaded once in init and never re-checked, so saved
-        // anime only appeared after an app restart.
         viewModelScope.launch {
             val store = libraryStore
             if (store == null) {
@@ -77,11 +142,17 @@ class LibraryViewModel : ViewModel() {
                 return@launch
             }
             store.changes.collect { anime ->
-                _state.value = if (anime.isEmpty()) {
-                    LibraryState.Empty
-                } else {
-                    LibraryState.Success(sort(anime))
-                }
+                allAnime = anime
+                applyFilterAndSort()
+            }
+        }
+        // Phase 4 — collect categories + assignments reactively.
+        viewModelScope.launch {
+            val catStore = categoryStore ?: return@launch
+            catStore.changes.collect { state ->
+                _categories.value = state.categories
+                categoryAssignments = state.assignments
+                applyFilterAndSort()
             }
         }
     }
@@ -91,12 +162,9 @@ class LibraryViewModel : ViewModel() {
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                // The changes flow already keeps us in sync; this is just for
-                // pull-to-refresh UX (shows the spinner briefly).
                 val store = libraryStore ?: return@launch
-                val all = store.getAll()
-                _state.value = if (all.isEmpty()) LibraryState.Empty
-                else LibraryState.Success(sort(all))
+                allAnime = store.getAll()
+                applyFilterAndSort()
             } finally {
                 _isRefreshing.value = false
             }
@@ -107,11 +175,7 @@ class LibraryViewModel : ViewModel() {
     fun setSort(mode: SortMode) {
         if (mode == _sortMode.value) return
         _sortMode.value = mode
-        // Re-sort the already-loaded list without hitting the store again
-        // (cheap — LibraryStore.getAll() is in-memory, but avoiding the
-        // re-read keeps the sort snappy).
-        val current = (_state.value as? LibraryState.Success)?.anime ?: return
-        _state.value = LibraryState.Success(sort(current))
+        applyFilterAndSort()
     }
 
     /**

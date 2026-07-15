@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Sort
@@ -23,6 +24,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.layout.ContentScale
@@ -55,6 +57,37 @@ fun LibraryScreen(
     val sortMode by viewModel.sortMode.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val displayMode by viewModel.displayMode.collectAsState()
+    val categories by viewModel.categories.collectAsState()
+    val selectedCategoryId by viewModel.selectedCategoryId.collectAsState()
+    var showCreateCategoryDialog by remember { mutableStateOf(false) }
+
+    // Create-category dialog
+    if (showCreateCategoryDialog) {
+        var newCategoryName by remember { mutableStateOf("") }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showCreateCategoryDialog = false },
+            title = { Text("New category") },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = newCategoryName,
+                    onValueChange = { newCategoryName = it },
+                    label = { Text("Category name") },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (newCategoryName.isNotBlank()) {
+                        viewModel.createCategory(newCategoryName)
+                    }
+                    showCreateCategoryDialog = false
+                }) { Text("Create") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateCategoryDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -75,6 +108,18 @@ fun LibraryScreen(
                     displayMode = displayMode,
                     onDisplayModeClick = { viewModel.cycleDisplayMode() },
                 )
+            }
+
+            // Phase 4 — Category tabs (scrollable). Shown only if there are categories.
+            if (categories.isNotEmpty()) {
+                item(key = "category_tabs", span = { GridItemSpan(maxLineSpan) }) {
+                    CategoryTabRow(
+                        categories = categories,
+                        selectedId = selectedCategoryId,
+                        onSelect = { viewModel.selectCategory(it) },
+                        onAddClick = { showCreateCategoryDialog = true },
+                    )
+                }
             }
 
             when (val s = state) {
@@ -417,5 +462,50 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
             color = MaterialTheme.colorScheme.error,
         )
         TextButton(onClick = onRetry) { Text("Retry") }
+    }
+}
+
+/**
+ * Phase 4 — Scrollable category tab row.
+ *
+ * Shows one tab per category (Default + user-created). Tapping a tab filters
+ * the library to show only anime in that category. The "+" button opens a
+ * create-category dialog.
+ *
+ * The "Default" category (id=0) shows all anime.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategoryTabRow(
+    categories: List<CategoryStore.Category>,
+    selectedId: Long,
+    onSelect: (Long) -> Unit,
+    onAddClick: () -> Unit,
+) {
+    ScrollableTabRow(
+        selectedTabIndex = categories.indexOfFirst { it.id == selectedId }.coerceAtLeast(0),
+        edgePadding = 12.dp,
+        divider = {},
+        containerColor = Color.Transparent,
+    ) {
+        categories.forEach { category ->
+            Tab(
+                selected = category.id == selectedId,
+                onClick = { onSelect(category.id) },
+                text = { Text(category.name) },
+            )
+        }
+        // "+" tab to create a new category
+        Tab(
+            selected = false,
+            onClick = onAddClick,
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Add, contentDescription = "Add category", modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("New")
+                }
+            },
+        )
     }
 }
