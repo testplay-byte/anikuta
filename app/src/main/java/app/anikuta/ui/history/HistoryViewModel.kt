@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uy.kohesive.injekt.Injekt
@@ -15,22 +16,20 @@ import uy.kohesive.injekt.api.get
 import java.util.Calendar
 
 /**
- * Phase 5 task 5.10 — ViewModel for the History screen.
+ * ViewModel for the History screen.
  *
- * Reads saved watch-progress entries from [WatchProgressStore] (a simple
- * PreferenceStore-backed JSON map keyed by `"$anilistId:$episodeUrl"`) and
- * exposes them as a [HistoryState] flow.
+ * Phase 1 revamp changes:
+ *  - Reactive: collects [WatchProgressStore.changes] Flow instead of a one-shot
+ *    load(). History now updates in real time when the user watches an episode.
+ *  - Fixed clearAll O(n) → single [WatchProgressStore.deleteAll] call.
+ *  - Fixed "This Week" off-by-one: dayDiff 2..7 → This Week (was 2..6).
+ *  - Added coverUrl / animeTitle / episodeNumber / thumbnailUrl to HistoryEntry
+ *    (for Phase 2's History UI with real covers + episode thumbnails).
  *
- * State lifecycle:
- *  - [HistoryState.Loading] while the JSON map is being parsed
- *  - [HistoryState.Empty] when there are zero entries
- *  - [HistoryState.Success] with a "Continue Watching" list (entries < 90%
- *    complete) and a chronologically grouped list (Today / Yesterday /
- *    This Week / Earlier)
- *  - [HistoryState.Error] if DI isn't available or parsing fails
- *
- * The same try/catch-DI pattern as [app.anikuta.ui.home.HomeViewModel] — the
- * screen never crashes if WatchProgressStore isn't registered.
+ *  Related files (edit one → check the others):
+ *    - WatchProgressStore.kt — the data source (changes Flow)
+ *    - HistoryScreen.kt — the UI (reads HistoryState)
+ *    - PlayerActivity.kt saveProgress() — writes to WatchProgressStore
  */
 class HistoryViewModel : ViewModel() {
 
@@ -52,90 +51,98 @@ class HistoryViewModel : ViewModel() {
     val state: StateFlow<HistoryState> = _state.asStateFlow()
 
     init {
-        load()
+        observeChanges()
     }
 
-    /** Re-read progress from the store. Safe to call repeatedly. */
-    fun refresh() = load()
-
-    private fun load() {
+    /**
+     * Collect the reactive [WatchProgressStore.changes] Flow.
+     * History updates in real time — no manual refresh needed.
+     */
+    private fun observeChanges() {
         val s = store
         if (s == null) {
             _state.value = HistoryState.Error("App not properly initialized")
             return
         }
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                try {
-                    val all = s.getAll()
-                    if (all.isEmpty()) {
-                        return@withContext HistoryState.Empty
-                    }
-                    val now = System.currentTimeMillis()
-
-                    // Parse keys: "$anilistId:$episodeUrl". Episode URLs contain
-                    // colons (https://...), so only split on the FIRST colon.
-                    val entries = all.mapNotNull { (key, progress) ->
-                        val anilistId = key.substringBefore(':').toIntOrNull() ?: return@mapNotNull null
-                        val episodeUrl = key.substringAfter(':')
-                        val fraction = if (progress.durationSeconds > 0) {
-                            (progress.positionSeconds.toFloat() / progress.durationSeconds.toFloat())
-                                .coerceIn(0f, 1f)
-                        } else {
-                            0f
+            s.changes.collectLatest { all ->
+                val result = withContext(Dispatchers.Default) {
+                    try {
+                        if (all.isEmpty()) {
+                            return@withContext HistoryState.Empty
                         }
-                        HistoryEntry(
-                            anilistId = anilistId,
-                            episodeUrl = episodeUrl,
-                            title = progress.title,
-                            positionSeconds = progress.positionSeconds,
-                            durationSeconds = progress.durationSeconds,
-                            updatedAt = progress.updatedAt,
-                            progressFraction = fraction,
+                        val now = System.currentTimeMillis()
+
+                        // Parse keys: "$anilistId:$episodeUrl". Episode URLs contain
+                        // colons (https://...), so only split on the FIRST colon.
+                        val entries = all.mapNotNull { (key, progress) ->
+                            val anilistId = key.substringBefore(':').toIntOrNull()
+                                ?: return@mapNotNull null
+                            val episodeUrl = key.substringAfter(':')
+                            val fraction = if (progress.durationSeconds > 0) {
+                                (progress.positionSeconds.toFloat() / progress.durationSeconds.toFloat())
+                                    .coerceIn(0f, 1f)
+                            } else {
+                                0f
+                            }
+                            HistoryEntry(
+                                anilistId = anilistId,
+                                episodeUrl = episodeUrl,
+                                title = progress.title,
+                                positionSeconds = progress.positionSeconds,
+                                durationSeconds = progress.durationSeconds,
+                                updatedAt = progress.updatedAt,
+                                progressFraction = fraction,
+                                coverUrl = progress.coverUrl,
+                                animeTitle = progress.animeTitle,
+                                episodeNumber = progress.episodeNumber,
+                                thumbnailUrl = progress.thumbnailUrl,
+                            )
+                        }.sortedByDescending { it.updatedAt }
+
+                        val continueWatching = entries
+                            .filter { it.progressFraction < CONTINUE_WATCHING_THRESHOLD }
+
+                        val groups = groupByTime(entries, now)
+
+                        HistoryState.Success(
+                            continueWatching = continueWatching,
+                            groups = groups,
                         )
-                    }.sortedByDescending { it.updatedAt }
-
-                    val continueWatching = entries
-                        .filter { it.progressFraction < CONTINUE_WATCHING_THRESHOLD }
-
-                    val groups = groupByTime(entries, now)
-
-                    HistoryState.Success(
-                        continueWatching = continueWatching,
-                        groups = groups,
-                    )
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to load history", e)
-                    HistoryState.Error(e.message ?: "Unknown error")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to load history", e)
+                        HistoryState.Error(e.message ?: "Unknown error")
+                    }
                 }
+                _state.value = result
             }
-            _state.value = result
         }
     }
 
-    /** Remove every saved progress entry, then reload. */
+    /** Re-read progress from the store. Safe to call repeatedly. */
+    fun refresh() {
+        // The Flow auto-updates, but this is kept for explicit refresh requests
+        // (e.g. pull-to-refresh). It's a no-op since the Flow is always live.
+    }
+
+    /**
+     * Remove every saved progress entry, then the Flow auto-reloads.
+     * Single pref write via [WatchProgressStore.deleteAll] (was O(anime)).
+     */
     fun clearAll() {
         val s = store ?: return
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
-                    val all = s.getAll()
-                    // Use clearAnime(id) per unique anime — clearAnime removes
-                    // every episode for that anime in one pref write, which is
-                    // much cheaper than calling clear() once per episode.
-                    val anilistIds = all.keys.mapNotNull { key ->
-                        key.substringBefore(':').toIntOrNull()
-                    }.toSet()
-                    anilistIds.forEach { s.clearAnime(it) }
+                    s.deleteAll()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to clear all history", e)
                 }
             }
-            load()
         }
     }
 
-    /** Remove a single entry, then reload. */
+    /** Remove a single entry. The Flow auto-reloads. */
     fun clearEntry(anilistId: Int, episodeUrl: String) {
         val s = store ?: return
         viewModelScope.launch {
@@ -146,13 +153,15 @@ class HistoryViewModel : ViewModel() {
                     Log.e(TAG, "Failed to clear entry", e)
                 }
             }
-            load()
         }
     }
 
     /**
      * Bucket entries into time periods based on calendar day (not 24-hour
      * deltas) so "Today" always means the current calendar day.
+     *
+     * Fix: "This Week" now covers dayDiff 2..7 (was 2..6). dayDiff==7 is
+     * still within a rolling 7-day window.
      */
     private fun groupByTime(entries: List<HistoryEntry>, now: Long): List<HistoryGroup> {
         val startOfToday = Calendar.getInstance().apply {
@@ -182,7 +191,7 @@ class HistoryViewModel : ViewModel() {
             val bucket = when {
                 dayDiff <= 0L -> "Today"
                 dayDiff == 1L -> "Yesterday"
-                dayDiff < 7L -> "This Week"
+                dayDiff <= 7L -> "This Week"  // fix: was < 7L
                 else -> "Earlier"
             }
             buckets[bucket]!!.add(entry)
@@ -213,6 +222,14 @@ data class HistoryEntry(
     val durationSeconds: Int,
     val updatedAt: Long,
     val progressFraction: Float,
+    /** Anime cover URL — for the History page cover image. Null = use placeholder. */
+    val coverUrl: String? = null,
+    /** Anime title — for the History page. Null = unknown. */
+    val animeTitle: String? = null,
+    /** Episode number — for the History page. -1 = unknown. */
+    val episodeNumber: Float = -1f,
+    /** Episode thumbnail URL — for the History page episode thumbnail. Null = use cover fallback. */
+    val thumbnailUrl: String? = null,
 )
 
 /** A labeled, in-order group of entries for the chronological list. */

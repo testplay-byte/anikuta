@@ -54,6 +54,7 @@ import uy.kohesive.injekt.api.get
 @Composable
 fun DetailScreen(
     anilistId: Int,
+    autoPlayUrl: String = "",
     onBack: () -> Unit,
 ) {
     val viewModel: DetailViewModel = viewModel(key = "detail_$anilistId") {
@@ -108,16 +109,33 @@ fun DetailScreen(
         viewModel.refreshDownloadedOnDisk()
     }
 
+    // Phase 2: Auto-play support for history resume.
+    // When autoPlayUrl is set (from History tap) and episodes finish loading,
+    // find the matching episode and trigger playEpisode() automatically.
+    // This launches the player at the saved position.
+    var autoPlayAttempted by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(episodeState, autoPlayUrl) {
+        if (autoPlayUrl.isBlank() || autoPlayAttempted) return@LaunchedEffect
+        val loaded = episodeState as? EpisodeState.Loaded ?: return@LaunchedEffect
+        val matchingEpisode = loaded.episodeList.find { it.url == autoPlayUrl }
+        if (matchingEpisode != null) {
+            autoPlayAttempted = true
+            viewModel.playEpisode(matchingEpisode)
+        }
+    }
+
     // Observe play requests from the ViewModel → launch the player.
     androidx.compose.runtime.LaunchedEffect(playRequest) {
         val req = playRequest ?: return@LaunchedEffect
         when (req) {
             is PlayRequest.Play -> {
-                // Get cover color from the current anime (if loaded)
+                // Get cover color + cover URL + anime title from the current anime (if loaded)
                 val anime = (detailState as? DetailState.Success)?.anime
                 val coverColorInt = anime?.coverImage?.color?.let {
                     try { android.graphics.Color.parseColor(it) } catch (e: Exception) { 0 }
                 } ?: 0
+                val coverUrlStr = anime?.coverImage?.extraLarge ?: anime?.coverImage?.large ?: ""
+                val animeTitleStr = anime?.title?.preferred() ?: ""
                 val intent = app.anikuta.player.PlayerActivity.newIntent(
                     context = context,
                     videoUrl = req.url,
@@ -127,6 +145,8 @@ fun DetailScreen(
                     episodeNumber = req.episodeNumber,
                     videoHeaders = req.videoHeaders,
                     coverColor = coverColorInt,
+                    coverUrl = coverUrlStr,
+                    animeTitle = animeTitleStr,
                     sourceId = req.sourceId,
                     videoServer = req.videoServer,
                     videoAudio = req.videoAudio,

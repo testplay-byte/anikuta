@@ -247,13 +247,10 @@ private fun PlayerEpisodeRow(
         MaterialTheme.colorScheme.surfaceContainerHigh
     }
 
-    // FIX: Highlight current episode with a prominent border + full-strength
-    // primaryContainer background. Previously used primaryContainer.copy(
-    // alpha = 0.5f) which was barely noticeable. Now the currently-playing
-    // row has a 2dp primary-colored border + tonal elevation for a clear
-    // "glow" effect that's immediately distinguishable from other rows.
+    // Highlight current episode with surfaceContainerHigh + primary border
+    // (was primaryContainer — user dislikes the blue-ish color)
     val finalCardColor = if (isCurrent) {
-        MaterialTheme.colorScheme.primaryContainer
+        MaterialTheme.colorScheme.surfaceContainerHigh
     } else {
         cardColor
     }
@@ -364,13 +361,13 @@ private fun PlayerEpisodeRow(
                                     if (showEpisodeNumber && episodeNumberPosition == "badge") {
                                         Surface(
                                             shape = RoundedCornerShape(6.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                         ) {
                                             Text(
                                                 text = "EP ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                color = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                             )
                                         }
@@ -537,13 +534,13 @@ private fun PlayerEpisodeRow(
                             if (showEpisodeNumber && episodeNumberPosition == "badge") {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 ) {
                                     Text(
                                         text = "EP ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        color = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     )
                                 }

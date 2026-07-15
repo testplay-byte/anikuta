@@ -14,6 +14,8 @@ import app.anikuta.data.AnimeDatabaseFactory
 import app.anikuta.data.cache.CacheManager
 import app.anikuta.data.cache.EpisodeCacheStore
 import app.anikuta.data.cache.LocalCache
+import app.anikuta.data.cache.SubDubStore
+import app.anikuta.data.cache.ExtensionLinkStore
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
@@ -21,7 +23,10 @@ import app.anikuta.data.supabase.SupabaseClient
 import app.anikuta.player.PlayerPreferences
 import app.anikuta.player.PlayerEpisodePreferences
 import app.anikuta.player.WatchProgressStore
+import app.anikuta.player.PlaybackStateStore
 import app.anikuta.ui.library.LibraryStore
+import app.anikuta.ui.library.CategoryStore
+import app.anikuta.ui.library.LibraryDisplayPrefs
 import app.anikuta.data.tracker.AniListTracker
 import app.anikuta.source.bridge.AniyomiSourceBridge
 import app.anikuta.download.DownloadPreferences
@@ -90,9 +95,15 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { PlayerPreferences(get<PreferenceStore>()) }
         addSingletonFactory { PlayerEpisodePreferences(get<PreferenceStore>()) }
         addSingletonFactory { WatchProgressStore(get<PreferenceStore>()) }
+        // Phase C — Playback state memory (last video URL + tracks per episode)
+        addSingletonFactory { PlaybackStateStore(get<PreferenceStore>()) }
 
         // Phase 5 task 5.6 — Library persistence (saved AniList IDs + cached JSON)
         addSingletonFactory { LibraryStore(get<PreferenceStore>()) }
+        // Phase 4 — Library categories (Default + user-created)
+        addSingletonFactory { CategoryStore(get<PreferenceStore>()) }
+        // Phase E — Library display customization (persisted)
+        addSingletonFactory { LibraryDisplayPrefs(get<PreferenceStore>()) }
 
         // Anime database — register BOTH AnimeDatabase and SqlDriver.
         // AndroidAnimeDatabaseHandler needs both (db for queries, driver for
@@ -207,5 +218,9 @@ class AppModule(val app: Application) : InjektModule {
 
         // Episode cache (persistent — survives app restart)
         addSingletonFactory { EpisodeCacheStore(get<Context>()) }
+        // Phase B — Sub/Dub cache (populated by DetailViewModel, read by Library)
+        addSingletonFactory { SubDubStore(get<PreferenceStore>()) }
+        // Phase I — Extension-to-AniList link cache
+        addSingletonFactory { ExtensionLinkStore(get<PreferenceStore>()) }
     }
 }

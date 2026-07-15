@@ -5,6 +5,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -39,6 +41,9 @@ import app.anikuta.ui.library.LibraryScreen
 import app.anikuta.ui.history.HistoryScreen
 import app.anikuta.ui.search.SearchScreen
 import app.anikuta.ui.settings.MoreScreen
+import app.anikuta.player.PlaybackStateStore
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 sealed class Screen(
     val route: String,
@@ -171,9 +176,48 @@ fun AnikutaNavGraph() {
             }
             composable(Screen.History.route) {
                 HistoryScreen(
-                    onResume = { anilistId, _, _ ->
-                        // Navigate to detail — the player will resume from the
-                        // saved position when the user taps the episode.
+                    onResume = { anilistId, episodeUrl, title ->
+                        // Phase F — direct resume: check PlaybackStateStore for a saved
+                        // video URL. If found, launch the player directly (skips the
+                        // "Resolving video" step on the detail page). If not found,
+                        // fall back to the detail page with autoPlayUrl.
+                        val context = navController.context
+                        try {
+                            val pbStore: PlaybackStateStore = Injekt.get()
+                            val saved = pbStore.get(anilistId, episodeUrl)
+                            // Also fetch watch progress for cover URL + anime title + episode number
+                            val wpStore: app.anikuta.player.WatchProgressStore = Injekt.get()
+                            val progress = wpStore.get(anilistId, episodeUrl)
+                            if (saved != null && saved.videoUrl.isNotBlank()) {
+                                // Direct launch with the saved video URL + server + audio + quality
+                                val intent = app.anikuta.player.PlayerActivity.newIntent(
+                                    context = context,
+                                    videoUrl = saved.videoUrl,
+                                    title = title,
+                                    anilistId = anilistId,
+                                    episodeUrl = episodeUrl,
+                                    episodeNumber = progress?.episodeNumber ?: -1f,
+                                    videoHeaders = saved.videoHeaders,
+                                    coverUrl = progress?.coverUrl ?: "",
+                                    animeTitle = progress?.animeTitle ?: "",
+                                    sourceId = saved.sourceId,
+                                    videoServer = saved.videoServer,
+                                    videoAudio = saved.videoAudio,
+                                    videoQuality = saved.videoQuality,
+                                )
+                                context.startActivity(intent)
+                            } else {
+                                // No saved state — fall back to detail with autoPlayUrl
+                                val encoded = java.net.URLEncoder.encode(episodeUrl, "UTF-8")
+                                navController.navigate("detail/$anilistId?autoPlayUrl=$encoded")
+                            }
+                        } catch (e: Exception) {
+                            // PlaybackStateStore not available — fall back to detail
+                            val encoded = java.net.URLEncoder.encode(episodeUrl, "UTF-8")
+                            navController.navigate("detail/$anilistId?autoPlayUrl=$encoded")
+                        }
+                    },
+                    onOpenDetail = { anilistId ->
                         navController.navigate("detail/$anilistId")
                     },
                 )
@@ -182,6 +226,9 @@ fun AnikutaNavGraph() {
                 SearchScreen(
                     onAnimeClick = { anilistId ->
                         navController.navigate("detail/$anilistId")
+                    },
+                    onSourceResultClick = { route ->
+                        navController.navigate(route)
                     },
                 )
             }
@@ -192,14 +239,90 @@ fun AnikutaNavGraph() {
                 )
             }
             composable(
-                route = "detail/{anilistId}",
-                arguments = listOf(navArgument("anilistId") { type = NavType.IntType }),
+                route = "detail/{anilistId}?autoPlayUrl={autoPlayUrl}",
+                arguments = listOf(
+                    navArgument("anilistId") { type = NavType.IntType },
+                    navArgument("autoPlayUrl") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                        nullable = true
+                    },
+                ),
             ) { backStackEntry ->
                 val anilistId = backStackEntry.arguments?.getInt("anilistId") ?: 0
+                val autoPlayUrl = backStackEntry.arguments?.getString("autoPlayUrl")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
                 DetailScreen(
                     anilistId = anilistId,
+                    autoPlayUrl = autoPlayUrl,
                     onBack = { navController.popBackStack() },
                 )
+            }
+            // Phase I — Source linking (from extension search results)
+            // Checks ExtensionLinkStore first; if linked, goes to DetailScreen;
+            // if not, shows SourceLinkingScreen which searches AniList + links.
+            composable(
+                route = "source-link/{sourceId}/{animeUrl}/{title}/{thumbnailUrl}",
+                arguments = listOf(
+                    navArgument("sourceId") { type = NavType.LongType },
+                    navArgument("animeUrl") { type = NavType.StringType },
+                    navArgument("title") { type = NavType.StringType },
+                    navArgument("thumbnailUrl") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val sourceId = backStackEntry.arguments?.getLong("sourceId") ?: -1L
+                val animeUrl = backStackEntry.arguments?.getString("animeUrl")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+                val title = backStackEntry.arguments?.getString("title")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+                val thumbnailUrl = backStackEntry.arguments?.getString("thumbnailUrl")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+
+                // Check if already linked
+                val linkStore: app.anikuta.data.cache.ExtensionLinkStore = try {
+                    Injekt.get()
+                } catch (e: Exception) { null!! }
+
+                val linkedId = linkStore?.getAniListId(sourceId, animeUrl)
+                if (linkedId != null && linkedId > 0) {
+                    // Already linked → go directly to DetailScreen
+                    LaunchedEffect(Unit) {
+                        navController.navigate("detail/$linkedId") {
+                            popUpTo("source-link/$sourceId/${java.net.URLEncoder.encode(animeUrl, "UTF-8")}/${java.net.URLEncoder.encode(title, "UTF-8")}/${java.net.URLEncoder.encode(thumbnailUrl, "UTF-8")}") {
+                                inclusive = true
+                            }
+                        }
+                    }
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    // Not linked → show the linking screen
+                    app.anikuta.ui.detail.SourceLinkingScreen(
+                        sourceId = sourceId,
+                        animeUrl = animeUrl,
+                        title = title,
+                        thumbnailUrl = thumbnailUrl.ifBlank { null },
+                        sourceName = "",
+                        onLinked = { anilistId ->
+                            navController.navigate("detail/$anilistId") {
+                                popUpTo("source-link/$sourceId/${java.net.URLEncoder.encode(animeUrl, "UTF-8")}/${java.net.URLEncoder.encode(title, "UTF-8")}/${java.net.URLEncoder.encode(thumbnailUrl, "UTF-8")}") {
+                                    inclusive = true
+                                }
+                            }
+                        },
+                        onAniListNotFound = {
+                            // No longer used — the linking screen now handles everything
+                            // (shows search results + manual search). This callback is kept
+                            // for API compatibility but does nothing.
+                        },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
             // Hidden debug screen (Phase 5 task 5.1). Accessible via long-press
             // on the version number in About settings. Easily removable: delete this
@@ -212,6 +335,15 @@ fun AnikutaNavGraph() {
             // --- Settings subpages (Phase 6 task 6.17-6.24) ---
             composable("settings/general") {
                 app.anikuta.ui.settings.GeneralSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/library") {
+                app.anikuta.ui.settings.LibrarySettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/history") {
+                app.anikuta.ui.settings.HistorySettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/search") {
+                app.anikuta.ui.settings.SearchSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable("settings/data") {
                 app.anikuta.ui.settings.StorageSettingsScreen(onBack = { navController.popBackStack() })

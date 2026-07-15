@@ -489,13 +489,13 @@ internal fun PlayerScreen(
                                 // Episode number badge (prominent)
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 ) {
                                     Text(
                                         text = "EPISODE ${app.anikuta.ui.detail.EpisodeTitleParser.formatEpisodeNumber(currentEpisode.episode_number)}",
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        color = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                     )
                                 }

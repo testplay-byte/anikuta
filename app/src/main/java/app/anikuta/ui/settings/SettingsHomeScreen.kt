@@ -26,8 +26,11 @@ import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.Icon
@@ -67,6 +70,9 @@ fun SettingsHomeScreen(
 ) {
     val categories = listOf(
         SettingsCategory("settings/general", "General", "Clear cache, storage", Icons.Default.CleaningServices, "emerald"),
+        SettingsCategory("settings/library", "Library", "Display mode, categories, badges", Icons.Default.LibraryBooks, "amber"),
+        SettingsCategory("settings/history", "History", "Watch threshold, retention", Icons.Default.History, "rose"),
+        SettingsCategory("settings/search", "Search", "Default source, result count", Icons.Default.Search, "sky"),
         SettingsCategory("settings/data", "Data & Storage", "Storage folder, downloads location", Icons.Default.Folder, "blue"),
         SettingsCategory("settings/player", "Player", "Speed, hardware decoding, audio", Icons.Default.PlayCircle, "violet"),
         SettingsCategory("settings/details", "Details", "Episode list display, thumbnails, titles", Icons.Default.Info, "indigo"),
