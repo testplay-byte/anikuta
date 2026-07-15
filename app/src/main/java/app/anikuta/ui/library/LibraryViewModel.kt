@@ -108,23 +108,33 @@ class LibraryViewModel : ViewModel() {
      * - LAST_WATCHED: by most-recent watch-progress timestamp across all
      *   episodes of each anime (desc). Anime with no progress sort last,
      *   preserving their relative order.
+     *
+     *   Phase 1 fix: previously scanned all progress keys PER ANIME (O(n×m)).
+     *   Now builds a `Map<Int, Long>` (anilistId → maxUpdatedAt) ONCE per sort,
+     *   then looks up — O(n + m).
+     *
      * - UNREAD: best-effort — we don't yet track seen-episode counts for
      *   saved anime, so we sort by total episode count descending as a
      *   proxy (more episodes → likely more to watch). Will be refined when
-     *   seen-episode tracking lands.
+     *   seen-episode tracking lands (Phase 4).
      */
     private fun sort(anime: List<AniListAnime>): List<AniListAnime> {
         return when (_sortMode.value) {
             SortMode.TITLE -> anime.sortedBy { it.title.preferred().lowercase() }
             SortMode.LAST_WATCHED -> {
                 val progress = watchProgressStore?.getAll().orEmpty()
-                anime.sortedByDescending { anime ->
-                    val prefix = "${anime.id}:"
-                    progress.keys
-                        .filter { it.startsWith(prefix) }
-                        .maxOfOrNull { progress[it]?.updatedAt ?: 0L }
-                        ?: 0L
+                // Build maxUpdatedAt per anilistId ONCE — O(m).
+                val maxUpdatedAtByAnime = HashMap<Int, Long>(progress.size)
+                for (key in progress.keys) {
+                    val anilistId = key.substringBefore(':').toIntOrNull() ?: continue
+                    val updatedAt = progress[key]?.updatedAt ?: 0L
+                    val current = maxUpdatedAtByAnime[anilistId] ?: 0L
+                    if (updatedAt > current) {
+                        maxUpdatedAtByAnime[anilistId] = updatedAt
+                    }
                 }
+                // Sort by the precomputed map — O(n log n), no per-anime scanning.
+                anime.sortedByDescending { maxUpdatedAtByAnime[it.id] ?: 0L }
             }
             SortMode.UNREAD -> anime.sortedByDescending { it.episodes ?: 0 }
         }
