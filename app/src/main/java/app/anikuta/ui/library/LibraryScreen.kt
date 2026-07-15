@@ -112,7 +112,6 @@ fun LibraryScreen(
     if (showSettingsSheet) {
         androidx.compose.material3.ModalBottomSheet(
             onDismissRequest = { showSettingsSheet = false },
-            sheetMaxHeight = androidx.compose.ui.unit.Fraction(0.6f), // limit height
         ) {
             LibrarySettingsSheet(
                 sortMode = sortMode,
@@ -813,6 +812,7 @@ private fun LibrarySettingsSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(max = 400.dp)  // Phase H: limit sheet height
             .navigationBarsPadding(),
     ) {
         // Tab row — NO categories here (they're on the library page itself)
