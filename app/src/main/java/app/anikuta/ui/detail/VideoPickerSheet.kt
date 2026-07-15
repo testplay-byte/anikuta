@@ -139,6 +139,7 @@ private fun VideoPickerBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        dragHandle = null,
     ) {
         Column(
             modifier = Modifier

@@ -195,6 +195,53 @@ class AniyomiSourceBridge(
         Log.e(TAG, "[${source.name}] search failed: ${e.message}", e)
         emptyList()
     }
+
+    /**
+     * Fetch popular anime from all installed sources (Phase I — extension browse mode).
+     * Returns up to 20 results per source, flattened.
+     */
+    suspend fun fetchPopularFromAllSources(): List<SourceSearchResult> = withContext(Dispatchers.IO) {
+        val sources = sourceManager.getCatalogueSources()
+        if (sources.isEmpty()) return@withContext emptyList()
+        coroutineScope {
+            sources.map { source ->
+                async { fetchFromSource(source, isPopular = true) }
+            }.awaitAll().flatten()
+        }
+    }
+
+    /**
+     * Fetch latest anime from all installed sources (Phase I — extension browse mode).
+     * Returns up to 20 results per source, flattened.
+     */
+    suspend fun fetchLatestFromAllSources(): List<SourceSearchResult> = withContext(Dispatchers.IO) {
+        val sources = sourceManager.getCatalogueSources()
+        if (sources.isEmpty()) return@withContext emptyList()
+        coroutineScope {
+            sources.map { source ->
+                async { fetchFromSource(source, isPopular = false) }
+            }.awaitAll().flatten()
+        }
+    }
+
+    private suspend fun fetchFromSource(
+        source: AnimeCatalogueSource,
+        isPopular: Boolean,
+    ): List<SourceSearchResult> = try {
+        val page = if (isPopular) source.getPopularAnime(1) else source.getLatestUpdates(1)
+        page.animes.take(20).map { sAnime ->
+            SourceSearchResult(
+                title = sAnime.title,
+                thumbnailUrl = sAnime.thumbnail_url,
+                url = sAnime.url,
+                sourceName = source.name,
+                sourceId = source.id,
+            )
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "[${source.name}] fetch ${if (isPopular) "popular" else "latest"} failed: ${e.message}", e)
+        emptyList()
+    }
 }
 
 /**

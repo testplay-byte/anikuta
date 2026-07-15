@@ -133,6 +133,21 @@ class SearchViewModel : ViewModel() {
         // Search now fires only on explicit submit (keyboard Enter / search button).
         // The user requested: "remove that and wire the Enter button of the keyboard
         // with the actual search."
+
+        // Phase I: eagerly fetch AniList genres so they're available in the filter sheet
+        // even before the user searches (was only fetched on first search → appeared empty).
+        viewModelScope.launch {
+            val repo = anilistRepo ?: return@launch
+            try {
+                val genres = repo.getGenres()
+                if (genres.isNotEmpty()) {
+                    _availableGenres.value = genres
+                    Log.d(TAG, "Loaded ${genres.size} AniList genres")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not load AniList genres: ${e.message}")
+            }
+        }
     }
 
     /** Current page for pagination (Phase 5 part 2). */
@@ -156,13 +171,54 @@ class SearchViewModel : ViewModel() {
     private val _sourceResults = MutableStateFlow<List<SourceSearchResult>>(emptyList())
     val sourceResults: StateFlow<List<SourceSearchResult>> = _sourceResults.asStateFlow()
 
+    /** Popular anime from extensions (shown when SOURCES mode + no query). */
+    private val _popularResults = MutableStateFlow<List<SourceSearchResult>>(emptyList())
+    val popularResults: StateFlow<List<SourceSearchResult>> = _popularResults.asStateFlow()
+
+    /** Latest anime from extensions (shown when SOURCES mode + no query). */
+    private val _latestResults = MutableStateFlow<List<SourceSearchResult>>(emptyList())
+    val latestResults: StateFlow<List<SourceSearchResult>> = _latestResults.asStateFlow()
+
+    /** Whether popular/latest are currently loading. */
+    private val _isLoadingBrowse = MutableStateFlow(false)
+    val isLoadingBrowse: StateFlow<Boolean> = _isLoadingBrowse.asStateFlow()
+
     fun setSearchMode(mode: SearchMode) {
         _searchMode.value = mode
-        // Re-trigger search if there's an active query.
         val q = _query.value.trim()
         if (q.isNotBlank()) {
             viewModelScope.launch {
                 if (mode == SearchMode.ANILIST) doSearch(q) else doSourceSearch(q)
+            }
+        } else if (mode == SearchMode.SOURCES) {
+            // No query + SOURCES mode → load popular + latest from extensions
+            loadExtensionBrowse()
+        } else {
+            // Switching to ANILIST with no query → reset to Idle
+            _state.value = SearchState.Idle
+        }
+    }
+
+    /** Load popular + latest from all extension sources (Phase I). */
+    private fun loadExtensionBrowse() {
+        val bridge = sourceBridge ?: return
+        _isLoadingBrowse.value = true
+        viewModelScope.launch {
+            try {
+                val popular = bridge.fetchPopularFromAllSources()
+                val latest = bridge.fetchLatestFromAllSources()
+                _popularResults.value = popular
+                _latestResults.value = latest
+                _state.value = if (popular.isEmpty() && latest.isEmpty()) {
+                    SearchState.Empty
+                } else {
+                    SearchState.Idle // browse mode uses popularResults/latestResults directly
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load extension browse", e)
+                _state.value = SearchState.Error(e.message ?: "Unknown error")
+            } finally {
+                _isLoadingBrowse.value = false
             }
         }
     }
@@ -345,23 +401,23 @@ class SearchViewModel : ViewModel() {
      */
     fun onSubmit() {
         val term = _query.value.trim()
+        val hasActiveFilters = _selectedGenre.value != null || _selectedYear.value != null ||
+            _selectedFormat.value != null || _selectedSeason.value != null ||
+            _selectedStatus.value != null || _selectedSort.value != null
         if (term.isNotBlank()) {
             viewModelScope.launch {
                 if (_searchMode.value == SearchMode.SOURCES) doSourceSearch(term)
                 else doSearch(term)
             }
+        } else if (hasActiveFilters) {
+            // Search with filters only (empty query) — AniList supports filter-only search
+            viewModelScope.launch { doSearch("") }
         }
     }
 
     /** Retry the last search (used by the error-state retry button). Phase 5. */
     fun retry() {
-        val term = _query.value.trim()
-        if (term.isNotBlank()) {
-            viewModelScope.launch {
-                if (_searchMode.value == SearchMode.SOURCES) doSourceSearch(term)
-                else doSearch(term)
-            }
-        }
+        onSubmit()
     }
 
     /**

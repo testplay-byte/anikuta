@@ -73,6 +73,9 @@ fun SearchScreen(
     val showAdult by viewModel.showAdult.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
     val sourceResults by viewModel.sourceResults.collectAsState()
+    val popularResults by viewModel.popularResults.collectAsState()
+    val latestResults by viewModel.latestResults.collectAsState()
+    val isLoadingBrowse by viewModel.isLoadingBrowse.collectAsState()
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -84,6 +87,7 @@ fun SearchScreen(
     if (showFilterSheet) {
         androidx.compose.material3.ModalBottomSheet(
             onDismissRequest = { showFilterSheet = false },
+            dragHandle = null,
         ) {
             FilterSheetContent(
                 searchMode = searchMode,
@@ -195,6 +199,19 @@ fun SearchScreen(
 
         // --- Body ----------------------------------------------------------
         when {
+            query.isBlank() && searchMode == SearchMode.SOURCES -> {
+                // Phase I: Extension browse mode — show Popular + Latest sections
+                ExtensionBrowseSection(
+                    popular = popularResults,
+                    latest = latestResults,
+                    isLoading = isLoadingBrowse,
+                    onResultClick = { result ->
+                        val encodedUrl = java.net.URLEncoder.encode(result.url, "UTF-8")
+                        onSourceResultClick("source-detail/${result.sourceId}/$encodedUrl")
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             query.isBlank() -> {
                 RecentSearchesSection(
                     recent = recent,
@@ -217,7 +234,6 @@ fun SearchScreen(
                         }
                         is SearchState.Success -> {
                             if (searchMode == SearchMode.SOURCES) {
-                                // Phase 5 part 4 — source results grid (Phase D: clickable)
                                 SourceResultsGrid(
                                     results = sourceResults,
                                     onResultClick = { result ->
@@ -962,6 +978,162 @@ private fun SourceResultCard(
                     text = result.title,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = result.sourceName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Phase I — Extension browse section (shown when SOURCES mode + no query).
+ *
+ * Shows two horizontally-scrollable rows:
+ *   - Popular: top 20 from all extension sources
+ *   - Latest: top 20 from all extension sources
+ * Each in a dedicated container with its own background + header.
+ */
+@Composable
+private fun ExtensionBrowseSection(
+    popular: List<app.anikuta.source.bridge.SourceSearchResult>,
+    latest: List<app.anikuta.source.bridge.SourceSearchResult>,
+    isLoading: Boolean,
+    onResultClick: (app.anikuta.source.bridge.SourceSearchResult) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (isLoading) {
+        Box(modifier = modifier, contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+    androidx.compose.foundation.lazy.LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(bottom = 16.dp),
+    ) {
+        if (popular.isNotEmpty()) {
+            item {
+                BrowseSectionHeader("Popular")
+            }
+            item {
+                SourceResultRow(
+                    results = popular.take(20),
+                    onResultClick = onResultClick,
+                )
+            }
+        }
+        if (latest.isNotEmpty()) {
+            item {
+                BrowseSectionHeader("Latest")
+            }
+            item {
+                SourceResultRow(
+                    results = latest.take(20),
+                    onResultClick = onResultClick,
+                )
+            }
+        }
+        if (popular.isEmpty() && latest.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "No extensions installed.\nInstall extensions to browse popular and latest anime.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowseSectionHeader(title: String) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
+private fun SourceResultRow(
+    results: List<app.anikuta.source.bridge.SourceSearchResult>,
+    onResultClick: (app.anikuta.source.bridge.SourceSearchResult) -> Unit,
+) {
+    androidx.compose.foundation.lazy.LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        items(results) { result ->
+            SourceBrowseCard(result, onClick = { onResultClick(result) })
+        }
+    }
+}
+
+@Composable
+private fun SourceBrowseCard(
+    result: app.anikuta.source.bridge.SourceSearchResult,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .width(120.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 1.dp,
+    ) {
+        Column {
+            if (!result.thumbnailUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = result.thumbnailUrl,
+                    contentDescription = result.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(170.dp)
+                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(170.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+                ) {}
+            }
+            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                Text(
+                    text = result.title,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
