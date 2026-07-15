@@ -209,14 +209,21 @@ class SearchViewModel : ViewModel() {
         viewModelScope.launch {
             _state.value = SearchState.Loading
             try {
-                // Use browseByGenre with a popular genre as a proxy for "trending"
-                // AniList doesn't have a direct "trending" endpoint, but we can
-                // search with sort=POPULARITY_DESC and empty query
-                val data = repo.searchAnime("", page = 1, perPage = 25)
-                _state.value = if (data.isEmpty()) {
-                    SearchState.Empty
+                val data = repo.getTrending(page = 1, perPage = 25)
+                allResults = data
+                hasMore = false
+                // If filters are active, apply them; otherwise show all trending
+                val hasActiveFilters = _selectedGenres.value.isNotEmpty() || _selectedYears.value.isNotEmpty() ||
+                    _selectedFormats.value.isNotEmpty() || _selectedSeasons.value.isNotEmpty() ||
+                    _selectedStatuses.value.isNotEmpty()
+                if (hasActiveFilters) {
+                    applyFilters()
                 } else {
-                    SearchState.Success(anime = data, hasMore = data.size >= 25, isLoadingMore = false)
+                    _state.value = if (data.isEmpty()) {
+                        SearchState.Empty
+                    } else {
+                        SearchState.Success(anime = data, hasMore = false, isLoadingMore = false)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "AniList browse failed", e)
@@ -253,9 +260,9 @@ class SearchViewModel : ViewModel() {
     private val _selectedGenres = MutableStateFlow<Set<String>>(emptySet())
     val selectedGenres: StateFlow<Set<String>> = _selectedGenres.asStateFlow()
 
-    /** Selected year filter (null = no filter). */
-    private val _selectedYear = MutableStateFlow<Int?>(null)
-    val selectedYear: StateFlow<Int?> = _selectedYear.asStateFlow()
+    /** Selected years (multi-select). Empty = no filter. */
+    private val _selectedYears = MutableStateFlow<Set<Int>>(emptySet())
+    val selectedYears: StateFlow<Set<Int>> = _selectedYears.asStateFlow()
 
     /** Selected formats (multi-select). Empty = no filter. */
     private val _selectedFormats = MutableStateFlow<Set<String>>(emptySet())
@@ -323,12 +330,17 @@ class SearchViewModel : ViewModel() {
         _selectedStatuses.value = current
         applyFilters()
     }
-    fun setYearFilter(year: Int?) { _selectedYear.value = year; applyFilters() }
+    fun toggleYear(year: Int) {
+        val current = _selectedYears.value.toMutableSet()
+        if (current.contains(year)) current.remove(year) else current.add(year)
+        _selectedYears.value = current
+        applyFilters()
+    }
     fun setSortFilter(sort: String?) { _selectedSort.value = sort; applyFilters() }
     fun setShowAdult(show: Boolean) { _showAdult.value = show; applyFilters() }
     fun clearFilters() {
         _selectedGenres.value = emptySet()
-        _selectedYear.value = null
+        _selectedYears.value = emptySet()
         _selectedFormats.value = emptySet()
         _selectedSeasons.value = emptySet()
         _selectedStatuses.value = emptySet()
@@ -340,13 +352,13 @@ class SearchViewModel : ViewModel() {
     /** Apply the current filters to [allResults] and update the state. */
     private fun applyFilters() {
         val genres = _selectedGenres.value
-        val year = _selectedYear.value
+        val years = _selectedYears.value
         val formats = _selectedFormats.value
         val seasons = _selectedSeasons.value
         val statuses = _selectedStatuses.value
         val filtered = allResults.filter { anime ->
             (genres.isEmpty() || anime.genres?.any { it in genres } == true) &&
-            (year == null || anime.seasonYear == year) &&
+            (years.isEmpty() || anime.seasonYear in years) &&
             (formats.isEmpty() || anime.format in formats) &&
             (seasons.isEmpty() || anime.season in seasons) &&
             (statuses.isEmpty() || anime.status in statuses)
@@ -447,7 +459,7 @@ class SearchViewModel : ViewModel() {
      */
     fun onSubmit() {
         val term = _query.value.trim()
-        val hasActiveFilters = _selectedGenres.value.isNotEmpty() || _selectedYear.value != null ||
+        val hasActiveFilters = _selectedGenres.value.isNotEmpty() || _selectedYears.value.isNotEmpty() ||
             _selectedFormats.value.isNotEmpty() || _selectedSeasons.value.isNotEmpty() ||
             _selectedStatuses.value.isNotEmpty() || _selectedSort.value != null
         // If in RECENT mode, auto-switch to AniList for the search
@@ -460,7 +472,10 @@ class SearchViewModel : ViewModel() {
                 else doSearch(term)
             }
         } else if (hasActiveFilters) {
-            viewModelScope.launch { doSearch("") }
+            // Empty query + active filters → load trending then apply filters client-side
+            if (_searchMode.value == SearchMode.ANILIST) {
+                loadAniListBrowse() // loads trending, then applyFilters runs on it
+            }
         }
     }
 

@@ -68,7 +68,7 @@ fun SearchScreen(
     val recent by viewModel.recentSearches.collectAsState()
     val availableGenres by viewModel.availableGenres.collectAsState()
     val selectedGenres by viewModel.selectedGenres.collectAsState()
-    val selectedYear by viewModel.selectedYear.collectAsState()
+    val selectedYears by viewModel.selectedYears.collectAsState()
     val selectedFormats by viewModel.selectedFormats.collectAsState()
     val selectedSeasons by viewModel.selectedSeasons.collectAsState()
     val selectedStatuses by viewModel.selectedStatuses.collectAsState()
@@ -84,8 +84,8 @@ fun SearchScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
 
     // Active filter count (for the badge on the filter button)
-    val activeFilterCount = selectedGenres.size + selectedFormats.size + selectedSeasons.size + selectedStatuses.size +
-        (if (selectedYear != null) 1 else 0) + (if (selectedSort != null) 1 else 0)
+    val activeFilterCount = selectedGenres.size + selectedYears.size + selectedFormats.size + selectedSeasons.size + selectedStatuses.size +
+        (if (selectedSort != null) 1 else 0)
 
     // Phase I — Tabbed filter bottom sheet (redesigned)
     if (showFilterSheet) {
@@ -102,14 +102,14 @@ fun SearchScreen(
                 availableStatuses = viewModel.availableStatuses,
                 availableSorts = viewModel.availableSorts,
                 selectedGenres = selectedGenres,
-                selectedYear = selectedYear,
+                selectedYears = selectedYears,
                 selectedFormats = selectedFormats,
                 selectedSeasons = selectedSeasons,
                 selectedStatuses = selectedStatuses,
                 selectedSort = selectedSort,
                 showAdult = showAdult,
                 onGenreToggle = { viewModel.toggleGenre(it) },
-                onYearSelected = { viewModel.setYearFilter(it) },
+                onYearToggle = { viewModel.toggleYear(it) },
                 onFormatToggle = { viewModel.toggleFormat(it) },
                 onSeasonToggle = { viewModel.toggleSeason(it) },
                 onStatusToggle = { viewModel.toggleStatus(it) },
@@ -1191,14 +1191,14 @@ private fun FilterSheetTabbed(
     availableStatuses: List<String>,
     availableSorts: List<String>,
     selectedGenres: Set<String>,
-    selectedYear: Int?,
+    selectedYears: Set<Int>,
     selectedFormats: Set<String>,
     selectedSeasons: Set<String>,
     selectedStatuses: Set<String>,
     selectedSort: String?,
     showAdult: Boolean,
     onGenreToggle: (String) -> Unit,
-    onYearSelected: (Int?) -> Unit,
+    onYearToggle: (Int) -> Unit,
     onFormatToggle: (String) -> Unit,
     onSeasonToggle: (String) -> Unit,
     onStatusToggle: (String) -> Unit,
@@ -1297,9 +1297,9 @@ private fun FilterSheetTabbed(
                 )
                 "Year" -> FlowRowFilterChips(
                     items = availableYears.map { it.toString() },
-                    selected = listOfNotNull(selectedYear?.toString()),
+                    selected = selectedYears.map { it.toString() },
                     onToggle = { item ->
-                        onYearSelected(if (selectedYear?.toString() == item) null else item.toIntOrNull())
+                        item.toIntOrNull()?.let { onYearToggle(it) }
                     },
                 )
                 "Season" -> FlowRowFilterChips(
