@@ -241,7 +241,9 @@ fun SearchScreen(
                     isLoading = isLoadingBrowse,
                     onResultClick = { result ->
                         val encodedUrl = java.net.URLEncoder.encode(result.url, "UTF-8")
-                        onSourceResultClick("source-detail/${result.sourceId}/$encodedUrl")
+                        val encodedTitle = java.net.URLEncoder.encode(result.title, "UTF-8")
+                        val encodedThumb = java.net.URLEncoder.encode(result.thumbnailUrl ?: "", "UTF-8")
+                        onSourceResultClick("source-link/${result.sourceId}/$encodedUrl/$encodedTitle/$encodedThumb")
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -261,7 +263,9 @@ fun SearchScreen(
                                     results = sourceResults,
                                     onResultClick = { result ->
                                         val encodedUrl = java.net.URLEncoder.encode(result.url, "UTF-8")
-                                        onSourceResultClick("source-detail/${result.sourceId}/$encodedUrl")
+                                        val encodedTitle = java.net.URLEncoder.encode(result.title, "UTF-8")
+                                        val encodedThumb = java.net.URLEncoder.encode(result.thumbnailUrl ?: "", "UTF-8")
+                                        onSourceResultClick("source-link/${result.sourceId}/$encodedUrl/$encodedTitle/$encodedThumb")
                                     },
                                     modifier = Modifier.fillMaxSize(),
                                 )

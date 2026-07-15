@@ -5,6 +5,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -251,23 +253,65 @@ fun AnikutaNavGraph() {
                     onBack = { navController.popBackStack() },
                 )
             }
-            // Phase D — Source-based detail (from extension search results)
+            // Phase I — Source linking (from extension search results)
+            // Checks ExtensionLinkStore first; if linked, goes to DetailScreen;
+            // if not, shows SourceLinkingScreen which searches AniList + links.
             composable(
-                route = "source-detail/{sourceId}/{animeUrl}",
+                route = "source-link/{sourceId}/{animeUrl}/{title}/{thumbnailUrl}",
                 arguments = listOf(
                     navArgument("sourceId") { type = NavType.LongType },
                     navArgument("animeUrl") { type = NavType.StringType },
+                    navArgument("title") { type = NavType.StringType },
+                    navArgument("thumbnailUrl") { type = NavType.StringType },
                 ),
             ) { backStackEntry ->
                 val sourceId = backStackEntry.arguments?.getLong("sourceId") ?: -1L
                 val animeUrl = backStackEntry.arguments?.getString("animeUrl")?.let {
                     java.net.URLDecoder.decode(it, "UTF-8")
                 } ?: ""
-                app.anikuta.ui.detail.SourceDetailScreen(
-                    sourceId = sourceId,
-                    animeUrl = animeUrl,
-                    onBack = { navController.popBackStack() },
-                )
+                val title = backStackEntry.arguments?.getString("title")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+                val thumbnailUrl = backStackEntry.arguments?.getString("thumbnailUrl")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+
+                // Check if already linked
+                val linkStore: app.anikuta.data.cache.ExtensionLinkStore = try {
+                    Injekt.get()
+                } catch (e: Exception) { null!! }
+
+                val linkedId = linkStore?.getAniListId(sourceId, animeUrl)
+                if (linkedId != null && linkedId > 0) {
+                    // Already linked → go directly to DetailScreen
+                    LaunchedEffect(Unit) {
+                        navController.navigate("detail/$linkedId") {
+                            popUpTo("source-link/$sourceId/${java.net.URLEncoder.encode(animeUrl, "UTF-8")}/${java.net.URLEncoder.encode(title, "UTF-8")}/${java.net.URLEncoder.encode(thumbnailUrl, "UTF-8")}") {
+                                inclusive = true
+                            }
+                        }
+                    }
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    // Not linked → show the linking screen
+                    app.anikuta.ui.detail.SourceLinkingScreen(
+                        sourceId = sourceId,
+                        animeUrl = animeUrl,
+                        title = title,
+                        thumbnailUrl = thumbnailUrl.ifBlank { null },
+                        sourceName = "",
+                        onLinked = { anilistId ->
+                            navController.navigate("detail/$anilistId") {
+                                popUpTo("source-link/$sourceId/${java.net.URLEncoder.encode(animeUrl, "UTF-8")}/${java.net.URLEncoder.encode(title, "UTF-8")}/${java.net.URLEncoder.encode(thumbnailUrl, "UTF-8")}") {
+                                    inclusive = true
+                                }
+                            }
+                        },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
             // Hidden debug screen (Phase 5 task 5.1). Accessible via long-press
             // on the version number in About settings. Easily removable: delete this
