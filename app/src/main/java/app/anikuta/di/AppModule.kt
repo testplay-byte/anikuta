@@ -22,6 +22,7 @@ import app.anikuta.data.supabase.SupabaseClient
 import app.anikuta.player.PlayerPreferences
 import app.anikuta.player.PlayerEpisodePreferences
 import app.anikuta.player.WatchProgressStore
+import app.anikuta.player.PlaybackStateStore
 import app.anikuta.ui.library.LibraryStore
 import app.anikuta.ui.library.CategoryStore
 import app.anikuta.data.tracker.AniListTracker
@@ -92,6 +93,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { PlayerPreferences(get<PreferenceStore>()) }
         addSingletonFactory { PlayerEpisodePreferences(get<PreferenceStore>()) }
         addSingletonFactory { WatchProgressStore(get<PreferenceStore>()) }
+        // Phase C — Playback state memory (last video URL + tracks per episode)
+        addSingletonFactory { PlaybackStateStore(get<PreferenceStore>()) }
 
         // Phase 5 task 5.6 — Library persistence (saved AniList IDs + cached JSON)
         addSingletonFactory { LibraryStore(get<PreferenceStore>()) }

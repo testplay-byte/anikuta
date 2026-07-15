@@ -281,6 +281,7 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var observer: PlayerObserver
     private var viewModel: PlayerViewModel? = null
     private val watchProgress: WatchProgressStore? = try { uy.kohesive.injekt.Injekt.get() } catch (e: Exception) { null }
+    private val playbackStateStore: PlaybackStateStore? = try { uy.kohesive.injekt.Injekt.get() } catch (e: Exception) { null }
     private var anilistId: Int = -1
     private var episodeUrl: String = ""
     private var resumedPosition: Int? = null
@@ -687,6 +688,27 @@ class PlayerActivity : ComponentActivity() {
                 Log.w(TAG, "Could not seek to saved position", e)
             }
         }
+
+        // Phase C — restore saved audio + subtitle tracks.
+        // The PlaybackStateStore remembers which tracks were selected last time.
+        // We restore them after the video loads + the seek completes.
+        val savedState = playbackStateStore?.get(anilistId, episodeUrl)
+        if (savedState != null) {
+            try {
+                if (savedState.audioTrackId >= 0) {
+                    MPVLib.setPropertyInt("aid", savedState.audioTrackId)
+                    viewModel?.setCurrentAudioId(savedState.audioTrackId)
+                    Log.d(TAG, "Phase C: restored audio track ${savedState.audioTrackId}")
+                }
+                if (savedState.subtitleTrackId >= 0) {
+                    MPVLib.setPropertyInt("sid", savedState.subtitleTrackId)
+                    viewModel?.setCurrentSubtitleId(savedState.subtitleTrackId)
+                    Log.d(TAG, "Phase C: restored subtitle track ${savedState.subtitleTrackId}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Phase C: could not restore tracks", e)
+            }
+        }
     }
 
     private fun formatTime(seconds: Int): String {
@@ -798,6 +820,7 @@ class PlayerActivity : ComponentActivity() {
 
     /**
      * Save current playback progress to WatchProgressStore (task 5.4).
+     * Also saves the playback state (video URL + tracks) to PlaybackStateStore (Phase C).
      */
     private fun saveProgress() {
         val store = watchProgress ?: return
@@ -817,10 +840,26 @@ class PlayerActivity : ComponentActivity() {
                 episodeNumber = vmEpisodeNumber ?: -1f,
             )
             Log.d(TAG, "Saved progress: ${pos}s / ${dur}s")
+
+            // Phase C — save the playback state (video URL + tracks) so resume
+            // can try the exact same video first, falling back if dead.
+            playbackStateStore?.save(
+                anilistId = anilistId,
+                episodeUrl = episodeUrl,
+                videoUrl = currentVideoUrl,
+                videoServer = currentVideoServer,
+                videoAudio = currentVideoAudio,
+                videoQuality = currentVideoQuality,
+                videoHeaders = intent.getStringExtra(EXTRA_VIDEO_HEADERS) ?: "",
+                audioTrackId = vm.currentAudioId.value,
+                subtitleTrackId = vm.currentSubtitleId.value,
+                sourceId = sourceId,
+            )
         } else if (dur > 0 && pos >= dur - 2) {
             // Finished — clear the progress so next time we start from 0.
             store.clear(anilistId, episodeUrl)
-            Log.d(TAG, "Episode finished — cleared progress")
+            playbackStateStore?.clear(anilistId, episodeUrl)
+            Log.d(TAG, "Episode finished — cleared progress + playback state")
             // Sync to AniList: mark episode as watched (task 6.9)
             syncToAniList()
         }
