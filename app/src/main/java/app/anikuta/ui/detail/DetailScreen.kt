@@ -54,6 +54,7 @@ import uy.kohesive.injekt.api.get
 @Composable
 fun DetailScreen(
     anilistId: Int,
+    autoPlayUrl: String = "",
     onBack: () -> Unit,
 ) {
     val viewModel: DetailViewModel = viewModel(key = "detail_$anilistId") {
@@ -106,6 +107,21 @@ fun DetailScreen(
     // in a previous session or after the auto-remove countdown removed them from the queue.
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.refreshDownloadedOnDisk()
+    }
+
+    // Phase 2: Auto-play support for history resume.
+    // When autoPlayUrl is set (from History tap) and episodes finish loading,
+    // find the matching episode and trigger playEpisode() automatically.
+    // This launches the player at the saved position.
+    var autoPlayAttempted by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(episodeState, autoPlayUrl) {
+        if (autoPlayUrl.isBlank() || autoPlayAttempted) return@LaunchedEffect
+        val loaded = episodeState as? EpisodeState.Loaded ?: return@LaunchedEffect
+        val matchingEpisode = loaded.episodeList.find { it.url == autoPlayUrl }
+        if (matchingEpisode != null) {
+            autoPlayAttempted = true
+            viewModel.playEpisode(matchingEpisode)
+        }
     }
 
     // Observe play requests from the ViewModel → launch the player.

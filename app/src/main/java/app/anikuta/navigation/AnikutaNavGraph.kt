@@ -171,9 +171,14 @@ fun AnikutaNavGraph() {
             }
             composable(Screen.History.route) {
                 HistoryScreen(
-                    onResume = { anilistId, _, _ ->
-                        // Navigate to detail — the player will resume from the
-                        // saved position when the user taps the episode.
+                    onResume = { anilistId, episodeUrl, _ ->
+                        // Navigate to detail with autoPlayUrl — the detail page
+                        // will resolve the video and launch the player at the
+                        // saved position.
+                        val encoded = java.net.URLEncoder.encode(episodeUrl, "UTF-8")
+                        navController.navigate("detail/$anilistId?autoPlayUrl=$encoded")
+                    },
+                    onOpenDetail = { anilistId ->
                         navController.navigate("detail/$anilistId")
                     },
                 )
@@ -192,12 +197,23 @@ fun AnikutaNavGraph() {
                 )
             }
             composable(
-                route = "detail/{anilistId}",
-                arguments = listOf(navArgument("anilistId") { type = NavType.IntType }),
+                route = "detail/{anilistId}?autoPlayUrl={autoPlayUrl}",
+                arguments = listOf(
+                    navArgument("anilistId") { type = NavType.IntType },
+                    navArgument("autoPlayUrl") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                        nullable = true
+                    },
+                ),
             ) { backStackEntry ->
                 val anilistId = backStackEntry.arguments?.getInt("anilistId") ?: 0
+                val autoPlayUrl = backStackEntry.arguments?.getString("autoPlayUrl")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
                 DetailScreen(
                     anilistId = anilistId,
+                    autoPlayUrl = autoPlayUrl,
                     onBack = { navController.popBackStack() },
                 )
             }

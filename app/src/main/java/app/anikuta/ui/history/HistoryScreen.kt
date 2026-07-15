@@ -55,6 +55,7 @@ import java.util.Locale
 @Composable
 fun HistoryScreen(
     onResume: (anilistId: Int, episodeUrl: String, title: String) -> Unit = { _, _, _ -> },
+    onOpenDetail: (anilistId: Int) -> Unit = {},
 ) {
     val viewModel: HistoryViewModel = viewModel()
     val state by viewModel.state.collectAsState()
@@ -180,6 +181,7 @@ private fun HistoryContent(
                 HistoryEntryRow(
                     entry = entry,
                     onClick = { onResume(entry.anilistId, entry.episodeUrl, entry.title) },
+                    onThumbnailClick = { onOpenDetail(entry.anilistId) },
                     onLongPress = { onEntryLongPress(entry) },
                 )
             }
@@ -424,6 +426,7 @@ private fun ContinueWatchingCard(
 private fun HistoryEntryRow(
     entry: HistoryEntry,
     onClick: () -> Unit,
+    onThumbnailClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
@@ -456,12 +459,14 @@ private fun HistoryEntryRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // 16:9 episode thumbnail (or anime cover fallback) — 72dp wide.
+            // Tapping the thumbnail opens the detail page (no auto-play).
             Box(
                 modifier = Modifier
                     .width(72.dp)
                     .height(40.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(if (imageUrl.isNullOrBlank()) placeholderColor else Color.Transparent),
+                    .background(if (imageUrl.isNullOrBlank()) placeholderColor else Color.Transparent)
+                    .clickable { onThumbnailClick() },
                 contentAlignment = Alignment.Center,
             ) {
                 if (!imageUrl.isNullOrBlank()) {
