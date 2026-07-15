@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
@@ -23,6 +25,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
@@ -81,15 +84,15 @@ fun SearchScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
 
     // Active filter count (for the badge on the filter button)
-    val activeFilterCount = listOf(selectedGenre, selectedYear, selectedFormat).count { it != null }
+    val activeFilterCount = listOf(selectedGenre, selectedYear, selectedFormat, selectedSeason, selectedStatus, selectedSort).count { it != null }
 
-    // Phase 5 part 3 — Filter bottom sheet
+    // Phase I — Tabbed filter bottom sheet (redesigned)
     if (showFilterSheet) {
         androidx.compose.material3.ModalBottomSheet(
             onDismissRequest = { showFilterSheet = false },
             dragHandle = null,
         ) {
-            FilterSheetContent(
+            FilterSheetTabbed(
                 searchMode = searchMode,
                 availableGenres = availableGenres,
                 availableYears = viewModel.availableYears,
@@ -112,6 +115,10 @@ fun SearchScreen(
                 onSortSelected = { viewModel.setSortFilter(it) },
                 onShowAdultChanged = { viewModel.setShowAdult(it) },
                 onClearAll = { viewModel.clearFilters() },
+                onApply = {
+                    showFilterSheet = false
+                    viewModel.onSubmit()
+                },
             )
         }
     }
@@ -199,8 +206,20 @@ fun SearchScreen(
 
         // --- Body ----------------------------------------------------------
         when {
+            // RECENT mode or no query in AniList mode → show recent searches
+            (searchMode == SearchMode.RECENT || (query.isBlank() && searchMode == SearchMode.ANILIST)) -> {
+                RecentSearchesSection(
+                    recent = recent,
+                    onSelect = { term ->
+                        viewModel.selectRecent(term)
+                        keyboard?.show()
+                    },
+                    onClear = viewModel::clearRecent,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            // SOURCES mode + no query → show Popular + Latest
             query.isBlank() && searchMode == SearchMode.SOURCES -> {
-                // Phase I: Extension browse mode — show Popular + Latest sections
                 ExtensionBrowseSection(
                     popular = popularResults,
                     latest = latestResults,
@@ -209,17 +228,6 @@ fun SearchScreen(
                         val encodedUrl = java.net.URLEncoder.encode(result.url, "UTF-8")
                         onSourceResultClick("source-detail/${result.sourceId}/$encodedUrl")
                     },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            query.isBlank() -> {
-                RecentSearchesSection(
-                    recent = recent,
-                    onSelect = { term ->
-                        viewModel.selectRecent(term)
-                        keyboard?.show()
-                    },
-                    onClear = viewModel::clearRecent,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -566,9 +574,8 @@ private fun SearchAnimeCard(
                 Text(
                     text = anime.title.preferred(),
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    minLines = 2,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 // Subtitle: format · score · year
@@ -1146,6 +1153,187 @@ private fun SourceBrowseCard(
                     maxLines = 1,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Phase I — Tabbed filter bottom sheet (redesigned).
+ *
+ * Top row: filter category tabs (Genre / Format / Year / Season / Status / Sort)
+ * Below: the selected category's options (multi-select FilterChips)
+ * Top-right: Apply button (closes the sheet + triggers search)
+ * Bottom: Clear all + Adult toggle (AniList mode only)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterSheetTabbed(
+    searchMode: SearchMode,
+    availableGenres: List<String>,
+    availableYears: List<Int>,
+    availableFormats: List<String>,
+    availableSeasons: List<String>,
+    availableStatuses: List<String>,
+    availableSorts: List<String>,
+    selectedGenre: String?,
+    selectedYear: Int?,
+    selectedFormat: String?,
+    selectedSeason: String?,
+    selectedStatus: String?,
+    selectedSort: String?,
+    showAdult: Boolean,
+    onGenreSelected: (String?) -> Unit,
+    onYearSelected: (Int?) -> Unit,
+    onFormatSelected: (String?) -> Unit,
+    onSeasonSelected: (String?) -> Unit,
+    onStatusSelected: (String?) -> Unit,
+    onSortSelected: (String?) -> Unit,
+    onShowAdultChanged: (Boolean) -> Unit,
+    onClearAll: () -> Unit,
+    onApply: () -> Unit,
+) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = if (searchMode == SearchMode.ANILIST) {
+        listOf("Genre", "Format", "Year", "Season", "Status", "Sort")
+    } else {
+        listOf("Format", "Sort", "Status")
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 450.dp)
+            .navigationBarsPadding(),
+    ) {
+        // Top row: title + Apply button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (searchMode == SearchMode.ANILIST) "AniList Filters" else "Extension Filters",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onClearAll) { Text("Clear") }
+                Spacer(modifier = Modifier.width(4.dp))
+                Button(onClick = onApply) { Text("Apply") }
+            }
+        }
+
+        // Tab row — filter categories
+        ScrollableTabRow(
+            selectedTabIndex = selectedTab.coerceIn(0, tabs.lastIndex),
+            containerColor = Color.Transparent,
+            edgePadding = 0.dp,
+            divider = {},
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { Text(title, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal) },
+                )
+            }
+        }
+
+        // Tab content — scrollable
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+        ) {
+            val currentTab = tabs.getOrNull(selectedTab) ?: ""
+            when (currentTab) {
+                "Genre" -> {
+                    if (availableGenres.isEmpty()) {
+                        Text("Loading genres...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        FlowRowFilterChips(
+                            items = availableGenres,
+                            selected = listOfNotNull(selectedGenre),
+                            onToggle = { item ->
+                                onGenreSelected(if (selectedGenre == item) null else item)
+                            },
+                        )
+                    }
+                }
+                "Format" -> FlowRowFilterChips(
+                    items = availableFormats,
+                    selected = listOfNotNull(selectedFormat),
+                    onToggle = { item ->
+                        onFormatSelected(if (selectedFormat == item) null else item)
+                    },
+                )
+                "Year" -> FlowRowFilterChips(
+                    items = availableYears.map { it.toString() },
+                    selected = listOfNotNull(selectedYear?.toString()),
+                    onToggle = { item ->
+                        onYearSelected(if (selectedYear?.toString() == item) null else item.toIntOrNull())
+                    },
+                )
+                "Season" -> FlowRowFilterChips(
+                    items = availableSeasons,
+                    selected = listOfNotNull(selectedSeason),
+                    onToggle = { item ->
+                        onSeasonSelected(if (selectedSeason == item) null else item)
+                    },
+                )
+                "Status" -> FlowRowFilterChips(
+                    items = availableStatuses,
+                    selected = listOfNotNull(selectedStatus),
+                    onToggle = { item ->
+                        onStatusSelected(if (selectedStatus == item) null else item)
+                    },
+                )
+                "Sort" -> FlowRowFilterChips(
+                    items = availableSorts,
+                    selected = listOfNotNull(selectedSort),
+                    onToggle = { item ->
+                        onSortSelected(if (selectedSort == item) null else item)
+                    },
+                )
+            }
+
+            // Adult toggle (AniList only)
+            if (searchMode == SearchMode.ANILIST && currentTab == "Sort") {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Show adult results", style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = showAdult, onCheckedChange = onShowAdultChanged)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun FlowRowFilterChips(
+    items: List<String>,
+    selected: List<String>,
+    onToggle: (String) -> Unit,
+) {
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        items.forEach { item ->
+            FilterChip(
+                selected = selected.contains(item),
+                onClick = { onToggle(item) },
+                label = { Text(item) },
+            )
         }
     }
 }

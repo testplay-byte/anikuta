@@ -164,7 +164,7 @@ class SearchViewModel : ViewModel() {
 
     // Phase 5 part 4 — source toggle
     /** Search mode: AniList (default) or Extensions. */
-    private val _searchMode = MutableStateFlow(SearchMode.ANILIST)
+    private val _searchMode = MutableStateFlow(SearchMode.RECENT)
     val searchMode: StateFlow<SearchMode> = _searchMode.asStateFlow()
 
     /** Source search results (when in SOURCES mode). Separate from AniList results. */
@@ -186,15 +186,19 @@ class SearchViewModel : ViewModel() {
     fun setSearchMode(mode: SearchMode) {
         _searchMode.value = mode
         val q = _query.value.trim()
+        if (mode == SearchMode.RECENT) {
+            // Recent mode: just show recent searches (clear query + reset state)
+            _query.value = ""
+            _state.value = SearchState.Idle
+            return
+        }
         if (q.isNotBlank()) {
             viewModelScope.launch {
                 if (mode == SearchMode.ANILIST) doSearch(q) else doSourceSearch(q)
             }
         } else if (mode == SearchMode.SOURCES) {
-            // No query + SOURCES mode → load popular + latest from extensions
             loadExtensionBrowse()
         } else {
-            // Switching to ANILIST with no query → reset to Idle
             _state.value = SearchState.Idle
         }
     }
@@ -404,13 +408,16 @@ class SearchViewModel : ViewModel() {
         val hasActiveFilters = _selectedGenre.value != null || _selectedYear.value != null ||
             _selectedFormat.value != null || _selectedSeason.value != null ||
             _selectedStatus.value != null || _selectedSort.value != null
+        // If in RECENT mode, auto-switch to AniList for the search
+        if (_searchMode.value == SearchMode.RECENT) {
+            _searchMode.value = SearchMode.ANILIST
+        }
         if (term.isNotBlank()) {
             viewModelScope.launch {
                 if (_searchMode.value == SearchMode.SOURCES) doSourceSearch(term)
                 else doSearch(term)
             }
         } else if (hasActiveFilters) {
-            // Search with filters only (empty query) — AniList supports filter-only search
             viewModelScope.launch { doSearch("") }
         }
     }
@@ -501,6 +508,7 @@ sealed class SearchState {
 
 /** Search mode (Phase 5 part 4). */
 enum class SearchMode(val label: String) {
+    RECENT("Recent"),
     ANILIST("AniList"),
     SOURCES("Extensions"),
 }
