@@ -309,9 +309,45 @@ fun AnikutaNavGraph() {
                                 }
                             }
                         },
+                        onAniListNotFound = {
+                            // AniList search failed → open the SourceDetailScreen (extension-only detail)
+                            navController.navigate("source-detail-fallback/$sourceId/${java.net.URLEncoder.encode(animeUrl, "UTF-8")}/${java.net.URLEncoder.encode(title, "UTF-8")}/${java.net.URLEncoder.encode(thumbnailUrl, "UTF-8")}") {
+                                popUpTo("source-link/$sourceId/${java.net.URLEncoder.encode(animeUrl, "UTF-8")}/${java.net.URLEncoder.encode(title, "UTF-8")}/${java.net.URLEncoder.encode(thumbnailUrl, "UTF-8")}") {
+                                    inclusive = true
+                                }
+                            }
+                        },
                         onBack = { navController.popBackStack() },
                     )
                 }
+            }
+            // Phase I — Source detail fallback (AniList not found, extension-only detail)
+            composable(
+                route = "source-detail-fallback/{sourceId}/{animeUrl}/{title}/{thumbnailUrl}",
+                arguments = listOf(
+                    navArgument("sourceId") { type = NavType.LongType },
+                    navArgument("animeUrl") { type = NavType.StringType },
+                    navArgument("title") { type = NavType.StringType },
+                    navArgument("thumbnailUrl") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val sourceId = backStackEntry.arguments?.getLong("sourceId") ?: -1L
+                val animeUrl = backStackEntry.arguments?.getString("animeUrl")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+                val title = backStackEntry.arguments?.getString("title")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+                val thumbnailUrl = backStackEntry.arguments?.getString("thumbnailUrl")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+                app.anikuta.ui.detail.SourceDetailScreen(
+                    sourceId = sourceId,
+                    animeUrl = animeUrl,
+                    initialTitle = title,
+                    initialThumbnailUrl = thumbnailUrl.ifBlank { null },
+                    onBack = { navController.popBackStack() },
+                )
             }
             // Hidden debug screen (Phase 5 task 5.1). Accessible via long-press
             // on the version number in About settings. Easily removable: delete this

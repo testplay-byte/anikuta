@@ -59,6 +59,7 @@ fun SourceLinkingScreen(
     thumbnailUrl: String?,
     sourceName: String,
     onLinked: (anilistId: Int) -> Unit,
+    onAniListNotFound: () -> Unit,
     onBack: () -> Unit,
 ) {
     val viewModel: SourceLinkingViewModel = viewModel(key = "source_linking_${sourceId}_$animeUrl") {
@@ -66,10 +67,12 @@ fun SourceLinkingScreen(
     }
     val state by viewModel.state.collectAsState()
 
-    // When linked, navigate to the detail page
+    // When linked, navigate to the AniList detail page
     LaunchedEffect(state) {
-        if (state is SourceLinkingState.Linked) {
-            onLinked((state as SourceLinkingState.Linked).anilistId)
+        when (state) {
+            is SourceLinkingState.Linked -> onLinked((state as SourceLinkingState.Linked).anilistId)
+            is SourceLinkingState.Error -> onAniListNotFound()
+            else -> {}
         }
     }
 
@@ -152,19 +155,14 @@ fun SourceLinkingScreen(
                     )
                 }
                 is SourceLinkingState.Error -> {
+                    // Brief flash before navigating to SourceDetailScreen
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        "Could not find this anime on AniList.",
+                        "Not found on AniList. Opening extension details...",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        s.message,
-                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = onBack) { Text("Go back") }
                 }
             }
         }
