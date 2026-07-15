@@ -185,6 +185,9 @@ fun AnikutaNavGraph() {
                         try {
                             val pbStore: PlaybackStateStore = Injekt.get()
                             val saved = pbStore.get(anilistId, episodeUrl)
+                            // Also fetch watch progress for cover URL + anime title + episode number
+                            val wpStore: app.anikuta.player.WatchProgressStore = Injekt.get()
+                            val progress = wpStore.get(anilistId, episodeUrl)
                             if (saved != null && saved.videoUrl.isNotBlank()) {
                                 // Direct launch with the saved video URL + server + audio + quality
                                 val intent = app.anikuta.player.PlayerActivity.newIntent(
@@ -193,7 +196,10 @@ fun AnikutaNavGraph() {
                                     title = title,
                                     anilistId = anilistId,
                                     episodeUrl = episodeUrl,
+                                    episodeNumber = progress?.episodeNumber ?: -1f,
                                     videoHeaders = saved.videoHeaders,
+                                    coverUrl = progress?.coverUrl ?: "",
+                                    animeTitle = progress?.animeTitle ?: "",
                                     sourceId = saved.sourceId,
                                     videoServer = saved.videoServer,
                                     videoAudio = saved.videoAudio,
