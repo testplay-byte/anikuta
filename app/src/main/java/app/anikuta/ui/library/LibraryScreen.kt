@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -78,6 +79,22 @@ fun LibraryScreen(
     val gridState = rememberLazyGridState()
     val isScrolled by remember {
         derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 50 }
+    }
+    val scope = rememberCoroutineScope()
+
+    // Phase H: when settings sheet opens, scroll the grid up to hide the top bar
+    // + categories + count header. The first card row should be at the top.
+    androidx.compose.runtime.LaunchedEffect(showSettingsSheet) {
+        if (showSettingsSheet) {
+            // Scroll past: topbar (index 0) + category_pills (index 1) + count_header (index 2)
+            // → land on index 3 (first anime card) with offset 0
+            try {
+                gridState.animateScrollToItem(3, 0)
+            } catch (_: Exception) {
+                // If there aren't enough items, scroll to whatever is available
+                try { gridState.animateScrollToItem(2, 0) } catch (_: Exception) {}
+            }
+        }
     }
 
     // Create-category dialog
@@ -206,16 +223,17 @@ fun LibraryScreen(
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
                         )
                     }
-                    items(
+                    itemsIndexed(
                         items = s.anime,
-                        key = { it.id },
-                        contentType = { "anime_card_${displaySettings.displayMode.name}" },
-                    ) { anime ->
+                        key = { _, it -> it.id },
+                        contentType = { _, _ -> "anime_card_${displaySettings.displayMode.name}" },
+                    ) { index, anime ->
                         LibraryCard(
                             anime = anime,
                             unwatchedCount = unwatchedCounts[anime.id] ?: 0,
                             subDubInfo = subDubInfo[anime.id],
                             settings = displaySettings,
+                            index = index,
                             onClick = { onAnimeClick(anime.id) },
                         )
                     }
@@ -319,6 +337,7 @@ private fun LibraryCard(
     unwatchedCount: Int,
     settings: LibraryDisplayPrefs.Settings,
     subDubInfo: app.anikuta.data.cache.SubDubStore.SubDubInfo? = null,
+    index: Int = 0,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -341,6 +360,7 @@ private fun LibraryCard(
             unwatchedCount = unwatchedCount,
             subDubInfo = subDubInfo,
             settings = settings,
+            index = index,
             scale = scale,
             cornerRadius = cornerRadius,
             interactionSource = interactionSource,
@@ -351,6 +371,7 @@ private fun LibraryCard(
             unwatchedCount = unwatchedCount,
             subDubInfo = subDubInfo,
             settings = settings,
+            index = index,
             scale = scale,
             cornerRadius = cornerRadius,
             interactionSource = interactionSource,
@@ -360,12 +381,14 @@ private fun LibraryCard(
 }
 
 /**
- * GRID_2 — Rich card: 2:3 portrait cover + title + metadata below.
+ * GRID — Rich card matching the detail page episode list style.
  *
- * Layout:
- *   [Cover (2:3, full width, ~210dp) with badges in corners]
- *   [Title (2 lines, SemiBold)]
- *   [Score ★ · Year · Format — metadata row]
+ * Patterns from EpisodeRow:
+ *  - Alternating bg: surfaceContainerLow (even) / surfaceContainerHigh (odd)
+ *  - 12dp rounded Surface (was Card)
+ *  - Title in a surfaceContainer Surface (8dp rounded) — like episode titles
+ *  - SUB/DUB in AudioPills style (outlineVariant, 6dp rounded, dot separators)
+ *  - Score badge on the cover (black 70% alpha overlay — like episode number)
  */
 @Composable
 private fun LibraryRichCard(
@@ -373,11 +396,18 @@ private fun LibraryRichCard(
     unwatchedCount: Int,
     subDubInfo: app.anikuta.data.cache.SubDubStore.SubDubInfo?,
     settings: LibraryDisplayPrefs.Settings,
+    index: Int,
     scale: Float,
     cornerRadius: Float,
     interactionSource: MutableInteractionSource,
     onClick: () -> Unit,
 ) {
+    // Alternating bg — matches EpisodeRow pattern
+    val cardColor = if (index % 2 == 0) {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
     val borderWidth = when (settings.cardBorder) {
         LibraryDisplayPrefs.CardBorder.NONE -> 0.dp
         LibraryDisplayPrefs.CardBorder.THIN -> 1.dp
@@ -385,18 +415,13 @@ private fun LibraryRichCard(
     }
     val borderColor = MaterialTheme.colorScheme.outlineVariant
 
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale),
-        shape = RoundedCornerShape(cornerRadius.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (settings.cardBorder == LibraryDisplayPrefs.CardBorder.NONE) 1.dp else 0.dp,
-            pressedElevation = 3.dp,
-        ),
+        shape = RoundedCornerShape(12.dp),
+        color = cardColor,
+        tonalElevation = 1.dp,
         border = if (borderWidth > 0.dp) androidx.compose.foundation.BorderStroke(borderWidth, borderColor) else null,
         interactionSource = interactionSource,
         onClick = onClick,
@@ -407,7 +432,7 @@ private fun LibraryRichCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(topStart = cornerRadius.dp, topEnd = cornerRadius.dp)),
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
             ) {
                 AsyncImage(
                     model = anime.coverImage.best(),
@@ -420,44 +445,44 @@ private fun LibraryRichCard(
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(8.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primary,
+                            .padding(6.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f),
                     ) {
                         Text(
                             text = unwatchedCount.toString(),
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = androidx.compose.ui.graphics.Color.White,
                         )
                     }
                 }
-                // Score badge (top-end) — if enabled
+                // Score badge (top-end) — if enabled — black overlay like episode number
                 if (settings.showRating && anime.averageScore != null) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(8.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                            .padding(6.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("★", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text("★", style = MaterialTheme.typography.labelSmall, color = androidx.compose.ui.graphics.Color.White)
                             Spacer(modifier = Modifier.width(2.dp))
                             Text(
                                 anime.averageScore.toString(),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = androidx.compose.ui.graphics.Color.White,
                             )
                         }
                     }
                 }
-                // OVERLAY title (on the cover, bottom) — if titlePosition is OVERLAY
+                // OVERLAY title — if titlePosition is OVERLAY
                 if (settings.titlePosition == LibraryDisplayPrefs.TitlePosition.OVERLAY) {
                     Box(
                         modifier = Modifier
@@ -482,7 +507,6 @@ private fun LibraryRichCard(
                             maxLines = settings.titleMaxLines,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        // Metadata row (overlay)
                         val metaItems = mutableListOf<String>()
                         if (settings.showYear && anime.seasonYear != null) metaItems.add(anime.seasonYear.toString())
                         if (anime.format != null) metaItems.add(formatLabel(anime.format))
@@ -504,49 +528,129 @@ private fun LibraryRichCard(
                         .fillMaxWidth()
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                 ) {
-                    Text(
-                        text = anime.title.preferred(),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = settings.titleMaxLines,
-                        minLines = settings.titleMaxLines,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    // Title in a surfaceContainer Surface — matches EpisodeRow pattern
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = anime.title.preferred(),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = settings.titleMaxLines,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    // Metadata row + audio pills — matches EpisodeRow's DateAudioPillsRow
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        // Year pill
                         if (settings.showYear && anime.seasonYear != null) {
-                            Text(anime.seasonYear.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            ) {
+                                Text(
+                                    anime.seasonYear.toString(),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
                         }
+                        // Format pill
                         if (anime.format != null) {
-                            Text("· ${formatLabel(anime.format)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            ) {
+                                Text(
+                                    formatLabel(anime.format),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
                         }
+                        // Episode count pill
                         if (settings.showEpisodes && anime.episodes != null) {
-                            Text("· ${anime.episodes} eps", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            ) {
+                                Text(
+                                    "${anime.episodes} eps",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
                         }
-                    }
-                    // SUB/DUB badges
-                    if (settings.showSubDub && subDubInfo != null && (subDubInfo.hasSub || subDubInfo.hasDub)) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (subDubInfo.hasSub) {
-                                Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-                                    Text("SUB", modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                }
-                            }
-                            if (subDubInfo.hasDub) {
-                                Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.tertiaryContainer) {
-                                    Text("DUB", modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                }
-                            }
+                        // Audio pills (SUB/DUB) — matches AudioPills pattern
+                        if (settings.showSubDub && subDubInfo != null && (subDubInfo.hasSub || subDubInfo.hasDub)) {
+                            LibraryAudioPills(hasSub = subDubInfo.hasSub, hasDub = subDubInfo.hasDub)
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Audio pills matching the detail page's AudioPills composable.
+ * outlineVariant bg, 6dp rounded, dot separators, short labels when 2+.
+ */
+@Composable
+private fun LibraryAudioPills(hasSub: Boolean, hasDub: Boolean) {
+    data class Audio(val full: String, val short: String)
+    val parts = buildList {
+        if (hasSub) add(Audio("SUB", "S"))
+        if (hasDub) add(Audio("DUB", "D"))
+    }
+    val useShort = parts.size >= 2
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            parts.forEachIndexed { idx, audio ->
+                if (idx > 0) {
+                    Box(
+                        modifier = Modifier
+                            .size(3.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                androidx.compose.foundation.shape.CircleShape,
+                            ),
+                    )
+                }
+                Text(
+                    text = if (useShort) audio.short else audio.full,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
         }
     }
@@ -564,18 +668,25 @@ private fun LibraryListCard(
     unwatchedCount: Int,
     subDubInfo: app.anikuta.data.cache.SubDubStore.SubDubInfo?,
     settings: LibraryDisplayPrefs.Settings,
+    index: Int,
     scale: Float,
     cornerRadius: Float,
     interactionSource: MutableInteractionSource,
     onClick: () -> Unit,
 ) {
+    // Alternating bg — matches EpisodeRow pattern
+    val cardColor = if (index % 2 == 0) {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale),
         shape = RoundedCornerShape(cornerRadius.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = cardColor,
         ),
         elevation = CardDefaults.cardElevation(
             defaultElevation = 1.dp,
