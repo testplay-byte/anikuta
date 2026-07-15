@@ -24,9 +24,10 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -163,11 +164,12 @@ fun LibraryScreen(
                     items(
                         items = s.anime,
                         key = { it.id },
-                        contentType = { "anime_card" },
+                        contentType = { "anime_card_${displayMode.name}" },
                     ) { anime ->
                         LibraryCard(
                             anime = anime,
                             unwatchedCount = unwatchedCounts[anime.id] ?: 0,
+                            displayMode = displayMode,
                             onClick = { onAnimeClick(anime.id) },
                         )
                     }
@@ -287,15 +289,27 @@ private fun LibraryTopBar(
 }
 
 /**
- * M3 Expressive library card — spring-based press feedback + corner morph,
- * matching HomeScreen's ExpressiveAnimeCard. On press: scale 1 → 0.96,
- * corner radius 16dp → 20dp.
+ * M3 Expressive library card — redesigned (Phase A).
  *
- * Phase 4 part 3: shows an unwatched-episode count badge in the top-start
- * corner of the cover when [unwatchedCount] > 0.
+ * Adapts to the current [DisplayMode]:
+ *  - GRID_2: rich card — 2:3 cover + title + score/year/format metadata
+ *  - GRID_3: compact card — cover-only with gradient + title overlay
+ *  - LIST: horizontal row — small cover (left) + title/metadata (right)
+ *
+ * All modes share the spring press feedback (scale 1→0.96 + corner morph
+ * 16→20dp) via [AnikutaSprings].
+ *
+ * Badges:
+ *  - Unwatched count (top-start, primary color) — when unwatchedCount > 0
+ *  - Score (top-end, surfaceVariant with star) — when averageScore != null
  */
 @Composable
-private fun LibraryCard(anime: AniListAnime, unwatchedCount: Int, onClick: () -> Unit) {
+private fun LibraryCard(
+    anime: AniListAnime,
+    unwatchedCount: Int,
+    displayMode: DisplayMode,
+    onClick: () -> Unit,
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -310,34 +324,81 @@ private fun LibraryCard(anime: AniListAnime, unwatchedCount: Int, onClick: () ->
         label = "lib_card_corner",
     )
 
+    when (displayMode) {
+        DisplayMode.LIST -> LibraryListCard(
+            anime = anime,
+            unwatchedCount = unwatchedCount,
+            scale = scale,
+            cornerRadius = cornerRadius,
+            interactionSource = interactionSource,
+            onClick = onClick,
+        )
+        DisplayMode.GRID_3 -> LibraryCompactCard(
+            anime = anime,
+            unwatchedCount = unwatchedCount,
+            scale = scale,
+            cornerRadius = cornerRadius,
+            interactionSource = interactionSource,
+            onClick = onClick,
+        )
+        DisplayMode.GRID_2 -> LibraryRichCard(
+            anime = anime,
+            unwatchedCount = unwatchedCount,
+            scale = scale,
+            cornerRadius = cornerRadius,
+            interactionSource = interactionSource,
+            onClick = onClick,
+        )
+    }
+}
+
+/**
+ * GRID_2 — Rich card: 2:3 portrait cover + title + metadata below.
+ *
+ * Layout:
+ *   [Cover (2:3, full width, ~210dp) with badges in corners]
+ *   [Title (2 lines, SemiBold)]
+ *   [Score ★ · Year · Format — metadata row]
+ */
+@Composable
+private fun LibraryRichCard(
+    anime: AniListAnime,
+    unwatchedCount: Int,
+    scale: Float,
+    cornerRadius: Float,
+    interactionSource: MutableInteractionSource,
+    onClick: () -> Unit,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(260.dp)
             .scale(scale),
         shape = RoundedCornerShape(cornerRadius.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp,
-            pressedElevation = 4.dp,
+            defaultElevation = 1.dp,
+            pressedElevation = 3.dp,
         ),
         interactionSource = interactionSource,
         onClick = onClick,
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Cover with badges
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(topStart = cornerRadius.dp, topEnd = cornerRadius.dp)),
+            ) {
                 AsyncImage(
                     model = anime.coverImage.best(),
                     contentDescription = anime.title.preferred(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(190.dp)
-                        .clip(RoundedCornerShape(topStart = cornerRadius.dp, topEnd = cornerRadius.dp)),
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
-                // Unwatched count badge (top-start corner)
+                // Unwatched badge (top-start)
                 if (unwatchedCount > 0) {
                     Surface(
                         modifier = Modifier
@@ -348,34 +409,72 @@ private fun LibraryCard(anime: AniListAnime, unwatchedCount: Int, onClick: () ->
                     ) {
                         Text(
                             text = unwatchedCount.toString(),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                     }
                 }
+                // Score badge (top-end)
+                if (anime.averageScore != null) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "★",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                anime.averageScore.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
             }
+            // Metadata below cover
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
                     text = anime.title.preferred(),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
+                    minLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    lineHeight = androidx.compose.ui.unit.TextUnit(18f, androidx.compose.ui.unit.TextUnitType.Sp),
                 )
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (anime.averageScore != null) {
+                    if (anime.seasonYear != null) {
                         Text(
-                            "★ ${anime.averageScore}",
+                            anime.seasonYear.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (anime.format != null) {
+                        Text(
+                            "· ${formatLabel(anime.format)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -391,6 +490,232 @@ private fun LibraryCard(anime: AniListAnime, unwatchedCount: Int, onClick: () ->
             }
         }
     }
+}
+
+/**
+ * GRID_3 — Compact card: cover-only with gradient + title overlay at bottom.
+ *
+ * Smaller than the rich card — optimizes for seeing more covers at once.
+ * The title sits on a gradient overlay at the bottom of the cover.
+ */
+@Composable
+private fun LibraryCompactCard(
+    anime: AniListAnime,
+    unwatchedCount: Int,
+    scale: Float,
+    cornerRadius: Float,
+    interactionSource: MutableInteractionSource,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale),
+        shape = RoundedCornerShape(cornerRadius.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp,
+            pressedElevation = 3.dp,
+        ),
+        interactionSource = interactionSource,
+        onClick = onClick,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(cornerRadius.dp)),
+        ) {
+            AsyncImage(
+                model = anime.coverImage.best(),
+                contentDescription = anime.title.preferred(),
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            // Bottom gradient for text readability
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.75f),
+                            ),
+                            startY = Float.POSITIVE_INFINITY * 0.4f,
+                            endY = Float.POSITIVE_INFINITY,
+                        ),
+                    ),
+            )
+            // Unwatched badge (top-start)
+            if (unwatchedCount > 0) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                ) {
+                    Text(
+                        text = unwatchedCount.toString(),
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
+            }
+            // Title overlay (bottom)
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(8.dp),
+            ) {
+                Text(
+                    text = anime.title.preferred(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (anime.seasonYear != null) {
+                    Text(
+                        anime.seasonYear.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.8f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * LIST — Horizontal row: small cover (left) + title/metadata (right).
+ *
+ * Cover is 56×80dp (2:3 portrait). The right side shows the title,
+ * score, year/format, and unwatched count.
+ */
+@Composable
+private fun LibraryListCard(
+    anime: AniListAnime,
+    unwatchedCount: Int,
+    scale: Float,
+    cornerRadius: Float,
+    interactionSource: MutableInteractionSource,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale),
+        shape = RoundedCornerShape(cornerRadius.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp,
+            pressedElevation = 3.dp,
+        ),
+        interactionSource = interactionSource,
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Cover thumbnail (56×80dp, 2:3)
+            Box(
+                modifier = Modifier
+                    .width(56.dp)
+                    .height(80.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+            ) {
+                AsyncImage(
+                    model = anime.coverImage.best(),
+                    contentDescription = anime.title.preferred(),
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                // Unwatched badge (top-start, small)
+                if (unwatchedCount > 0) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopStart),
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                    ) {
+                        Text(
+                            text = unwatchedCount.toString(),
+                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                }
+            }
+            // Metadata (right)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp),
+            ) {
+                Text(
+                    text = anime.title.preferred(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (anime.averageScore != null) {
+                        Text(
+                            "★ ${anime.averageScore}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                    if (anime.seasonYear != null) {
+                        Text(
+                            "· ${anime.seasonYear}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (anime.format != null) {
+                        Text(
+                            "· ${formatLabel(anime.format)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Maps AniList format strings to readable labels. */
+private fun formatLabel(format: String): String = when (format) {
+    "TV" -> "TV"
+    "MOVIE" -> "Movie"
+    "OVA" -> "OVA"
+    "ONA" -> "ONA"
+    "SPECIAL" -> "Special"
+    "MUSIC" -> "Music"
+    else -> format
 }
 
 @Composable
