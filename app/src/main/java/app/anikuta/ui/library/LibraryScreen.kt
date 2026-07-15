@@ -11,12 +11,15 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Sort
@@ -61,6 +64,7 @@ fun LibraryScreen(
     val viewModel: LibraryViewModel = viewModel()
     val state by viewModel.state.collectAsState()
     val sortMode by viewModel.sortMode.collectAsState()
+    val sortAscending by viewModel.sortAscending.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val displaySettings by viewModel.displaySettings.collectAsState()
     val categories by viewModel.categories.collectAsState()
@@ -69,6 +73,12 @@ fun LibraryScreen(
     val subDubInfo by viewModel.subDubInfo.collectAsState()
     var showCreateCategoryDialog by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
+
+    // Phase H: track scroll for the gradient blur effect at the top
+    val gridState = rememberLazyGridState()
+    val isScrolled by remember {
+        derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 50 }
+    }
 
     // Create-category dialog
     if (showCreateCategoryDialog) {
@@ -102,13 +112,11 @@ fun LibraryScreen(
     if (showSettingsSheet) {
         androidx.compose.material3.ModalBottomSheet(
             onDismissRequest = { showSettingsSheet = false },
+            sheetMaxHeight = androidx.compose.ui.unit.Fraction(0.6f), // limit height
         ) {
             LibrarySettingsSheet(
-                categories = categories,
-                selectedCategoryId = selectedCategoryId,
-                onSelectCategory = { viewModel.selectCategory(it) },
-                onCreateCategory = { showCreateCategoryDialog = true; showSettingsSheet = false },
                 sortMode = sortMode,
+                sortAscending = sortAscending,
                 onSortSelected = { viewModel.setSort(it) },
                 settings = displaySettings,
                 onSetDisplayMode = viewModel::setDisplayMode,
@@ -135,8 +143,10 @@ fun LibraryScreen(
         isRefreshing = isRefreshing,
         onRefresh = { viewModel.refresh() },
     ) {
+        Box(modifier = Modifier.fillMaxSize()) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(gridColumns),
+            state = gridState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = 0.dp, bottom = 24.dp, start = 12.dp, end = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -147,6 +157,17 @@ fun LibraryScreen(
                 LibraryTopBar(
                     onSettingsClick = { showSettingsSheet = true },
                 )
+            }
+
+            // Phase H: Category pills (below the top bar, above the grid)
+            if (categories.size > 1) {
+                item(key = "category_pills", span = { GridItemSpan(maxLineSpan) }) {
+                    LibraryCategoryPills(
+                        categories = categories,
+                        selectedId = selectedCategoryId,
+                        onSelect = { viewModel.selectCategory(it) },
+                    )
+                }
             }
 
             when (val s = state) {
@@ -202,6 +223,23 @@ fun LibraryScreen(
                 }
             }
         }
+        // Phase H: gradient blur + darkening at the top when scrolling
+        if (isScrolled) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+                            0.5f to MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
+                            1f to MaterialTheme.colorScheme.background.copy(alpha = 0f),
+                        ),
+                    ),
+            )
+        }
+        } // end Box
     }
 }
 
@@ -754,11 +792,8 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LibrarySettingsSheet(
-    categories: List<CategoryStore.Category>,
-    selectedCategoryId: Long,
-    onSelectCategory: (Long) -> Unit,
-    onCreateCategory: () -> Unit,
     sortMode: SortMode,
+    sortAscending: Boolean,
     onSortSelected: (SortMode) -> Unit,
     settings: LibraryDisplayPrefs.Settings,
     onSetDisplayMode: (LibraryDisplayPrefs.DisplayMode) -> Unit,
@@ -780,54 +815,7 @@ private fun LibrarySettingsSheet(
             .fillMaxWidth()
             .navigationBarsPadding(),
     ) {
-        // Pill-shaped category selection at the TOP (no empty space)
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(categories) { category ->
-                val isSelected = category.id == selectedCategoryId
-                Surface(
-                    modifier = Modifier
-                        .then(
-                            if (isSelected) Modifier
-                            else Modifier.clickable { onSelectCategory(category.id) },
-                        ),
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = if (isSelected) 0.dp else 1.dp,
-                ) {
-                    Text(
-                        text = category.name,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            // "New" pill for creating categories
-            item {
-                Surface(
-                    modifier = Modifier.clickable { onCreateCategory() },
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "New category", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("New", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    }
-                }
-            }
-        }
-
-        // Tab row
+        // Tab row — NO categories here (they're on the library page itself)
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = Color.Transparent,
@@ -844,7 +832,7 @@ private fun LibrarySettingsSheet(
         // Tab content
         when (selectedTab) {
             0 -> FilterTab()
-            1 -> SortTab(sortMode, onSortSelected)
+            1 -> SortTab(sortMode, sortAscending, onSortSelected)
             2 -> DisplayTab(settings, onSetDisplayMode, onSetGridColumns, onSetTitlePosition, onSetTitleMaxLines, onSetShowRating, onSetShowYear, onSetShowEpisodes, onSetShowSubDub, onSetShowUnwatchedBadge, onSetCardBorder)
         }
     }
@@ -873,13 +861,14 @@ private fun FilterTab() {
 }
 
 @Composable
-private fun SortTab(sortMode: SortMode, onSortSelected: (SortMode) -> Unit) {
+private fun SortTab(sortMode: SortMode, sortAscending: Boolean, onSortSelected: (SortMode) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
     ) {
         SortMode.entries.forEach { mode ->
+            val isSelected = mode == sortMode
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -891,11 +880,25 @@ private fun SortTab(sortMode: SortMode, onSortSelected: (SortMode) -> Unit) {
                 Text(
                     mode.label,
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (mode == sortMode) FontWeight.Bold else FontWeight.Normal,
-                    color = if (mode == sortMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
-                if (mode == sortMode) {
-                    Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                if (isSelected) {
+                    // Show asc/desc indicator — click to toggle
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (sortAscending) "A→Z" else "Z→A",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            if (sortAscending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                            contentDescription = if (sortAscending) "Ascending" else "Descending",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
         }
@@ -987,5 +990,44 @@ private fun SwitchRow(title: String, checked: Boolean, onCheckedChange: (Boolean
     ) {
         Text(title, style = MaterialTheme.typography.bodyMedium)
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/**
+ * Phase H — Category pills shown on the library page (below the top bar).
+ *
+ * Pill-shaped (RoundedCornerShape(20dp)), horizontally scrollable.
+ * Selected = primary background; unselected = surfaceContainerHigh.
+ * Only shown when there's more than 1 category.
+ */
+@Composable
+private fun LibraryCategoryPills(
+    categories: List<CategoryStore.Category>,
+    selectedId: Long,
+    onSelect: (Long) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(categories) { category ->
+            val isSelected = category.id == selectedId
+            Surface(
+                modifier = Modifier.clickable { onSelect(category.id) },
+                shape = RoundedCornerShape(20.dp),
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = if (isSelected) 0.dp else 1.dp,
+            ) {
+                Text(
+                    text = category.name,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }

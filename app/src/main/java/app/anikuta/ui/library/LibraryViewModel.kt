@@ -70,6 +70,10 @@ class LibraryViewModel : ViewModel() {
     private val _sortMode = MutableStateFlow(SortMode.TITLE)
     val sortMode: StateFlow<SortMode> = _sortMode.asStateFlow()
 
+    /** Sort direction (Phase H). True = ascending, False = descending. */
+    private val _sortAscending = MutableStateFlow(true)
+    val sortAscending: StateFlow<Boolean> = _sortAscending.asStateFlow()
+
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
@@ -272,8 +276,13 @@ class LibraryViewModel : ViewModel() {
 
     /** Switch sort mode and re-sort the currently-loaded list. */
     fun setSort(mode: SortMode) {
-        if (mode == _sortMode.value) return
-        _sortMode.value = mode
+        if (mode == _sortMode.value) {
+            // Same sort tapped again → invert direction
+            _sortAscending.value = !_sortAscending.value
+        } else {
+            _sortMode.value = mode
+            _sortAscending.value = true // default to ascending on new sort
+        }
         applyFilterAndSort()
     }
 
@@ -295,11 +304,15 @@ class LibraryViewModel : ViewModel() {
      *   seen-episode tracking lands (Phase 4).
      */
     private fun sort(anime: List<AniListAnime>): List<AniListAnime> {
+        val ascending = _sortAscending.value
         return when (_sortMode.value) {
-            SortMode.TITLE -> anime.sortedBy { it.title.preferred().lowercase() }
+            SortMode.TITLE -> if (ascending) {
+                anime.sortedBy { it.title.preferred().lowercase() }
+            } else {
+                anime.sortedByDescending { it.title.preferred().lowercase() }
+            }
             SortMode.LAST_WATCHED -> {
                 val progress = watchProgressStore?.getAll().orEmpty()
-                // Build maxUpdatedAt per anilistId ONCE — O(m).
                 val maxUpdatedAtByAnime = HashMap<Int, Long>(progress.size)
                 for (key in progress.keys) {
                     val anilistId = key.substringBefore(':').toIntOrNull() ?: continue
@@ -309,10 +322,17 @@ class LibraryViewModel : ViewModel() {
                         maxUpdatedAtByAnime[anilistId] = updatedAt
                     }
                 }
-                // Sort by the precomputed map — O(n log n), no per-anime scanning.
-                anime.sortedByDescending { maxUpdatedAtByAnime[it.id] ?: 0L }
+                if (ascending) {
+                    anime.sortedBy { maxUpdatedAtByAnime[it.id] ?: 0L }
+                } else {
+                    anime.sortedByDescending { maxUpdatedAtByAnime[it.id] ?: 0L }
+                }
             }
-            SortMode.UNREAD -> anime.sortedByDescending { it.episodes ?: 0 }
+            SortMode.UNREAD -> if (ascending) {
+                anime.sortedBy { it.episodes ?: 0 }
+            } else {
+                anime.sortedByDescending { it.episodes ?: 0 }
+            }
         }
     }
 }
