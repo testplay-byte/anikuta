@@ -113,9 +113,10 @@ fun SearchScreen(
                             } else {
                                 ResultsGrid(
                                     anime = s.anime,
+                                    hasMore = s.hasMore,
+                                    isLoadingMore = s.isLoadingMore,
+                                    onLoadMore = { viewModel.loadMore() },
                                     onAnimeClick = { id ->
-                                        // Persist query to recent searches BEFORE navigating,
-                                        // so the back-stack return shows it in the recent list.
                                         viewModel.onAnimeClick(id)
                                         onAnimeClick(id)
                                     },
@@ -324,9 +325,27 @@ private fun ResultsGrid(
     anime: List<AniListAnime>,
     onAnimeClick: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    hasMore: Boolean = false,
+    isLoadingMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
 ) {
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+
+    // Phase 5 part 2: detect scroll near the bottom → trigger loadMore.
+    androidx.compose.runtime.LaunchedEffect(gridState, hasMore, isLoadingMore) {
+        androidx.compose.runtime.snapshotFlow {
+            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisible >= anime.size - 4 // trigger when 4 items from the end
+        }.collect { nearEnd ->
+            if (nearEnd && hasMore && !isLoadingMore) {
+                onLoadMore()
+            }
+        }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
+        state = gridState,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -338,6 +357,19 @@ private fun ResultsGrid(
             contentType = { "search_anime_card" },
         ) { item ->
             SearchAnimeCard(item, onClick = { onAnimeClick(item.id) })
+        }
+        // Loading-more footer (full-width span)
+        if (isLoadingMore) {
+            item(key = "loading_more", span = { GridItemSpan(maxLineSpan) }) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            }
         }
     }
 }

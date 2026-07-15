@@ -127,42 +127,68 @@ class SearchViewModel : ViewModel() {
         // with the actual search."
     }
 
+    /** Current page for pagination (Phase 5 part 2). */
+    private var currentPage = 1
+    /** Whether more pages are available. */
+    private var hasMore = false
+    /** The query for the current search (used for loadMore). */
+    private var currentQuery = ""
+
     private suspend fun doSearch(q: String) {
         val repo = anilistRepo
-        val cache = cacheManager
-        if (repo == null || cache == null) {
+        if (repo == null) {
             _state.value = SearchState.Error("App not properly initialized")
             return
         }
+        // Reset pagination state for a new search.
+        currentPage = 1
+        currentQuery = q
         _state.value = SearchState.Loading
         try {
-            // Cache by query — backspaces / re-queries within 5min hit the
-            // LocalCache instead of re-querying AniList. Matches the pattern
-            // HomeViewModel uses for trending / popular / fresh.
-            val cacheKey = "search_${q.trim().lowercase()}"
-            val data = cache.getOrFetch(
-                key = cacheKey,
-                ttlMs = CACHE_TTL,
-                fetch = { repo.searchAnime(q) },
-                serialize = { json.encodeToString(ListSerializer(AniListAnime.serializer()), it) },
-                deserialize = { json.decodeFromString(ListSerializer(AniListAnime.serializer()), it) },
-            )
-            _state.value = if (data == null) {
-                SearchState.Error("No data")
-            } else if (data.isEmpty()) {
+            // Phase 5 part 2: direct API call (page 1, perPage 25) — no cache,
+            // because pagination makes cache keys complex. The cache was only
+            // 5-min TTL anyway.
+            val data = repo.searchAnime(q, page = 1, perPage = 25)
+            hasMore = data.size >= 25 // AniList returns exactly perPage if more exist
+            _state.value = if (data.isEmpty()) {
                 SearchState.Empty
             } else {
-                // Save the query to recent searches when we get real results.
-                // Previously this only happened in onAnimeClick (tapping a
-                // result), so a user who searched + pressed the keyboard
-                // search button without tapping a result never got the query
-                // saved — recent searches appeared empty.
                 saveRecent(q.trim())
-                SearchState.Success(data)
+                SearchState.Success(anime = data, hasMore = hasMore, isLoadingMore = false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Search failed for '$q'", e)
             _state.value = SearchState.Error(e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * Load the next page of results (Phase 5 part 2).
+     * Called when the user scrolls to the bottom of the results grid.
+     * Appends to the existing Success list. No-op if not Success or already loading.
+     */
+    fun loadMore() {
+        val repo = anilistRepo ?: return
+        val current = _state.value as? SearchState.Success ?: return
+        if (!current.hasMore || current.isLoadingMore) return
+        // Mark as loading more (keep the existing results visible).
+        _state.value = current.copy(isLoadingMore = true)
+        viewModelScope.launch {
+            try {
+                currentPage++
+                val nextData = repo.searchAnime(currentQuery, page = currentPage, perPage = 25)
+                hasMore = nextData.size >= 25
+                val combined = current.anime + nextData
+                _state.value = if (combined.isEmpty()) {
+                    SearchState.Empty
+                } else {
+                    SearchState.Success(anime = combined, hasMore = hasMore, isLoadingMore = false)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "loadMore failed (page $currentPage)", e)
+                // Revert to the previous state (without loading indicator).
+                _state.value = current.copy(isLoadingMore = false)
+            }
         }
     }
 
@@ -240,7 +266,11 @@ class SearchViewModel : ViewModel() {
 sealed class SearchState {
     data object Idle : SearchState()
     data object Loading : SearchState()
-    data class Success(val anime: List<AniListAnime>) : SearchState()
+    data class Success(
+        val anime: List<AniListAnime>,
+        val hasMore: Boolean = false,
+        val isLoadingMore: Boolean = false,
+    ) : SearchState()
     data object Empty : SearchState()
     data class Error(val message: String) : SearchState()
 }
