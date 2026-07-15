@@ -229,6 +229,15 @@ fun AnikutaNavGraph() {
             composable("settings/general") {
                 app.anikuta.ui.settings.GeneralSettingsScreen(onBack = { navController.popBackStack() })
             }
+            composable("settings/library") {
+                app.anikuta.ui.settings.LibrarySettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/history") {
+                app.anikuta.ui.settings.HistorySettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/search") {
+                app.anikuta.ui.settings.SearchSettingsScreen(onBack = { navController.popBackStack() })
+            }
             composable("settings/data") {
                 app.anikuta.ui.settings.StorageSettingsScreen(onBack = { navController.popBackStack() })
             }

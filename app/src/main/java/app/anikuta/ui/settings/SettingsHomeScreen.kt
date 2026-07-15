@@ -67,6 +67,9 @@ fun SettingsHomeScreen(
 ) {
     val categories = listOf(
         SettingsCategory("settings/general", "General", "Clear cache, storage", Icons.Default.CleaningServices, "emerald"),
+        SettingsCategory("settings/library", "Library", "Display mode, categories, badges", Icons.Default.LibraryBooks, "amber"),
+        SettingsCategory("settings/history", "History", "Watch threshold, retention", Icons.Default.History, "rose"),
+        SettingsCategory("settings/search", "Search", "Default source, result count", Icons.Default.Search, "sky"),
         SettingsCategory("settings/data", "Data & Storage", "Storage folder, downloads location", Icons.Default.Folder, "blue"),
         SettingsCategory("settings/player", "Player", "Speed, hardware decoding, audio", Icons.Default.PlayCircle, "violet"),
         SettingsCategory("settings/details", "Details", "Episode list display, thumbnails, titles", Icons.Default.Info, "indigo"),
