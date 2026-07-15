@@ -67,6 +67,10 @@ fun SearchScreen(
     val selectedGenre by viewModel.selectedGenre.collectAsState()
     val selectedYear by viewModel.selectedYear.collectAsState()
     val selectedFormat by viewModel.selectedFormat.collectAsState()
+    val selectedSeason by viewModel.selectedSeason.collectAsState()
+    val selectedStatus by viewModel.selectedStatus.collectAsState()
+    val selectedSort by viewModel.selectedSort.collectAsState()
+    val showAdult by viewModel.showAdult.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
     val sourceResults by viewModel.sourceResults.collectAsState()
     val focusRequester = remember { FocusRequester() }
@@ -86,12 +90,23 @@ fun SearchScreen(
                 availableGenres = availableGenres,
                 availableYears = viewModel.availableYears,
                 availableFormats = viewModel.availableFormats,
+                availableSeasons = viewModel.availableSeasons,
+                availableStatuses = viewModel.availableStatuses,
+                availableSorts = viewModel.availableSorts,
                 selectedGenre = selectedGenre,
                 selectedYear = selectedYear,
                 selectedFormat = selectedFormat,
+                selectedSeason = selectedSeason,
+                selectedStatus = selectedStatus,
+                selectedSort = selectedSort,
+                showAdult = showAdult,
                 onGenreSelected = { viewModel.setGenreFilter(it) },
                 onYearSelected = { viewModel.setYearFilter(it) },
                 onFormatSelected = { viewModel.setFormatFilter(it) },
+                onSeasonSelected = { viewModel.setSeasonFilter(it) },
+                onStatusSelected = { viewModel.setStatusFilter(it) },
+                onSortSelected = { viewModel.setSortFilter(it) },
+                onShowAdultChanged = { viewModel.setShowAdult(it) },
                 onClearAll = { viewModel.clearFilters() },
             )
         }
@@ -107,14 +122,16 @@ fun SearchScreen(
             .fillMaxSize()
             .statusBarsPadding(),
     ) {
-        // --- Source toggle (Phase G) — ABOVE the search bar ---
+        // --- Source toggle (Phase I) — CENTERED above the search bar ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            SearchMode.entries.forEach { mode ->
+            SearchMode.entries.forEachIndexed { index, mode ->
+                if (index > 0) Spacer(modifier = Modifier.width(8.dp))
                 FilterChip(
                     selected = searchMode == mode,
                     onClick = { viewModel.setSearchMode(mode) },
@@ -642,12 +659,23 @@ private fun FilterSheetContent(
     availableGenres: List<String>,
     availableYears: List<Int>,
     availableFormats: List<String>,
+    availableSeasons: List<String>,
+    availableStatuses: List<String>,
+    availableSorts: List<String>,
     selectedGenre: String?,
     selectedYear: Int?,
     selectedFormat: String?,
+    selectedSeason: String?,
+    selectedStatus: String?,
+    selectedSort: String?,
+    showAdult: Boolean,
     onGenreSelected: (String?) -> Unit,
     onYearSelected: (Int?) -> Unit,
     onFormatSelected: (String?) -> Unit,
+    onSeasonSelected: (String?) -> Unit,
+    onStatusSelected: (String?) -> Unit,
+    onSortSelected: (String?) -> Unit,
+    onShowAdultChanged: (Boolean) -> Unit,
     onClearAll: () -> Unit,
 ) {
     androidx.compose.foundation.lazy.LazyColumn(
@@ -747,6 +775,64 @@ private fun FilterSheetContent(
                             label = { Text(year.toString()) },
                         )
                     }
+                }
+            }
+        }
+        // AniList mode: additional filters (Season, Status, Sort, Adult)
+        if (searchMode == SearchMode.ANILIST) {
+            // Season
+            item {
+                Text("Season", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+            }
+            item {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    availableSeasons.forEach { season ->
+                        FilterChip(selected = selectedSeason == season, onClick = { onSeasonSelected(if (selectedSeason == season) null else season) }, label = { Text(season.lowercase().replaceFirstChar { it.uppercase() }) })
+                    }
+                }
+            }
+            // Status
+            item {
+                Text("Status", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+            }
+            item {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    availableStatuses.forEach { status ->
+                        FilterChip(selected = selectedStatus == status, onClick = { onStatusSelected(if (selectedStatus == status) null else status) }, label = { Text(status.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }) })
+                    }
+                }
+            }
+            // Sort
+            item {
+                Text("Sort by", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+            }
+            item {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    availableSorts.forEach { sort ->
+                        FilterChip(selected = selectedSort == sort, onClick = { onSortSelected(if (selectedSort == sort) null else sort) }, label = { Text(sort.lowercase().replaceFirstChar { it.uppercase() }) })
+                    }
+                }
+            }
+            // Adult content toggle
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Show adult results", style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = showAdult, onCheckedChange = onShowAdultChanged)
                 }
             }
         }
