@@ -153,7 +153,64 @@ class AniyomiSourceBridge(
         val source: AnimeCatalogueSource,
         val score: Double,
     )
+
+    /**
+     * Search all installed catalogue sources for [query] (Phase 5 part 4).
+     *
+     * Unlike [findMatch] (which finds the best match for a specific anime),
+     * this returns ALL results from ALL sources — for the Search page's
+     * "Extensions" mode. Results are grouped by source.
+     *
+     * Returns a flat list of [SourceSearchResult] (one per source anime found).
+     * Errors per source are caught and logged (one broken source doesn't kill
+     * the whole search).
+     */
+    suspend fun searchAllSources(query: String): List<SourceSearchResult> = withContext(Dispatchers.IO) {
+        val sources = sourceManager.getCatalogueSources()
+        if (sources.isEmpty()) return@withContext emptyList()
+
+        coroutineScope {
+            sources.map { source ->
+                async { searchSourcePublic(source, query) }
+            }.awaitAll().flatten()
+        }
+    }
+
+    /** Public version of searchSource that returns SourceSearchResult (not ScoredCandidate). */
+    private suspend fun searchSourcePublic(
+        source: AnimeCatalogueSource,
+        query: String,
+    ): List<SourceSearchResult> = try {
+        val page = source.getSearchAnime(1, query, AnimeFilterList())
+        page.animes.map { sAnime ->
+            SourceSearchResult(
+                title = sAnime.title,
+                thumbnailUrl = sAnime.thumbnail_url,
+                url = sAnime.url,
+                sourceName = source.name,
+                sourceId = source.id,
+            )
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "[${source.name}] search failed: ${e.message}", e)
+        emptyList()
+    }
 }
+
+/**
+ * A single search result from an extension source (Phase 5 part 4).
+ *
+ * Unlike [AniListAnime] (which has AniList ID + rich metadata), this is a
+ * lightweight wrapper around the extension's [SAnime] — just the fields
+ * needed to display a search result card and navigate to the detail page.
+ */
+data class SourceSearchResult(
+    val title: String,
+    val thumbnailUrl: String?,
+    val url: String,
+    val sourceName: String,
+    val sourceId: Long,
+)
 
 /* ------------------------------------------------------------------ */
 /* Result types                                                        */

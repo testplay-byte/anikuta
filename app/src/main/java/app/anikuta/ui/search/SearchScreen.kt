@@ -66,6 +66,8 @@ fun SearchScreen(
     val selectedGenre by viewModel.selectedGenre.collectAsState()
     val selectedYear by viewModel.selectedYear.collectAsState()
     val selectedFormat by viewModel.selectedFormat.collectAsState()
+    val searchMode by viewModel.searchMode.collectAsState()
+    val sourceResults by viewModel.sourceResults.collectAsState()
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -155,6 +157,22 @@ fun SearchScreen(
             }
         }
 
+        // Phase 5 part 4 — Source toggle (AniList vs Extensions)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SearchMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = searchMode == mode,
+                    onClick = { viewModel.setSearchMode(mode) },
+                    label = { Text(mode.label) },
+                )
+            }
+        }
+
         // --- Body ----------------------------------------------------------
         when {
             query.isBlank() -> {
@@ -178,7 +196,13 @@ fun SearchScreen(
                             )
                         }
                         is SearchState.Success -> {
-                            if (s.anime.isEmpty()) {
+                            if (searchMode == SearchMode.SOURCES) {
+                                // Phase 5 part 4 — source results grid
+                                SourceResultsGrid(
+                                    results = sourceResults,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            } else if (s.anime.isEmpty()) {
                                 EmptyState(query)
                             } else {
                                 ResultsGrid(
@@ -713,6 +737,98 @@ private fun FilterSheetContent(
                 modifier = Modifier.padding(vertical = 16.dp),
             ) {
                 Text("Clear all filters")
+            }
+        }
+    }
+}
+
+/**
+ * Phase 5 part 4 — Source results grid.
+ *
+ * Shows results from extension sources (not AniList). Each card shows the
+ * anime title, thumbnail, and source name. Tapping a source result is a
+ * no-op for now (navigating to detail from a source URL needs a different
+ * route than anilistId — future work).
+ */
+@Composable
+private fun SourceResultsGrid(
+    results: List<app.anikuta.source.bridge.SourceSearchResult>,
+    modifier: Modifier = Modifier,
+) {
+    if (results.isEmpty()) {
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "No source results",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = modifier,
+    ) {
+        items(
+            items = results,
+            key = { "${it.sourceName}:${it.url}" },
+            contentType = { "source_result_card" },
+        ) { result ->
+            SourceResultCard(result)
+        }
+    }
+}
+
+@Composable
+private fun SourceResultCard(result: app.anikuta.source.bridge.SourceSearchResult) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column {
+            if (!result.thumbnailUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = result.thumbnailUrl,
+                    contentDescription = result.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(190.dp),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(190.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                ) {}
+            }
+            Column(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = result.title,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = result.sourceName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                )
             }
         }
     }

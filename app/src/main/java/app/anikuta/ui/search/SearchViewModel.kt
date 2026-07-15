@@ -56,6 +56,7 @@ class SearchViewModel : ViewModel() {
     private val anilistRepo: AniListRepository?
     private val cacheManager: CacheManager?
     private val preferenceStore: PreferenceStore?
+    private val sourceBridge: app.anikuta.source.bridge.AniyomiSourceBridge?
     private val json = Json { ignoreUnknownKeys = true }
 
     init {
@@ -75,6 +76,12 @@ class SearchViewModel : ViewModel() {
             Injekt.get<PreferenceStore>().also { Log.d(TAG, "PreferenceStore obtained") }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get PreferenceStore", e)
+            null
+        }
+        sourceBridge = try {
+            Injekt.get<app.anikuta.source.bridge.AniyomiSourceBridge>()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get AniyomiSourceBridge", e)
             null
         }
     }
@@ -138,6 +145,26 @@ class SearchViewModel : ViewModel() {
     /** Available genres (fetched from AniList on first search). */
     private val _availableGenres = MutableStateFlow<List<String>>(emptyList())
     val availableGenres: StateFlow<List<String>> = _availableGenres.asStateFlow()
+
+    // Phase 5 part 4 — source toggle
+    /** Search mode: AniList (default) or Extensions. */
+    private val _searchMode = MutableStateFlow(SearchMode.ANILIST)
+    val searchMode: StateFlow<SearchMode> = _searchMode.asStateFlow()
+
+    /** Source search results (when in SOURCES mode). Separate from AniList results. */
+    private val _sourceResults = MutableStateFlow<List<SourceSearchResult>>(emptyList())
+    val sourceResults: StateFlow<List<SourceSearchResult>> = _sourceResults.asStateFlow()
+
+    fun setSearchMode(mode: SearchMode) {
+        _searchMode.value = mode
+        // Re-trigger search if there's an active query.
+        val q = _query.value.trim()
+        if (q.isNotBlank()) {
+            viewModelScope.launch {
+                if (mode == SearchMode.ANILIST) doSearch(q) else doSourceSearch(q)
+            }
+        }
+    }
 
     /** Selected genre filter (null = no filter). */
     private val _selectedGenre = MutableStateFlow<String?>(null)
@@ -278,7 +305,10 @@ class SearchViewModel : ViewModel() {
     fun onSubmit() {
         val term = _query.value.trim()
         if (term.isNotBlank()) {
-            viewModelScope.launch { doSearch(term) }
+            viewModelScope.launch {
+                if (_searchMode.value == SearchMode.SOURCES) doSourceSearch(term)
+                else doSearch(term)
+            }
         }
     }
 
@@ -286,7 +316,39 @@ class SearchViewModel : ViewModel() {
     fun retry() {
         val term = _query.value.trim()
         if (term.isNotBlank()) {
-            viewModelScope.launch { doSearch(term) }
+            viewModelScope.launch {
+                if (_searchMode.value == SearchMode.SOURCES) doSourceSearch(term)
+                else doSearch(term)
+            }
+        }
+    }
+
+    /**
+     * Search all installed extension sources (Phase 5 part 4).
+     * Results are stored in [_sourceResults] (separate from AniList results).
+     * No pagination (extensions return one page at a time; aniyomi's global
+     * search is also first-page-only).
+     */
+    private suspend fun doSourceSearch(q: String) {
+        val bridge = sourceBridge
+        if (bridge == null) {
+            _state.value = SearchState.Error("Sources not available")
+            return
+        }
+        _state.value = SearchState.Loading
+        _sourceResults.value = emptyList()
+        try {
+            val results = bridge.searchAllSources(q)
+            _sourceResults.value = results
+            _state.value = if (results.isEmpty()) {
+                SearchState.Empty
+            } else {
+                saveRecent(q.trim())
+                SearchState.Success(anime = emptyList(), hasMore = false, isLoadingMore = false)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Source search failed for '$q'", e)
+            _state.value = SearchState.Error(e.message ?: "Unknown error")
         }
     }
 
@@ -338,4 +400,10 @@ sealed class SearchState {
     ) : SearchState()
     data object Empty : SearchState()
     data class Error(val message: String) : SearchState()
+}
+
+/** Search mode (Phase 5 part 4). */
+enum class SearchMode(val label: String) {
+    ANILIST("AniList"),
+    SOURCES("Extensions"),
 }
