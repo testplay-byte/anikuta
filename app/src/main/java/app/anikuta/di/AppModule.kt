@@ -25,6 +25,7 @@ import app.anikuta.player.WatchProgressStore
 import app.anikuta.player.PlaybackStateStore
 import app.anikuta.ui.library.LibraryStore
 import app.anikuta.ui.library.CategoryStore
+import app.anikuta.ui.library.LibraryDisplayPrefs
 import app.anikuta.data.tracker.AniListTracker
 import app.anikuta.source.bridge.AniyomiSourceBridge
 import app.anikuta.download.DownloadPreferences
@@ -100,6 +101,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { LibraryStore(get<PreferenceStore>()) }
         // Phase 4 — Library categories (Default + user-created)
         addSingletonFactory { CategoryStore(get<PreferenceStore>()) }
+        // Phase E — Library display customization (persisted)
+        addSingletonFactory { LibraryDisplayPrefs(get<PreferenceStore>()) }
 
         // Anime database — register BOTH AnimeDatabase and SqlDriver.
         // AndroidAnimeDatabaseHandler needs both (db for queries, driver for

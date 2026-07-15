@@ -57,6 +57,13 @@ class LibraryViewModel : ViewModel() {
         Log.e(TAG, "❌ Failed to get SubDubStore from DI", e); null
     }
 
+    // Phase E — persisted display customization
+    private val displayPrefs: LibraryDisplayPrefs? = try {
+        Injekt.get<LibraryDisplayPrefs>()
+    } catch (e: Exception) {
+        Log.e(TAG, "❌ Failed to get LibraryDisplayPrefs from DI", e); null
+    }
+
     private val _state = MutableStateFlow<LibraryState>(LibraryState.Loading)
     val state: StateFlow<LibraryState> = _state.asStateFlow()
 
@@ -66,9 +73,31 @@ class LibraryViewModel : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    /** Display mode: 2-col grid, 3-col grid, or list. Phase 4. */
-    private val _displayMode = MutableStateFlow(DisplayMode.GRID_2)
-    val displayMode: StateFlow<DisplayMode> = _displayMode.asStateFlow()
+    /**
+     * Persisted display settings (Phase E).
+     * Reactive — updates when the user changes any setting in the customization sheet.
+     * Survives screen switches + app restarts (was in-memory before, which reset on tab switch).
+     */
+    val displaySettings: StateFlow<LibraryDisplayPrefs.Settings> = displayPrefs?.let { prefs ->
+        kotlinx.coroutines.flow.MutableStateFlow(prefs.getSettings()).also { mutable ->
+            viewModelScope.launch {
+                prefs.changes.collect { mutable.value = it }
+            }
+        }
+    } ?: kotlinx.coroutines.flow.MutableStateFlow(
+        LibraryDisplayPrefs.Settings(
+            displayMode = LibraryDisplayPrefs.DisplayMode.GRID,
+            gridColumns = 2,
+            titlePosition = LibraryDisplayPrefs.TitlePosition.BELOW,
+            titleMaxLines = 2,
+            showRating = true,
+            showYear = true,
+            showEpisodes = true,
+            showSubDub = true,
+            showUnwatchedBadge = true,
+            cardBorder = LibraryDisplayPrefs.CardBorder.THIN,
+        )
+    )
 
     /** Categories (Default + user-created). Phase 4. */
     private val _categories = MutableStateFlow<List<CategoryStore.Category>>(emptyList())
@@ -100,14 +129,32 @@ class LibraryViewModel : ViewModel() {
     /** The full unfiltered anime list (before category filtering). */
     private var allAnime: List<AniListAnime> = emptyList()
 
-    /** Toggle the display mode (GRID_2 → GRID_3 → LIST → GRID_2). */
-    fun cycleDisplayMode() {
-        _displayMode.value = when (_displayMode.value) {
-            DisplayMode.GRID_2 -> DisplayMode.GRID_3
-            DisplayMode.GRID_3 -> DisplayMode.LIST
-            DisplayMode.LIST -> DisplayMode.GRID_2
-        }
+    /** Set the display mode (GRID or LIST). Persisted. */
+    fun setDisplayMode(mode: LibraryDisplayPrefs.DisplayMode) {
+        displayPrefs?.setDisplayMode(mode)
     }
+
+    /** Set the number of grid columns (2-5). Persisted. */
+    fun setGridColumns(columns: Int) {
+        displayPrefs?.setGridColumns(columns)
+    }
+
+    /** Set the title position (BELOW or OVERLAY on the cover). Persisted. */
+    fun setTitlePosition(pos: LibraryDisplayPrefs.TitlePosition) {
+        displayPrefs?.setTitlePosition(pos)
+    }
+
+    /** Set the max lines for the title (1-3). Persisted. */
+    fun setTitleMaxLines(lines: Int) {
+        displayPrefs?.setTitleMaxLines(lines)
+    }
+
+    fun setShowRating(show: Boolean) = displayPrefs?.setShowRating(show) ?: Unit
+    fun setShowYear(show: Boolean) = displayPrefs?.setShowYear(show) ?: Unit
+    fun setShowEpisodes(show: Boolean) = displayPrefs?.setShowEpisodes(show) ?: Unit
+    fun setShowSubDub(show: Boolean) = displayPrefs?.setShowSubDub(show) ?: Unit
+    fun setShowUnwatchedBadge(show: Boolean) = displayPrefs?.setShowUnwatched(show) ?: Unit
+    fun setCardBorder(border: LibraryDisplayPrefs.CardBorder) = displayPrefs?.setCardBorder(border) ?: Unit
 
     /** Select a category tab. Re-filters the anime list. */
     fun selectCategory(id: Long) {
@@ -283,11 +330,4 @@ enum class SortMode(val label: String) {
     TITLE("Title"),
     LAST_WATCHED("Last watched"),
     UNREAD("Unread episodes"),
-}
-
-/** Display modes for the Library screen (Phase 4). */
-enum class DisplayMode(val columns: Int, val label: String) {
-    GRID_2(2, "2-column grid"),
-    GRID_3(3, "3-column grid"),
-    LIST(1, "List"),
 }
