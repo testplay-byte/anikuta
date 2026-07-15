@@ -15,6 +15,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -51,13 +54,14 @@ fun LibraryScreen(
     val state by viewModel.state.collectAsState()
     val sortMode by viewModel.sortMode.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val displayMode by viewModel.displayMode.collectAsState()
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = { viewModel.refresh() },
     ) {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Fixed(displayMode.columns),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = 0.dp, bottom = 24.dp, start = 12.dp, end = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -68,6 +72,8 @@ fun LibraryScreen(
                 LibraryTopBar(
                     sortMode = sortMode,
                     onSortSelected = { viewModel.setSort(it) },
+                    displayMode = displayMode,
+                    onDisplayModeClick = { viewModel.cycleDisplayMode() },
                 )
             }
 
@@ -130,6 +136,8 @@ fun LibraryScreen(
 private fun LibraryTopBar(
     sortMode: SortMode,
     onSortSelected: (SortMode) -> Unit,
+    displayMode: DisplayMode,
+    onDisplayModeClick: () -> Unit,
 ) {
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
@@ -156,45 +164,71 @@ private fun LibraryTopBar(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
-            // Sort dropdown — anchored to an IconButton (per task spec).
-            Box {
+            // Right side: display-mode toggle + sort dropdown
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Display mode toggle (Phase 4) — cycles GRID_2 → GRID_3 → LIST
                 Box(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(RoundedCornerShape(percent = 50))
                         .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .clickable { sortMenuExpanded = true },
+                        .clickable { onDisplayModeClick() },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Filled.Sort,
-                        contentDescription = "Sort",
+                        imageVector = when (displayMode) {
+                            DisplayMode.GRID_2 -> Icons.Outlined.GridView
+                            DisplayMode.GRID_3 -> Icons.Outlined.Apps
+                            DisplayMode.LIST -> Icons.Outlined.ViewList
+                        },
+                        contentDescription = displayMode.label,
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.size(18.dp),
                     )
                 }
-                DropdownMenu(
-                    expanded = sortMenuExpanded,
-                    onDismissRequest = { sortMenuExpanded = false },
-                ) {
-                    SortMode.entries.forEach { mode ->
-                        DropdownMenuItem(
-                            text = { Text(mode.label) },
-                            onClick = {
-                                onSortSelected(mode)
-                                sortMenuExpanded = false
-                            },
-                            trailingIcon = {
-                                if (mode == sortMode) {
-                                    Icon(
-                                        Icons.Filled.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            },
+                // Sort dropdown
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .clickable { sortMenuExpanded = true },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Filled.Sort,
+                            contentDescription = "Sort",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp),
                         )
+                    }
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false },
+                    ) {
+                        SortMode.entries.forEach { mode ->
+                            DropdownMenuItem(
+                                text = { Text(mode.label) },
+                                onClick = {
+                                    onSortSelected(mode)
+                                    sortMenuExpanded = false
+                                },
+                                trailingIcon = {
+                                    if (mode == sortMode) {
+                                        Icon(
+                                            Icons.Filled.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
             }

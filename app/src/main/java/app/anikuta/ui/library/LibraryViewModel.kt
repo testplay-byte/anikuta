@@ -52,6 +52,19 @@ class LibraryViewModel : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    /** Display mode: 2-col grid, 3-col grid, or list. Phase 4. */
+    private val _displayMode = MutableStateFlow(DisplayMode.GRID_2)
+    val displayMode: StateFlow<DisplayMode> = _displayMode.asStateFlow()
+
+    /** Toggle the display mode (GRID_2 → GRID_3 → LIST → GRID_2). */
+    fun cycleDisplayMode() {
+        _displayMode.value = when (_displayMode.value) {
+            DisplayMode.GRID_2 -> DisplayMode.GRID_3
+            DisplayMode.GRID_3 -> DisplayMode.LIST
+            DisplayMode.LIST -> DisplayMode.GRID_2
+        }
+    }
+
     init {
         // Collect from LibraryStore.changes so the Library page updates in
         // real time when the user saves/removes an anime on the detail page.
@@ -154,4 +167,11 @@ enum class SortMode(val label: String) {
     TITLE("Title"),
     LAST_WATCHED("Last watched"),
     UNREAD("Unread episodes"),
+}
+
+/** Display modes for the Library screen (Phase 4). */
+enum class DisplayMode(val columns: Int, val label: String) {
+    GRID_2(2, "2-column grid"),
+    GRID_3(3, "3-column grid"),
+    LIST(1, "List"),
 }
