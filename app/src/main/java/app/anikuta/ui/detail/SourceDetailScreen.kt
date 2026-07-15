@@ -146,9 +146,10 @@ fun SourceDetailScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                     // Description
-                    if (!anime.description.isNullOrBlank()) {
+                    val desc = anime.description
+                    if (!desc.isNullOrBlank()) {
                         Text(
-                            text = anime.description,
+                            text = desc,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         )
