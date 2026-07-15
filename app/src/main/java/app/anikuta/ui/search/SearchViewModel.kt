@@ -8,6 +8,7 @@ import app.anikuta.core.preference.PreferenceStore
 import app.anikuta.data.anilist.model.AniListAnime
 import app.anikuta.data.anilist.repository.AniListRepository
 import app.anikuta.data.cache.CacheManager
+import app.anikuta.source.bridge.SourceSearchResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
