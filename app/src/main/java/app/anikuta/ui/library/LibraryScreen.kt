@@ -61,6 +61,7 @@ fun LibraryScreen(
     val categories by viewModel.categories.collectAsState()
     val selectedCategoryId by viewModel.selectedCategoryId.collectAsState()
     val unwatchedCounts by viewModel.unwatchedCounts.collectAsState()
+    val subDubInfo by viewModel.subDubInfo.collectAsState()
     var showCreateCategoryDialog by remember { mutableStateOf(false) }
 
     // Create-category dialog
@@ -169,6 +170,7 @@ fun LibraryScreen(
                         LibraryCard(
                             anime = anime,
                             unwatchedCount = unwatchedCounts[anime.id] ?: 0,
+                            subDubInfo = subDubInfo[anime.id],
                             displayMode = displayMode,
                             onClick = { onAnimeClick(anime.id) },
                         )
@@ -308,6 +310,7 @@ private fun LibraryCard(
     anime: AniListAnime,
     unwatchedCount: Int,
     displayMode: DisplayMode,
+    subDubInfo: app.anikuta.data.cache.SubDubStore.SubDubInfo? = null,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -328,6 +331,7 @@ private fun LibraryCard(
         DisplayMode.LIST -> LibraryListCard(
             anime = anime,
             unwatchedCount = unwatchedCount,
+            subDubInfo = subDubInfo,
             scale = scale,
             cornerRadius = cornerRadius,
             interactionSource = interactionSource,
@@ -336,6 +340,7 @@ private fun LibraryCard(
         DisplayMode.GRID_3 -> LibraryCompactCard(
             anime = anime,
             unwatchedCount = unwatchedCount,
+            subDubInfo = subDubInfo,
             scale = scale,
             cornerRadius = cornerRadius,
             interactionSource = interactionSource,
@@ -344,6 +349,7 @@ private fun LibraryCard(
         DisplayMode.GRID_2 -> LibraryRichCard(
             anime = anime,
             unwatchedCount = unwatchedCount,
+            subDubInfo = subDubInfo,
             scale = scale,
             cornerRadius = cornerRadius,
             interactionSource = interactionSource,
@@ -364,6 +370,7 @@ private fun LibraryCard(
 private fun LibraryRichCard(
     anime: AniListAnime,
     unwatchedCount: Int,
+    subDubInfo: app.anikuta.data.cache.SubDubStore.SubDubInfo?,
     scale: Float,
     cornerRadius: Float,
     interactionSource: MutableInteractionSource,
@@ -487,6 +494,43 @@ private fun LibraryRichCard(
                         )
                     }
                 }
+                // SUB/DUB badges (Phase B) — shown when data is available
+                if (subDubInfo != null && (subDubInfo.hasSub || subDubInfo.hasDub)) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (subDubInfo.hasSub) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                            ) {
+                                Text(
+                                    "SUB",
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                            }
+                        }
+                        if (subDubInfo.hasDub) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                            ) {
+                                Text(
+                                    "DUB",
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -502,6 +546,7 @@ private fun LibraryRichCard(
 private fun LibraryCompactCard(
     anime: AniListAnime,
     unwatchedCount: Int,
+    subDubInfo: app.anikuta.data.cache.SubDubStore.SubDubInfo?,
     scale: Float,
     cornerRadius: Float,
     interactionSource: MutableInteractionSource,
@@ -604,6 +649,7 @@ private fun LibraryCompactCard(
 private fun LibraryListCard(
     anime: AniListAnime,
     unwatchedCount: Int,
+    subDubInfo: app.anikuta.data.cache.SubDubStore.SubDubInfo?,
     scale: Float,
     cornerRadius: Float,
     interactionSource: MutableInteractionSource,

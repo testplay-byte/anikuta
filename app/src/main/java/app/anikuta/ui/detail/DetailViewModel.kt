@@ -49,6 +49,7 @@ class DetailViewModel(
     private val cacheManager: CacheManager? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
     private val sourceBridge: AniyomiSourceBridge? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
     private val libraryStore: LibraryStore? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
+    private val subDubStore: app.anikuta.data.cache.SubDubStore? = try { Injekt.get() } catch (e: Exception) { Log.e(TAG, "DI failed", e); null }
     private val json = Json { ignoreUnknownKeys = true }
 
     private val _anime = MutableStateFlow<DetailState>(DetailState.Loading)
@@ -724,7 +725,38 @@ class DetailViewModel(
             val flat = withContext(Dispatchers.IO) { source.getVideoList(episode) }
             flat.filter { it.videoUrl.isNotBlank() }
         }
-        return groupVideosByServer(allVideos)
+        val sections = groupVideosByServer(allVideos)
+
+        // Phase B — detect sub/dub from the AudioVersion and cache it.
+        // This runs after every video resolution so the library card badges
+        // stay up-to-date as the user browses episodes.
+        try {
+            val audioVersions = sections
+                .flatMap { it.audioSections }
+                .map { it.audio }
+                .toSet()
+            val hasSub = audioVersions.any { it == AudioVersion.SUB || it == AudioVersion.HSUB }
+            val hasDub = audioVersions.any { it == AudioVersion.DUB }
+            val subCount = sections.flatMap { it.audioSections }
+                .filter { it.audio == AudioVersion.SUB || it.audio == AudioVersion.HSUB }
+                .sumOf { it.videos.size }
+            val dubCount = sections.flatMap { it.audioSections }
+                .filter { it.audio == AudioVersion.DUB }
+                .sumOf { it.videos.size }
+            subDubStore?.update(
+                anilistId = anilistId,
+                hasSub = hasSub,
+                hasDub = hasDub,
+                subCount = subCount,
+                dubCount = dubCount,
+                totalEpisodes = allVideos.size,
+            )
+            Log.d(TAG, "SubDub cached: hasSub=$hasSub hasDub=$hasDub subCount=$subCount dubCount=$dubCount")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to cache sub/dub info: ${e.message}")
+        }
+
+        return sections
     }
 
     /** User picked a specific video from the quality picker → launch the player. */

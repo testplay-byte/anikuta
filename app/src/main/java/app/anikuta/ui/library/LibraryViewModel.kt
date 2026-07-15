@@ -50,6 +50,13 @@ class LibraryViewModel : ViewModel() {
         Log.e(TAG, "❌ Failed to get CategoryStore from DI", e); null
     }
 
+    // Phase B — sub/dub cache
+    private val subDubStore: app.anikuta.data.cache.SubDubStore? = try {
+        Injekt.get()
+    } catch (e: Exception) {
+        Log.e(TAG, "❌ Failed to get SubDubStore from DI", e); null
+    }
+
     private val _state = MutableStateFlow<LibraryState>(LibraryState.Loading)
     val state: StateFlow<LibraryState> = _state.asStateFlow()
 
@@ -74,6 +81,14 @@ class LibraryViewModel : ViewModel() {
      */
     private val _unwatchedCounts = MutableStateFlow<Map<Int, Int>>(emptyMap())
     val unwatchedCounts: StateFlow<Map<Int, Int>> = _unwatchedCounts.asStateFlow()
+
+    /**
+     * Sub/Dub info per anime (Phase B).
+     * Key = AniList ID, value = SubDubInfo (hasSub, hasDub, subCount, dubCount).
+     * Populated when the user opens the Detail page (DetailViewModel.resolveVideos).
+     */
+    private val _subDubInfo = MutableStateFlow<Map<Int, app.anikuta.data.cache.SubDubStore.SubDubInfo>>(emptyMap())
+    val subDubInfo: StateFlow<Map<Int, app.anikuta.data.cache.SubDubStore.SubDubInfo>> = _subDubInfo.asStateFlow()
 
     /** Currently selected category tab (id). Default = 0 (the "Default" category). */
     private val _selectedCategoryId = MutableStateFlow(0L)
@@ -183,6 +198,13 @@ class LibraryViewModel : ViewModel() {
                     }
                 }
                 _unwatchedCounts.value = counts
+            }
+        }
+        // Phase B — collect sub/dub info reactively.
+        viewModelScope.launch {
+            val store = subDubStore ?: return@launch
+            store.changes.collect { all ->
+                _subDubInfo.value = all.mapKeys { (k, _) -> k.toIntOrNull() ?: 0 }
             }
         }
     }

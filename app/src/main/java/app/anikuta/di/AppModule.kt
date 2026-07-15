@@ -14,6 +14,7 @@ import app.anikuta.data.AnimeDatabaseFactory
 import app.anikuta.data.cache.CacheManager
 import app.anikuta.data.cache.EpisodeCacheStore
 import app.anikuta.data.cache.LocalCache
+import app.anikuta.data.cache.SubDubStore
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
@@ -210,5 +211,7 @@ class AppModule(val app: Application) : InjektModule {
 
         // Episode cache (persistent — survives app restart)
         addSingletonFactory { EpisodeCacheStore(get<Context>()) }
+        // Phase B — Sub/Dub cache (populated by DetailViewModel, read by Library)
+        addSingletonFactory { SubDubStore(get<PreferenceStore>()) }
     }
 }
