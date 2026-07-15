@@ -6,11 +6,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BookmarkBorder
@@ -64,7 +68,7 @@ fun LibraryScreen(
     val unwatchedCounts by viewModel.unwatchedCounts.collectAsState()
     val subDubInfo by viewModel.subDubInfo.collectAsState()
     var showCreateCategoryDialog by remember { mutableStateOf(false) }
-    var showCustomizationSheet by remember { mutableStateOf(false) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
 
     // Create-category dialog
     if (showCreateCategoryDialog) {
@@ -94,12 +98,18 @@ fun LibraryScreen(
         )
     }
 
-    // Phase E — Customization bottom sheet
-    if (showCustomizationSheet) {
+    // Phase H — Tabbed settings bottom sheet (Filter / Sort / Display)
+    if (showSettingsSheet) {
         androidx.compose.material3.ModalBottomSheet(
-            onDismissRequest = { showCustomizationSheet = false },
+            onDismissRequest = { showSettingsSheet = false },
         ) {
-            LibraryCustomizationSheet(
+            LibrarySettingsSheet(
+                categories = categories,
+                selectedCategoryId = selectedCategoryId,
+                onSelectCategory = { viewModel.selectCategory(it) },
+                onCreateCategory = { showCreateCategoryDialog = true; showSettingsSheet = false },
+                sortMode = sortMode,
+                onSortSelected = { viewModel.setSort(it) },
                 settings = displaySettings,
                 onSetDisplayMode = viewModel::setDisplayMode,
                 onSetGridColumns = viewModel::setGridColumns,
@@ -135,22 +145,8 @@ fun LibraryScreen(
             // Floating top bar — spans full width
             item(key = "topbar", span = { GridItemSpan(maxLineSpan) }) {
                 LibraryTopBar(
-                    sortMode = sortMode,
-                    onSortSelected = { viewModel.setSort(it) },
-                    onCustomizeClick = { showCustomizationSheet = true },
+                    onSettingsClick = { showSettingsSheet = true },
                 )
-            }
-
-            // Phase 4 — Category tabs (scrollable). Shown only if there are categories.
-            if (categories.isNotEmpty()) {
-                item(key = "category_tabs", span = { GridItemSpan(maxLineSpan) }) {
-                    CategoryTabRow(
-                        categories = categories,
-                        selectedId = selectedCategoryId,
-                        onSelect = { viewModel.selectCategory(it) },
-                        onAddClick = { showCreateCategoryDialog = true },
-                    )
-                }
             }
 
             when (val s = state) {
@@ -214,14 +210,14 @@ fun LibraryScreen(
  * statusBarsPadding here is the ONLY place that handles the status bar gap.
  * The sort button lives in the trailing slot (where HomeScreen puts search).
  */
+/**
+ * Phase H — Simplified top bar with ONE settings button.
+ * The button opens the tabbed settings sheet (Filter / Sort / Display).
+ */
 @Composable
 private fun LibraryTopBar(
-    sortMode: SortMode,
-    onSortSelected: (SortMode) -> Unit,
-    onCustomizeClick: () -> Unit,
+    onSettingsClick: () -> Unit,
 ) {
-    var sortMenuExpanded by remember { mutableStateOf(false) }
-
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -245,69 +241,21 @@ private fun LibraryTopBar(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
-            // Right side: sort dropdown + three-dot customize button
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            // Single settings button — opens tabbed bottom sheet
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .clickable { onSettingsClick() },
+                contentAlignment = Alignment.Center,
             ) {
-                // Sort dropdown
-                Box {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(percent = 50))
-                            .background(MaterialTheme.colorScheme.secondaryContainer)
-                            .clickable { sortMenuExpanded = true },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Filled.Sort,
-                            contentDescription = "Sort",
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = sortMenuExpanded,
-                        onDismissRequest = { sortMenuExpanded = false },
-                    ) {
-                        SortMode.entries.forEach { mode ->
-                            DropdownMenuItem(
-                                text = { Text(mode.label) },
-                                onClick = {
-                                    onSortSelected(mode)
-                                    sortMenuExpanded = false
-                                },
-                                trailingIcon = {
-                                    if (mode == sortMode) {
-                                        Icon(
-                                            Icons.Filled.Check,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                    }
-                                },
-                            )
-                        }
-                    }
-                }
-                // Three-dot customize button (Phase E) — opens the customization bottom sheet
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(percent = 50))
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .clickable { onCustomizeClick() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Filled.Tune,
-                        contentDescription = "Customize",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
+                Icon(
+                    Icons.Filled.Tune,
+                    contentDescription = "Library settings",
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
     }
@@ -794,67 +742,24 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
 }
 
 /**
- * Phase 4 — Scrollable category tab row.
+ * Phase H — Tabbed library settings bottom sheet.
  *
- * Shows one tab per category (Default + user-created). Tapping a tab filters
- * the library to show only anime in that category. The "+" button opens a
- * create-category dialog.
- *
- * The "Default" category (id=0) shows all anime.
+ * Mirrors aniyomi's AnimeLibrarySettingsDialog pattern:
+ *   - Pill-shaped category selection at the TOP (no empty space)
+ *   - 3 tabs: Filter, Sort, Display
+ *   - Filter: (future — downloaded, unseen, tracked filters)
+ *   - Sort: Title, Last watched, Unread (with ascending/descending)
+ *   - Display: Grid/List, columns, title position, max lines, show/hide fields, borders
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CategoryTabRow(
+private fun LibrarySettingsSheet(
     categories: List<CategoryStore.Category>,
-    selectedId: Long,
-    onSelect: (Long) -> Unit,
-    onAddClick: () -> Unit,
-) {
-    ScrollableTabRow(
-        selectedTabIndex = categories.indexOfFirst { it.id == selectedId }.coerceAtLeast(0),
-        edgePadding = 12.dp,
-        divider = {},
-        containerColor = Color.Transparent,
-    ) {
-        categories.forEach { category ->
-            Tab(
-                selected = category.id == selectedId,
-                onClick = { onSelect(category.id) },
-                text = { Text(category.name) },
-            )
-        }
-        // "+" tab to create a new category
-        Tab(
-            selected = false,
-            onClick = onAddClick,
-            text = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Add, contentDescription = "Add category", modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("New")
-                }
-            },
-        )
-    }
-}
-
-/**
- * Phase E — Library customization bottom sheet.
- *
- * Opens when the user taps the three-dot (Tune) button in the LibraryTopBar.
- * Gives the user full control over:
- *   - Display mode: Grid or List
- *   - Grid columns: 2, 3, 4, 5 (only shown in grid mode)
- *   - Title position: Below cover or Overlay on cover (only in grid mode)
- *   - Title max lines: 1, 2, 3
- *   - Show/hide: Rating, Year, Episodes, SUB/DUB, Unwatched badge
- *   - Card border: None, Thin, Thick
- *
- * All settings are persisted via LibraryDisplayPrefs — they survive screen
- * switches + app restarts.
- */
-@Composable
-private fun LibraryCustomizationSheet(
+    selectedCategoryId: Long,
+    onSelectCategory: (Long) -> Unit,
+    onCreateCategory: () -> Unit,
+    sortMode: SortMode,
+    onSortSelected: (SortMode) -> Unit,
     settings: LibraryDisplayPrefs.Settings,
     onSetDisplayMode: (LibraryDisplayPrefs.DisplayMode) -> Unit,
     onSetGridColumns: (Int) -> Unit,
@@ -867,95 +772,130 @@ private fun LibraryCustomizationSheet(
     onSetShowUnwatchedBadge: (Boolean) -> Unit,
     onSetCardBorder: (LibraryDisplayPrefs.CardBorder) -> Unit,
 ) {
-    androidx.compose.foundation.lazy.LazyColumn(
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Filter", "Sort", "Display")
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
             .navigationBarsPadding(),
     ) {
-        item {
-            Text(
-                "Customize Library",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 12.dp),
-            )
-        }
-        // Display mode
-        item {
-            Text("Layout", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
-            Row(
-                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilterChip(selected = settings.displayMode == LibraryDisplayPrefs.DisplayMode.GRID, onClick = { onSetDisplayMode(LibraryDisplayPrefs.DisplayMode.GRID) }, label = { Text("Grid") })
-                FilterChip(selected = settings.displayMode == LibraryDisplayPrefs.DisplayMode.LIST, onClick = { onSetDisplayMode(LibraryDisplayPrefs.DisplayMode.LIST) }, label = { Text("List") })
-            }
-        }
-        // Grid-only settings
-        if (settings.displayMode == LibraryDisplayPrefs.DisplayMode.GRID) {
-            item {
-                Text("Columns", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
-                Row(
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // Pill-shaped category selection at the TOP (no empty space)
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(categories) { category ->
+                val isSelected = category.id == selectedCategoryId
+                Surface(
+                    modifier = Modifier
+                        .then(
+                            if (isSelected) Modifier
+                            else Modifier.clickable { onSelectCategory(category.id) },
+                        ),
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = if (isSelected) 0.dp else 1.dp,
                 ) {
-                    listOf(2, 3, 4, 5).forEach { cols ->
-                        FilterChip(selected = settings.gridColumns == cols, onClick = { onSetGridColumns(cols) }, label = { Text(cols.toString()) })
+                    Text(
+                        text = category.name,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            // "New" pill for creating categories
+            item {
+                Surface(
+                    modifier = Modifier.clickable { onCreateCategory() },
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "New category", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("New", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
                     }
                 }
             }
-            item {
-                Text("Title position", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
-                Row(
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChip(selected = settings.titlePosition == LibraryDisplayPrefs.TitlePosition.BELOW, onClick = { onSetTitlePosition(LibraryDisplayPrefs.TitlePosition.BELOW) }, label = { Text("Below cover") })
-                    FilterChip(selected = settings.titlePosition == LibraryDisplayPrefs.TitlePosition.OVERLAY, onClick = { onSetTitlePosition(LibraryDisplayPrefs.TitlePosition.OVERLAY) }, label = { Text("On cover") })
-                }
+        }
+
+        // Tab row
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = Color.Transparent,
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { Text(title, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal) },
+                )
             }
         }
-        // Title max lines
-        item {
-            Text("Title lines", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
+
+        // Tab content
+        when (selectedTab) {
+            0 -> FilterTab()
+            1 -> SortTab(sortMode, onSortSelected)
+            2 -> DisplayTab(settings, onSetDisplayMode, onSetGridColumns, onSetTitlePosition, onSetTitleMaxLines, onSetShowRating, onSetShowYear, onSetShowEpisodes, onSetShowSubDub, onSetShowUnwatchedBadge, onSetCardBorder)
+        }
+    }
+}
+
+@Composable
+private fun FilterTab() {
+    // Future: downloaded, unseen, tracked, started, completed filters
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+    ) {
+        Text(
+            "No filters available yet",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "Filters (downloaded, unseen, tracked) will be added in a future update.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun SortTab(sortMode: SortMode, onSortSelected: (SortMode) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+    ) {
+        SortMode.entries.forEach { mode ->
             Row(
-                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+                    .clickable { onSortSelected(mode) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                listOf(1, 2, 3).forEach { lines ->
-                    FilterChip(selected = settings.titleMaxLines == lines, onClick = { onSetTitleMaxLines(lines) }, label = { Text(lines.toString()) })
-                }
-            }
-        }
-        // Show/hide toggles
-        item {
-            Text("Show", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
-        }
-        item {
-            SwitchSettingsRow(title = "Rating", checked = settings.showRating, onCheckedChange = onSetShowRating)
-        }
-        item {
-            SwitchSettingsRow(title = "Year", checked = settings.showYear, onCheckedChange = onSetShowYear)
-        }
-        item {
-            SwitchSettingsRow(title = "Episode count", checked = settings.showEpisodes, onCheckedChange = onSetShowEpisodes)
-        }
-        item {
-            SwitchSettingsRow(title = "SUB / DUB badges", checked = settings.showSubDub, onCheckedChange = onSetShowSubDub)
-        }
-        item {
-            SwitchSettingsRow(title = "Unwatched badge", checked = settings.showUnwatchedBadge, onCheckedChange = onSetShowUnwatchedBadge)
-        }
-        // Card border
-        item {
-            Text("Card border", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
-            Row(
-                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                LibraryDisplayPrefs.CardBorder.entries.forEach { border ->
-                    FilterChip(selected = settings.cardBorder == border, onClick = { onSetCardBorder(border) }, label = { Text(border.name.lowercase().replaceFirstChar { it.uppercase() }) })
+                Text(
+                    mode.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (mode == sortMode) FontWeight.Bold else FontWeight.Normal,
+                    color = if (mode == sortMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+                if (mode == sortMode) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -963,7 +903,81 @@ private fun LibraryCustomizationSheet(
 }
 
 @Composable
-private fun SwitchSettingsRow(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun DisplayTab(
+    settings: LibraryDisplayPrefs.Settings,
+    onSetDisplayMode: (LibraryDisplayPrefs.DisplayMode) -> Unit,
+    onSetGridColumns: (Int) -> Unit,
+    onSetTitlePosition: (LibraryDisplayPrefs.TitlePosition) -> Unit,
+    onSetTitleMaxLines: (Int) -> Unit,
+    onSetShowRating: (Boolean) -> Unit,
+    onSetShowYear: (Boolean) -> Unit,
+    onSetShowEpisodes: (Boolean) -> Unit,
+    onSetShowSubDub: (Boolean) -> Unit,
+    onSetShowUnwatchedBadge: (Boolean) -> Unit,
+    onSetCardBorder: (LibraryDisplayPrefs.CardBorder) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        // Display mode
+        SettingsSection("Layout") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = settings.displayMode == LibraryDisplayPrefs.DisplayMode.GRID, onClick = { onSetDisplayMode(LibraryDisplayPrefs.DisplayMode.GRID) }, label = { Text("Grid") })
+                FilterChip(selected = settings.displayMode == LibraryDisplayPrefs.DisplayMode.LIST, onClick = { onSetDisplayMode(LibraryDisplayPrefs.DisplayMode.LIST) }, label = { Text("List") })
+            }
+        }
+        // Grid-only settings
+        if (settings.displayMode == LibraryDisplayPrefs.DisplayMode.GRID) {
+            SettingsSection("Columns") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(2, 3, 4, 5).forEach { cols ->
+                        FilterChip(selected = settings.gridColumns == cols, onClick = { onSetGridColumns(cols) }, label = { Text(cols.toString()) })
+                    }
+                }
+            }
+            SettingsSection("Title position") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = settings.titlePosition == LibraryDisplayPrefs.TitlePosition.BELOW, onClick = { onSetTitlePosition(LibraryDisplayPrefs.TitlePosition.BELOW) }, label = { Text("Below cover") })
+                    FilterChip(selected = settings.titlePosition == LibraryDisplayPrefs.TitlePosition.OVERLAY, onClick = { onSetTitlePosition(LibraryDisplayPrefs.TitlePosition.OVERLAY) }, label = { Text("On cover") })
+                }
+            }
+        }
+        SettingsSection("Title lines") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1, 2, 3).forEach { lines ->
+                    FilterChip(selected = settings.titleMaxLines == lines, onClick = { onSetTitleMaxLines(lines) }, label = { Text(lines.toString()) })
+                }
+            }
+        }
+        SettingsSection("Card border") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LibraryDisplayPrefs.CardBorder.entries.forEach { border ->
+                    FilterChip(selected = settings.cardBorder == border, onClick = { onSetCardBorder(border) }, label = { Text(border.name.lowercase().replaceFirstChar { it.uppercase() }) })
+                }
+            }
+        }
+        SettingsSection("Show on cards") {
+            SwitchRow("Rating", settings.showRating, onSetShowRating)
+            SwitchRow("Year", settings.showYear, onSetShowYear)
+            SwitchRow("Episode count", settings.showEpisodes, onSetShowEpisodes)
+            SwitchRow("SUB / DUB badges", settings.showSubDub, onSetShowSubDub)
+            SwitchRow("Unwatched badge", settings.showUnwatchedBadge, onSetShowUnwatchedBadge)
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun SettingsSection(title: String, content: @Composable () -> Unit) {
+    Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+    content()
+}
+
+@Composable
+private fun SwitchRow(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
