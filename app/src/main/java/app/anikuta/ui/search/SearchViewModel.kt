@@ -206,15 +206,15 @@ class SearchViewModel : ViewModel() {
             val data = repo.searchAnime(q, page = 1, perPage = 25)
             hasMore = data.size >= 25
             allResults = data
-            _state.value = if (data.isEmpty()) {
-                SearchState.Empty
+            if (data.isEmpty()) {
+                _state.value = SearchState.Empty
             } else {
                 saveRecent(q.trim())
                 // Apply any active filters to the first page.
                 if (_selectedGenre.value != null || _selectedYear.value != null || _selectedFormat.value != null) {
                     applyFilters()
                 } else {
-                    SearchState.Success(anime = data, hasMore = hasMore, isLoadingMore = false)
+                    _state.value = SearchState.Success(anime = data, hasMore = hasMore, isLoadingMore = false)
                 }
             }
         } catch (e: Exception) {
