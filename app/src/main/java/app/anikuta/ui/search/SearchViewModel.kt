@@ -134,6 +134,60 @@ class SearchViewModel : ViewModel() {
     /** The query for the current search (used for loadMore). */
     private var currentQuery = ""
 
+    // Phase 5 part 3 — filters
+    /** Available genres (fetched from AniList on first search). */
+    private val _availableGenres = MutableStateFlow<List<String>>(emptyList())
+    val availableGenres: StateFlow<List<String>> = _availableGenres.asStateFlow()
+
+    /** Selected genre filter (null = no filter). */
+    private val _selectedGenre = MutableStateFlow<String?>(null)
+    val selectedGenre: StateFlow<String?> = _selectedGenre.asStateFlow()
+
+    /** Selected year filter (null = no filter). */
+    private val _selectedYear = MutableStateFlow<Int?>(null)
+    val selectedYear: StateFlow<Int?> = _selectedYear.asStateFlow()
+
+    /** Selected format filter (null = no filter). TV / MOVIE / OVA / ONA / SPECIAL / MUSIC. */
+    private val _selectedFormat = MutableStateFlow<String?>(null)
+    val selectedFormat: StateFlow<String?> = _selectedFormat.asStateFlow()
+
+    /** The unfiltered results (before client-side filtering). Used for re-filtering. */
+    private var allResults: List<AniListAnime> = emptyList()
+
+    /** Available formats for the filter sheet. */
+    val availableFormats = listOf("TV", "MOVIE", "OVA", "ONA", "SPECIAL", "MUSIC")
+
+    /** Available years (computed from search results). */
+    val availableYears: List<Int>
+        get() = allResults.mapNotNull { it.seasonYear }.distinct().sortedDescending()
+
+    fun setGenreFilter(genre: String?) { _selectedGenre.value = genre; applyFilters() }
+    fun setYearFilter(year: Int?) { _selectedYear.value = year; applyFilters() }
+    fun setFormatFilter(format: String?) { _selectedFormat.value = format; applyFilters() }
+    fun clearFilters() {
+        _selectedGenre.value = null
+        _selectedYear.value = null
+        _selectedFormat.value = null
+        applyFilters()
+    }
+
+    /** Apply the current filters to [allResults] and update the state. */
+    private fun applyFilters() {
+        val genre = _selectedGenre.value
+        val year = _selectedYear.value
+        val format = _selectedFormat.value
+        val filtered = allResults.filter { anime ->
+            (genre == null || anime.genres?.contains(genre) == true) &&
+            (year == null || anime.seasonYear == year) &&
+            (format == null || anime.format == format)
+        }
+        _state.value = if (filtered.isEmpty() && allResults.isNotEmpty()) {
+            SearchState.Empty
+        } else {
+            SearchState.Success(anime = filtered, hasMore = hasMore, isLoadingMore = false)
+        }
+    }
+
     private suspend fun doSearch(q: String) {
         val repo = anilistRepo
         if (repo == null) {
@@ -145,16 +199,23 @@ class SearchViewModel : ViewModel() {
         currentQuery = q
         _state.value = SearchState.Loading
         try {
-            // Phase 5 part 2: direct API call (page 1, perPage 25) — no cache,
-            // because pagination makes cache keys complex. The cache was only
-            // 5-min TTL anyway.
+            // Fetch genres on first search (for the filter sheet).
+            if (_availableGenres.value.isEmpty()) {
+                try { _availableGenres.value = repo.getGenres() } catch (e: Exception) { /* non-fatal */ }
+            }
             val data = repo.searchAnime(q, page = 1, perPage = 25)
-            hasMore = data.size >= 25 // AniList returns exactly perPage if more exist
+            hasMore = data.size >= 25
+            allResults = data
             _state.value = if (data.isEmpty()) {
                 SearchState.Empty
             } else {
                 saveRecent(q.trim())
-                SearchState.Success(anime = data, hasMore = hasMore, isLoadingMore = false)
+                // Apply any active filters to the first page.
+                if (_selectedGenre.value != null || _selectedYear.value != null || _selectedFormat.value != null) {
+                    applyFilters()
+                } else {
+                    SearchState.Success(anime = data, hasMore = hasMore, isLoadingMore = false)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Search failed for '$q'", e)
@@ -171,22 +232,26 @@ class SearchViewModel : ViewModel() {
         val repo = anilistRepo ?: return
         val current = _state.value as? SearchState.Success ?: return
         if (!current.hasMore || current.isLoadingMore) return
-        // Mark as loading more (keep the existing results visible).
         _state.value = current.copy(isLoadingMore = true)
         viewModelScope.launch {
             try {
                 currentPage++
                 val nextData = repo.searchAnime(currentQuery, page = currentPage, perPage = 25)
                 hasMore = nextData.size >= 25
-                val combined = current.anime + nextData
-                _state.value = if (combined.isEmpty()) {
-                    SearchState.Empty
+                allResults = allResults + nextData
+                // Re-apply filters to the combined list.
+                if (_selectedGenre.value != null || _selectedYear.value != null || _selectedFormat.value != null) {
+                    applyFilters()
+                    // But re-add the loading=false + hasMore on the filtered result.
+                    val filteredState = _state.value as? SearchState.Success
+                    if (filteredState != null) {
+                        _state.value = filteredState.copy(hasMore = hasMore, isLoadingMore = false)
+                    }
                 } else {
-                    SearchState.Success(anime = combined, hasMore = hasMore, isLoadingMore = false)
+                    _state.value = SearchState.Success(anime = allResults, hasMore = hasMore, isLoadingMore = false)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "loadMore failed (page $currentPage)", e)
-                // Revert to the previous state (without loading indicator).
                 _state.value = current.copy(isLoadingMore = false)
             }
         }

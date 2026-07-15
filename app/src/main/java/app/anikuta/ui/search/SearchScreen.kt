@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -61,8 +62,36 @@ fun SearchScreen(
     val query by viewModel.query.collectAsState()
     val state by viewModel.state.collectAsState()
     val recent by viewModel.recentSearches.collectAsState()
+    val availableGenres by viewModel.availableGenres.collectAsState()
+    val selectedGenre by viewModel.selectedGenre.collectAsState()
+    val selectedYear by viewModel.selectedYear.collectAsState()
+    val selectedFormat by viewModel.selectedFormat.collectAsState()
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    var showFilterSheet by remember { mutableStateOf(false) }
+
+    // Active filter count (for the badge on the filter button)
+    val activeFilterCount = listOf(selectedGenre, selectedYear, selectedFormat).count { it != null }
+
+    // Phase 5 part 3 — Filter bottom sheet
+    if (showFilterSheet) {
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { showFilterSheet = false },
+        ) {
+            FilterSheetContent(
+                availableGenres = availableGenres,
+                availableYears = viewModel.availableYears,
+                availableFormats = viewModel.availableFormats,
+                selectedGenre = selectedGenre,
+                selectedYear = selectedYear,
+                selectedFormat = selectedFormat,
+                onGenreSelected = { viewModel.setGenreFilter(it) },
+                onYearSelected = { viewModel.setYearFilter(it) },
+                onFormatSelected = { viewModel.setFormatFilter(it) },
+                onClearAll = { viewModel.clearFilters() },
+            )
+        }
+    }
 
     // Autofocus on first show — search is the user's primary intent here.
     LaunchedEffect(Unit) {
@@ -74,17 +103,57 @@ fun SearchScreen(
             .fillMaxSize()
             .statusBarsPadding(),
     ) {
-        // --- Search bar ----------------------------------------------------
-        SearchBarField(
-            query = query,
-            onQueryChange = viewModel::setQuery,
-            onClear = { viewModel.setQuery("") },
-            onSubmit = viewModel::onSubmit,
-            focusRequester = focusRequester,
+        // --- Search bar + filter button (Phase 5 part 3) -------------------
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SearchBarField(
+                query = query,
+                onQueryChange = viewModel::setQuery,
+                onClear = { viewModel.setQuery("") },
+                onSubmit = viewModel::onSubmit,
+                focusRequester = focusRequester,
+                modifier = Modifier.weight(1f),
+            )
+            // Filter button with active-count badge
+            Box {
+                Surface(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .clickable { showFilterSheet = true },
+                    shape = RoundedCornerShape(percent = 50),
+                    color = if (activeFilterCount > 0)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceContainerHigh,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Filled.FilterList,
+                            contentDescription = "Filters",
+                            tint = if (activeFilterCount > 0)
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (activeFilterCount > 0) {
+                    Badge(
+                        modifier = Modifier.align(Alignment.TopEnd),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ) {
+                        Text(activeFilterCount.toString(), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
 
         // --- Body ----------------------------------------------------------
         when {
@@ -524,6 +593,127 @@ private fun ErrorState(message: String, onRetry: () -> Unit = {}) {
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text("Retry")
+        }
+    }
+}
+
+/**
+ * Phase 5 part 3 — Filter bottom sheet content.
+ *
+ * Shows three filter sections: Genre (from AniList's GenreCollection),
+ * Year (from the current results), and Format (TV/MOVIE/OVA/ONA/SPECIAL/MUSIC).
+ * Each section uses FlowRow of FilterChips. A "Clear all" button at the bottom.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun FilterSheetContent(
+    availableGenres: List<String>,
+    availableYears: List<Int>,
+    availableFormats: List<String>,
+    selectedGenre: String?,
+    selectedYear: Int?,
+    selectedFormat: String?,
+    onGenreSelected: (String?) -> Unit,
+    onYearSelected: (Int?) -> Unit,
+    onFormatSelected: (String?) -> Unit,
+    onClearAll: () -> Unit,
+) {
+    androidx.compose.foundation.lazy.LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .navigationBarsPadding(),
+    ) {
+        item {
+            Text(
+                "Filters",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(vertical = 12.dp),
+            )
+        }
+        // Genre
+        item {
+            Text(
+                "Genre",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+            )
+        }
+        item {
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                availableGenres.take(20).forEach { genre ->
+                    FilterChip(
+                        selected = selectedGenre == genre,
+                        onClick = { onGenreSelected(if (selectedGenre == genre) null else genre) },
+                        label = { Text(genre) },
+                    )
+                }
+            }
+        }
+        // Format
+        item {
+            Text(
+                "Format",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+            )
+        }
+        item {
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                availableFormats.forEach { format ->
+                    FilterChip(
+                        selected = selectedFormat == format,
+                        onClick = { onFormatSelected(if (selectedFormat == format) null else format) },
+                        label = { Text(format) },
+                    )
+                }
+            }
+        }
+        // Year
+        if (availableYears.isNotEmpty()) {
+            item {
+                Text(
+                    "Year",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                )
+            }
+            item {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    availableYears.forEach { year ->
+                        FilterChip(
+                            selected = selectedYear == year,
+                            onClick = { onYearSelected(if (selectedYear == year) null else year) },
+                            label = { Text(year.toString()) },
+                        )
+                    }
+                }
+            }
+        }
+        // Clear all
+        item {
+            TextButton(
+                onClick = onClearAll,
+                modifier = Modifier.padding(vertical = 16.dp),
+            ) {
+                Text("Clear all filters")
+            }
         }
     }
 }
