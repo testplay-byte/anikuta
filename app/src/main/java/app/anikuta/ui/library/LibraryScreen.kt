@@ -95,7 +95,7 @@ fun LibraryScreen(
             // Scroll past: topbar (index 0) + category_pills (index 1) + count_header (index 2)
             // → land on index 3 (first anime card) with a small offset so it doesn't go too far
             try {
-                gridState.animateScrollToItem(3, -20) // -20 to reduce scroll by ~20dp
+                gridState.animateScrollToItem(3, -22) // reduced by 10% from -20
             } catch (_: Exception) {
                 try { gridState.animateScrollToItem(2, 0) } catch (_: Exception) {}
             }
@@ -760,26 +760,20 @@ private fun LibraryListCard(
                     }
                 }
             }
-            // Metadata (right) — title in surfaceContainer pill + metadata pills
+            // Metadata (right) — title as plain text + metadata pills
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 12.dp),
             ) {
-                // Title in surfaceContainer — matches EpisodeRow + grid card
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                ) {
-                    Text(
-                        text = anime.title.preferred(),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                // Title — plain text (no background), single line
+                Text(
+                    text = anime.title.preferred(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Spacer(modifier = Modifier.height(4.dp))
                 // Metadata pills row
                 Row(
@@ -1154,43 +1148,50 @@ private fun LibraryCategoryPills(
     onSelect: (Long) -> Unit,
     onAddClick: () -> Unit,
 ) {
-    LazyRow(
+    // Rectangular field (8dp rounded — less rounded than pills, more like a contained section)
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 1.dp,
     ) {
-        items(categories) { category ->
-            val isSelected = category.id == selectedId
-            Surface(
-                modifier = Modifier.clickable { onSelect(category.id) },
-                shape = RoundedCornerShape(20.dp),
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = if (isSelected) 0.dp else 1.dp,
-            ) {
-                Text(
-                    text = category.name,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        // "New" pill for creating categories
-        item {
-            Surface(
-                modifier = Modifier.clickable { onAddClick() },
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+        LazyRow(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(categories) { category ->
+                val isSelected = category.id == selectedId
+                Surface(
+                    modifier = Modifier.clickable { onSelect(category.id) },
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
-                    Icon(Icons.Filled.Add, contentDescription = "New category", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("New", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Text(
+                        text = category.name,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            // "New" button for creating categories
+            item {
+                Surface(
+                    modifier = Modifier.clickable { onAddClick() },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "New category", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("New", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    }
                 }
             }
         }
