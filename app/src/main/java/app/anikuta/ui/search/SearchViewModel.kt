@@ -381,7 +381,7 @@ class SearchViewModel : ViewModel() {
             } else {
                 saveRecent(q.trim())
                 // Apply any active filters to the first page.
-                if (_selectedGenre.value != null || _selectedYear.value != null || _selectedFormat.value != null) {
+                if (_selectedGenres.value.isNotEmpty() || _selectedYear.value != null || _selectedFormats.value.isNotEmpty() || _selectedSeasons.value.isNotEmpty() || _selectedStatuses.value.isNotEmpty() || _selectedSort.value != null) {
                     applyFilters()
                 } else {
                     _state.value = SearchState.Success(anime = data, hasMore = hasMore, isLoadingMore = false)
@@ -410,7 +410,7 @@ class SearchViewModel : ViewModel() {
                 hasMore = nextData.size >= 25
                 allResults = allResults + nextData
                 // Re-apply filters to the combined list.
-                if (_selectedGenre.value != null || _selectedYear.value != null || _selectedFormat.value != null) {
+                if (_selectedGenres.value.isNotEmpty() || _selectedYear.value != null || _selectedFormats.value.isNotEmpty() || _selectedSeasons.value.isNotEmpty() || _selectedStatuses.value.isNotEmpty() || _selectedSort.value != null) {
                     applyFilters()
                     // But re-add the loading=false + hasMore on the filtered result.
                     val filteredState = _state.value as? SearchState.Success
