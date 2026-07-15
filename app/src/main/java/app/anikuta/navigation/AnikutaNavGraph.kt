@@ -39,6 +39,9 @@ import app.anikuta.ui.library.LibraryScreen
 import app.anikuta.ui.history.HistoryScreen
 import app.anikuta.ui.search.SearchScreen
 import app.anikuta.ui.settings.MoreScreen
+import app.anikuta.player.PlaybackStateStore
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 sealed class Screen(
     val route: String,
@@ -178,7 +181,7 @@ fun AnikutaNavGraph() {
                         // fall back to the detail page with autoPlayUrl.
                         val context = navController.context
                         try {
-                            val pbStore = uy.kohesive.injekt.Injekt.get<app.anikuta.player.PlaybackStateStore>()
+                            val pbStore: PlaybackStateStore = Injekt.get()
                             val saved = pbStore.get(anilistId, episodeUrl)
                             if (saved != null && saved.videoUrl.isNotBlank()) {
                                 // Direct launch with the saved video URL + server + audio + quality
