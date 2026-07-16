@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Bell
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudDownload
@@ -15,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.anikuta.core.preference.Preference
@@ -202,6 +204,48 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                             onHourChange = { prefs.quietHoursEnd().set(it) },
                         )
                     }
+                }
+            }
+
+            // ---- Background battery ----
+            item {
+                SettingsGroupCard(title = "Background reliability") {
+                    var isIgnoringBattery by remember {
+                        mutableStateOf(
+                            android.os.PowerManager::class.java.let { pm ->
+                                val context = LocalContext.current
+                                val powerManager = context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+                                powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: false
+                            }
+                        )
+                    }
+                    val context = LocalContext.current
+                    ClickableSettingsRow(
+                        icon = Icons.Default.BatteryFull,
+                        title = "Disable battery optimization",
+                        subtitle = if (isIgnoringBattery) "✓ App is exempt — background tracking will work reliably"
+                                   else "Required for reliable background episode tracking. Some OEMs kill background apps without this.",
+                        onClick = {
+                            try {
+                                val intent = android.content.Intent(
+                                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                                ).apply {
+                                    data = android.net.Uri.parse("package:${context.packageName}")
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // Fallback: open app battery settings
+                                try {
+                                    val intent = android.content.Intent(
+                                        android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+                                    )
+                                    context.startActivity(intent)
+                                } catch (e2: Exception) {
+                                    android.widget.Toast.makeText(context, "Could not open battery settings", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                    )
                 }
             }
         }

@@ -27,6 +27,10 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Phase N: Required to re-schedule the release tracker after device reboot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Phase N: Required to request battery-optimization exemption so the
+         release tracker can run in the background reliably. Some OEMs (Xiaomi,
+         Huawei, Samsung) aggressively kill background apps without this. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Allow intent-based extension discovery on Android 11+ (package
          visibility). The intent-based fallback in AnimeExtensionLoader uses
