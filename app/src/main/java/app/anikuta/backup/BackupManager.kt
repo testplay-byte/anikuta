@@ -170,7 +170,7 @@ class BackupManager(
         val recentSearches = try {
             val prefs = Injekt.get<app.anikuta.core.preference.PreferenceStore>()
             val recentPref = prefs.getObject(
-                key = "pref_recent_searches",
+                key = "search_recent_terms",  // Must match SearchViewModel.RECENT_KEY
                 defaultValue = emptyList<String>(),
                 serializer = { json.encodeToString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), it) },
                 deserializer = { json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), it) },
@@ -193,7 +193,9 @@ class BackupManager(
         // Settings — collect all preference keys
         val settings = try {
             val prefs = Injekt.get<app.anikuta.core.preference.PreferenceStore>()
-            prefs.getAll().mapValues { it.value?.toString() ?: "" }
+            prefs.getAll().entries.associate { (key, value) ->
+                key to (value?.toString() ?: "")
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Could not read settings: ${e.message}")
             emptyMap()
@@ -350,7 +352,7 @@ class BackupManager(
             try {
                 val prefs = Injekt.get<app.anikuta.core.preference.PreferenceStore>()
                 val recentPref = prefs.getObject(
-                    key = "pref_recent_searches",
+                    key = "search_recent_terms",  // Must match SearchViewModel.RECENT_KEY
                     defaultValue = emptyList<String>(),
                     serializer = { json.encodeToString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), it) },
                     deserializer = { json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), it) },
