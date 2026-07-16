@@ -431,10 +431,25 @@ class ReleaseTracker(
         val autoDlEnabled = tracked.autoDownloadNew ?: prefs.globalAutoDownloadEnabled().get()
         if (!autoDlEnabled) return false
 
-        val autoDlSub = tracked.autoDownloadSub ?: prefs.globalAutoDownloadSub().get()
-        val autoDlDub = tracked.autoDownloadDub ?: prefs.globalAutoDownloadDub().get()
+        // Per-anime sub/dub settings override global. If per-anime is null (inherit global),
+        // use the global audio preference (radio selector: SUB / DUB / ANY).
+        val perAnimeSubSet = tracked.autoDownloadSub != null
+        val perAnimeDubSet = tracked.autoDownloadDub != null
 
-        return (autoDlSub && hasSub) || (autoDlDub && hasDub)
+        return if (perAnimeSubSet || perAnimeDubSet) {
+            // Per-anime override: use the per-anime sub/dub toggles
+            val autoDlSub = tracked.autoDownloadSub ?: false
+            val autoDlDub = tracked.autoDownloadDub ?: false
+            (autoDlSub && hasSub) || (autoDlDub && hasDub)
+        } else {
+            // No per-anime override: use the global audio preference (radio selector)
+            when (prefs.globalAutoDownloadAudio().get()) {
+                "SUB" -> hasSub
+                "DUB" -> hasDub
+                "ANY" -> hasSub || hasDub
+                else -> hasSub || hasDub  // default to "any"
+            }
+        }
     }
 
     /**
