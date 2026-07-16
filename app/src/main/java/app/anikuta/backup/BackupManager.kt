@@ -37,6 +37,7 @@ class BackupManager(
 
     companion object {
         private const val TAG = "BackupManager"
+        private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
     }
 
     // =========================================================================
@@ -533,9 +534,5 @@ class BackupManager(
         ) : RestoreResult()
 
         data class Error(val message: String) : RestoreResult()
-    }
-
-    companion object {
-        private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
     }
 }

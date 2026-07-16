@@ -22,6 +22,7 @@ import app.anikuta.notification.ReleaseCheckPlanner
 import app.anikuta.notification.SubDubResolver
 import app.anikuta.notification.ReleaseTracker
 import app.anikuta.notification.NotificationDispatcher
+import app.anikuta.backup.BackupManager
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
@@ -259,7 +260,7 @@ class AppModule(val app: Application) : InjektModule {
 
         // ---- Backup system ----
         addSingletonFactory {
-            app.anikuta.backup.BackupManager(
+            BackupManager(
                 context = get(),
                 libraryStore = get(),
                 watchProgressStore = get(),
