@@ -358,6 +358,9 @@ fun AnikutaNavGraph() {
             composable("settings/search") {
                 app.anikuta.ui.settings.SearchSettingsScreen(onBack = { navController.popBackStack() })
             }
+            composable("settings/notifications") {
+                app.anikuta.ui.settings.NotificationSettingsScreen(onBack = { navController.popBackStack() })
+            }
             composable("settings/data") {
                 app.anikuta.ui.settings.StorageSettingsScreen(onBack = { navController.popBackStack() })
             }
