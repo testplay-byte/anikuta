@@ -154,19 +154,19 @@ progress tracked, episodes downloadable, settings organized. ✅
 
 ---
 
-## Phase 7.5 — Episode list enhancements (next)
+## Phase 7.5 — Episode list enhancements ✅ DONE
 
 **Goal:** Episode thumbnails, titles, summaries, auto-fetch from AniList.
 
-- [ ] Episode title parsing (strip "Episode X - " prefix from SEpisode.name)
-- [ ] Episode summaries (from AniList if extension doesn't provide)
-- [ ] Episode thumbnails (preview images)
-- [ ] Auto-fetch from AniList (with 24h cache TTL)
-- [ ] Soft loading (show episodes first, enhance in background)
-- [ ] User settings (toggle titles, summaries, thumbnails, auto-fetch)
+- [x] Episode title parsing (strip "Episode X - " prefix from SEpisode.name) — `EpisodeTitleParser.kt`
+- [x] Episode summaries (from AniList/Jikan if extension doesn't provide) — `EpisodeMetadataFetcher.kt`
+- [x] Episode thumbnails (preview images) — rendered in `DetailScreen.kt` + `EpisodeListView.kt`
+- [x] Auto-fetch from AniList (multi-source: AniList streaming + Jikan/MAL) — `EpisodeMetadataFetcher.kt`
+- [x] Soft loading (show episodes first, enhance in background)
+- [x] User settings (toggle titles, summaries, thumbnails, dates, audio pills, positions) — `MetadataSettingsScreen`, `PlayerEpisodeDisplayScreen`, `DisplaySettingsScreen`, `LayoutSettingsScreen`, `DetailsSettingsScreen` + live preview (`EpisodeRowPreview`)
 
-**Deliverable:** Rich episode list with thumbnails, titles, and summaries.
-See `DOCS/PLAN/EPISODE-LIST-ENHANCEMENTS-PLAN.md` for full plan.
+**Deliverable:** Rich episode list with thumbnails, titles, and summaries. ✅
+(Plan doc `DOCS/PLAN/EPISODE-LIST-ENHANCEMENTS-PLAN.md` is now historical — implementation is complete.)
 
 ---
 

@@ -37,10 +37,10 @@
 | 5 — Library/History/Search | ✅ Done | Core navigation pages, source wiring, watch progress |
 | 6 — Functionality + polish | ✅ Done | Settings reorg, player UX, extension mgmt, AniList tracking, downloads, error handling |
 | 7 — Backend improvements | ✅ Done | Extension trust + repos, episode caching, 3-stage pull-to-refresh, video picker, downloads drag-and-drop, floating nav, onboarding permissions |
-| 7.5 — Episode list enhancements | ⏭️ Next | Thumbnails, titles, summaries, auto-fetch (see `DOCS/PLAN/EPISODE-LIST-ENHANCEMENTS-PLAN.md`) |
+| 7.5 — Episode list enhancements | ✅ Done | Thumbnails, titles, summaries, auto-fetch from AniList + Jikan/MAL (`EpisodeMetadataFetcher`), toggles in settings (`MetadataSettingsScreen`, `PlayerEpisodeDisplayScreen`, `DisplaySettingsScreen`, `LayoutSettingsScreen`, `DetailsSettingsScreen`), live preview (`EpisodeRowPreview`) |
 | 8 — Statistics & watch tracking | Planned | See `DOCS/PLAN/STATISTICS-PLAN.md` |
-| 9 — 4 designs + theming | Planned | Material3 / Dark Neon / Neobrutalism / Coffee Notebook |
-| 10 — Final polish | Planned | Backup/restore, performance pass, bug bash |
+| 9 — 4 designs + theming | Not started | Material3 / Dark Neon / Neobrutalism / Coffee Notebook. Current theme is a single hardcoded Material 3 Expressive scheme (Light/Dark only; no AMOLED, no accent presets, no design picker). |
+| 10 — Final polish | Not started | Backup/restore (currently stub only — see below), auto-download (stub only), episode notifications (not started), performance pass, bug bash |
 
 ---
 
@@ -96,11 +96,26 @@ anikuta/
 
 ---
 
+## What's actually left (verified 2026-07-16)
+
+The earlier "next" phase (7.5) is **already done**. The genuinely remaining work, in rough priority order:
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Backup / restore** | Stub only | `BackupPreferences` + flag constants exist in `:domain/backup/service/`, but **no UI, no worker, no actual backup creation or restore logic**. The flag constants are manga-leftovers (`FLAG_CHAPTERS`) — need anime adaptation. User wants this as a **separate dedicated module/folder** with custom-backup management + ability to load backups from aniyomi and similar forks. |
+| **Auto-download** | Stub only | `DownloadPreferences` has the preference keys (`downloadNewEpisodes()`, `autoDownloadWhileWatching()`, `downloadNewEpisodeCategories()`, `downloadNewUnseenEpisodesOnly()`, `removeAfterReadSlots()`, etc.) but **no worker/receiver consumes them** — the auto-download logic does not exist. |
+| **Episode notifications** | Not started | `Notifications.kt` only has download channels (progress/error/complete) + extension-updates. **No new-episode detection, no scheduling worker, no notification channel for new episodes.** User wants this as a **separate dedicated module/folder**. |
+| **Theming (Phase 9)** | Not started | `Theme.kt` has a single hardcoded Material 3 Expressive scheme (Light/Dark only). **No AMOLED, no accent presets, no design picker, no DesignSpec/DesignProvider abstraction.** The 4 designs (Material3/Dark Neon/Neobrutalism/Coffee Notebook) are documented in `DOCS/PLAN/DESIGNS/` but not implemented. |
+| **Quality-of-life features** | Various | To be enumerated as the user identifies them. |
+| **PlayerActivity refactor** | Deferred | 2,430-LoC god object. High value, high risk. Awaiting user go-ahead; will explain plan before touching. |
+| **Statistics (Phase 8)** | Planned | See `DOCS/PLAN/STATISTICS-PLAN.md`. |
+
 ## Immediate next steps (per user direction, 2026-07-16)
 
-1. ✅ **Documentation cleanup** — in progress. Fixing stale docs, creating this file + `DOCS/ENGINEERING/AI-AGENT-ONBOARDING.md`.
-2. ⏭️ **Testing layer** — add thin unit tests for the 5 pure-logic pieces (`EpisodeRecognition`, `SeasonRecognition`, `AnimeFetchInterval`, `GetApplicationRelease`, `CreateAnimeExtensionRepo`); document the manual+automated testing approach.
-3. ⏭️ **Then decide** — PlayerActivity refactor timing, feature-module extraction, Phase 7.5 episode list work.
+1. ✅ **Documentation cleanup** — DONE (commit `1cdf9f6`).
+2. ✅ **Testing layer** — DONE (commit `0226996`); 4 unit-test files, 58 cases.
+3. ✅ **Phase 7.5 verification** — DONE; confirmed implemented, docs updated.
+4. ⏭️ **Decide which feature to implement next** — backup, auto-download, episode notifications, or theming. User has suggested a **branch-per-feature + dedicated-agent** workflow: a separate agent works in a new branch, implements the feature, then the main agent tests and merges if good. Awaiting user's pick + confirmation of the workflow.
 
 ---
 

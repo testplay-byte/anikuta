@@ -94,10 +94,10 @@ Gradle split) so the UI can be changed independently.
 | 5 — Library / History / Search | ✅ Done |
 | 6 — Functionality + Polish | ✅ Done |
 | 7 — Backend improvements | ✅ Done (extensions, trust, repos, downloads, caching, video picker, search, filter, floating nav, onboarding) |
-| 7.5 — Episode list enhancements | ⏭️ Next (thumbnails, titles, summaries, auto-fetch) |
+| 7.5 — Episode list enhancements | ✅ Done (thumbnails, titles, summaries, auto-fetch from AniList + Jikan/MAL, toggles + live preview) |
 | 8 — Statistics & watch tracking | Planned |
-| 9 — 4 designs + theming | Planned |
-| 10 — Final polish | Planned |
+| 9 — 4 designs + theming | Not started (current theme is a single hardcoded Material 3 scheme) |
+| 10 — Final polish | Not started (backup/restore, auto-download, episode notifications — all stubs or not started) |
 
 > **For the live, always-current status, read `DOCS/CURRENT-STATE.md`.**
 
