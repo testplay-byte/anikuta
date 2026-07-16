@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.statusBarsPadding
 import coil3.compose.AsyncImage
 import app.anikuta.data.cache.ReleaseTrackingStore
-import app.anikuta.data.cache.SubDubStore
 import app.anikuta.notification.NotificationPreferences
 import app.anikuta.ui.detail.AnimeSettingsSheet
 import app.anikuta.ui.detail.SettingsMode
@@ -45,7 +44,6 @@ fun TrackedAnimeScreen(mode: SettingsMode = SettingsMode.NOTIFICATIONS, onBack: 
     val libraryStore: LibraryStore? = remember { try { Injekt.get() } catch (e: Exception) { null } }
     val trackingStore: ReleaseTrackingStore? = remember { try { Injekt.get() } catch (e: Exception) { null } }
     val prefs: NotificationPreferences? = remember { try { Injekt.get() } catch (e: Exception) { null } }
-    val subDubStore: SubDubStore? = remember { try { Injekt.get() } catch (e: Exception) { null } }
 
     var selectedAnimeId by remember { mutableStateOf<Int?>(null) }
 
@@ -72,7 +70,18 @@ fun TrackedAnimeScreen(mode: SettingsMode = SettingsMode.NOTIFICATIONS, onBack: 
             Text(screenTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         }
 
-        if (libraryAnime.isEmpty()) {
+        // Filter out fully-released anime (FINISHED + no next airing episode).
+        // These don't need tracking — no new episodes to notify about or download.
+        val visibleAnime = remember(libraryAnime) {
+            libraryAnime.filter { anime ->
+                // Show if: status is unknown, OR not finished, OR has a next airing episode
+                val isFinished = anime.status?.uppercase() == "FINISHED"
+                val hasNoNextAiring = anime.nextAiringEpisode == null
+                !(isFinished && hasNoNextAiring)
+            }
+        }
+
+        if (visibleAnime.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -87,22 +96,14 @@ fun TrackedAnimeScreen(mode: SettingsMode = SettingsMode.NOTIFICATIONS, onBack: 
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(libraryAnime, key = { it.id }) { anime ->
+                items(visibleAnime, key = { it.id }) { anime ->
                     val tracked = trackedMap[anime.id.toString()]
-                    val subDubInfo = subDubStore?.get(anime.id)
-                    val isFullyReleased = remember(anime, subDubInfo) {
-                        anime.status?.uppercase() == "FINISHED" &&
-                        subDubInfo != null &&
-                        subDubInfo.totalEpisodes > 0 &&
-                        subDubInfo.subCount >= subDubInfo.totalEpisodes &&
-                        subDubInfo.dubCount >= subDubInfo.totalEpisodes
-                    }
                     TrackedAnimeCard(
                         anime = anime,
                         tracked = tracked,
                         globalNotifyDefault = prefs?.globalNotifyEnabled()?.get() ?: true,
                         globalAutoDlDefault = prefs?.globalAutoDownloadEnabled()?.get() ?: false,
-                        isFullyReleased = isFullyReleased,
+                        isFullyReleased = false, // Already filtered out above
                         onClick = { selectedAnimeId = anime.id },
                     )
                 }

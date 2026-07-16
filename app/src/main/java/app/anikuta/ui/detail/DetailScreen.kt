@@ -792,7 +792,9 @@ private fun DetailHeader(
                 IconButton(onClick = onShare) {
                     Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
                 }
-                // Three-dot menu: Notification settings + Auto Download (hidden if fully released)
+                // Three-dot menu: Notification settings + Auto Download
+                // Both are hidden for fully-released anime (no new episodes to notify about or download).
+                // If both are hidden, shows "Nothing to configure".
                 var showNotificationSettings by remember { mutableStateOf(false) }
                 var showDownloadSettings by remember { mutableStateOf(false) }
                 var showMenu by remember { mutableStateOf(false) }
@@ -801,8 +803,6 @@ private fun DetailHeader(
                 // 1. AniList status == FINISHED
                 // 2. No nextAiringEpisode (no upcoming episode scheduled)
                 // 3. The loaded extension episode count >= AniList's total episode count
-                // This doesn't depend on SubDubStore (which may be null if the user hasn't
-                // resolved videos yet).
                 val loadedEpisodeCount = (episodeState as? EpisodeState.Loaded)?.episodeList?.size ?: 0
                 val isFullyReleased = remember(anime, loadedEpisodeCount) {
                     anime.status?.uppercase() == "FINISHED" &&
@@ -819,15 +819,21 @@ private fun DetailHeader(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Notification settings") },
-                        onClick = {
-                            showMenu = false
-                            showNotificationSettings = true
-                        },
-                    )
-                    // Hide "Auto Download" for fully-released anime (no new episodes to download)
-                    if (!isFullyReleased) {
+                    if (isFullyReleased) {
+                        // Both options hidden — show "Nothing to configure"
+                        DropdownMenuItem(
+                            text = { Text("Nothing to configure", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                            onClick = { /* no-op — disabled */ },
+                            enabled = false,
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text("Notification settings") },
+                            onClick = {
+                                showMenu = false
+                                showNotificationSettings = true
+                            },
+                        )
                         DropdownMenuItem(
                             text = { Text("Auto Download") },
                             onClick = {
