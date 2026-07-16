@@ -236,6 +236,7 @@ fun DetailScreen(
                 // Edge-to-edge banner with cover image + theme color tint
                 item(key = "header") {
                     DetailHeader(
+                        anilistId = anilistId,
                         anime = anime,
                         coverColor = coverColor,
                         isSaved = isSaved,
@@ -721,6 +722,7 @@ fun DetailScreen(
 
 @Composable
 private fun DetailHeader(
+    anilistId: Int,
     anime: AniListAnime,
     coverColor: Color,
     isSaved: Boolean,

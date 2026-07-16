@@ -5,12 +5,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryFull
-import androidx.compose.material.icons.filled.Bell
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QuietTime
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -85,7 +85,7 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
             item {
                 SettingsGroupCard(title = "General") {
                     SwitchSettingsRow(
-                        icon = Icons.Default.Bell,
+                        icon = Icons.Default.Notifications,
                         title = "Enable notifications",
                         subtitle = "Get notified when new episodes are available",
                         checked = globalNotifyEnabled,
@@ -184,7 +184,7 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
             item {
                 SettingsGroupCard(title = "Quiet hours") {
                     SwitchSettingsRow(
-                        icon = Icons.Default.QuietTime,
+                        icon = Icons.Default.Bedtime,
                         title = "Enable quiet hours",
                         subtitle = "Silence notifications during set hours",
                         checked = quietEnabled,
@@ -210,16 +210,11 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
             // ---- Background battery ----
             item {
                 SettingsGroupCard(title = "Background reliability") {
-                    var isIgnoringBattery by remember {
-                        mutableStateOf(
-                            android.os.PowerManager::class.java.let { pm ->
-                                val context = LocalContext.current
-                                val powerManager = context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
-                                powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: false
-                            }
-                        )
-                    }
                     val context = LocalContext.current
+                    val powerManager = remember { context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager }
+                    var isIgnoringBattery by remember {
+                        mutableStateOf(powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: false)
+                    }
                     ClickableSettingsRow(
                         icon = Icons.Default.BatteryFull,
                         title = "Disable battery optimization",

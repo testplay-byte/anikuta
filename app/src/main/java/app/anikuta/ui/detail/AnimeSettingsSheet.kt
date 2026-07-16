@@ -1,6 +1,8 @@
 package app.anikuta.ui.detail
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.item
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bell
 import androidx.compose.material.icons.filled.CloudDownload
@@ -105,7 +107,7 @@ fun AnimeSettingsSheet(
                     title = "Notify on new episodes",
                     subtitle = if (tracked?.notifyOnNew == null) "Global default: ON" else null,
                     checked = notifyOnNew,
-                    onCheckedChange = { update { it.copy(notifyOnNew = it) } },
+                    onCheckedChange = { newValue -> update { it.copy(notifyOnNew = newValue) } },
                 )
             }
             item {
@@ -115,7 +117,7 @@ fun AnimeSettingsSheet(
                     subtitle = if (tracked?.notifySub == null) "Global default: ${if (globalNotifySub) "ON" else "OFF"}" else null,
                     checked = notifySub,
                     enabled = notifyOnNew,
-                    onCheckedChange = { update { it.copy(notifySub = it) } },
+                    onCheckedChange = { newValue -> update { it.copy(notifySub = newValue) } },
                 )
             }
             item {
@@ -125,7 +127,7 @@ fun AnimeSettingsSheet(
                     subtitle = if (tracked?.notifyDub == null) "Global default: ${if (globalNotifyDub) "ON" else "OFF"}" else null,
                     checked = notifyDub,
                     enabled = notifyOnNew,
-                    onCheckedChange = { update { it.copy(notifyDub = it) } },
+                    onCheckedChange = { newValue -> update { it.copy(notifyDub = newValue) } },
                 )
             }
 
@@ -142,7 +144,7 @@ fun AnimeSettingsSheet(
                     title = "Auto-download new episodes",
                     subtitle = if (tracked?.autoDownloadNew == null) "Global default: ${if (globalAutoDlEnabled) "ON" else "OFF"}" else null,
                     checked = autoDlNew,
-                    onCheckedChange = { update { it.copy(autoDownloadNew = it) } },
+                    onCheckedChange = { newValue -> update { it.copy(autoDownloadNew = newValue) } },
                 )
             }
             item {
@@ -152,7 +154,7 @@ fun AnimeSettingsSheet(
                     subtitle = if (tracked?.autoDownloadSub == null) "Global default: ${if (globalAutoDlSub) "ON" else "OFF"}" else null,
                     checked = autoDlSub,
                     enabled = autoDlNew,  // Dependency: disabled if autoDlNew is off
-                    onCheckedChange = { update { it.copy(autoDownloadSub = it) } },
+                    onCheckedChange = { newValue -> update { it.copy(autoDownloadSub = newValue) } },
                 )
             }
             item {
@@ -162,7 +164,7 @@ fun AnimeSettingsSheet(
                     subtitle = if (tracked?.autoDownloadDub == null) "Global default: ${if (globalAutoDlDub) "ON" else "OFF"}" else null,
                     checked = autoDlDub,
                     enabled = autoDlNew,  // Dependency: disabled if autoDlNew is off
-                    onCheckedChange = { update { it.copy(autoDownloadDub = it) } },
+                    onCheckedChange = { newValue -> update { it.copy(autoDownloadDub = newValue) } },
                 )
             }
 
