@@ -272,7 +272,7 @@ fun DownloadsSettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit = {
  */
 @Composable
 private fun AutoDownloadSection() {
-    val prefs: app.anikuta.notification.NotificationPreferences = remember { uy.kohesive.injekt.Injekt.get() }
+    val prefs: app.anikuta.notification.NotificationPreferences = remember { uy.kohesive.injekt.Injekt.get<app.anikuta.notification.NotificationPreferences>() }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val autoDlEnabled by prefs.globalAutoDownloadEnabled().changes().collectAsState(initial = prefs.globalAutoDownloadEnabled().get())
