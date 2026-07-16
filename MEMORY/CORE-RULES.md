@@ -8,18 +8,20 @@
 
 ## 0. Project Snapshot
 
+> **For the live, always-current status, read `DOCS/CURRENT-STATE.md`.**
+> The table below is a quick orientation only; it may lag behind reality.
+
 | Field | Value |
 |-------|-------|
 | Project name | **ANI-KUTA** (display name) |
 | GitHub repo | https://github.com/testplay-byte/anikuta |
 | App ID | `app.anikuta` |
-| Origin | Copy (NOT a git fork) of **aniyomi** → https://github.com/aniyomiorg/aniyomi |
-| Fork style | **Copy-in**. Pristine copy kept in `REFERENCE/`. Never edited. |
-| Reference folders | `REFERENCE/` (stable, read-only) + `REFERENCE-STAGING/` (incoming copies for review) |
-| Backup | GitHub (`MEMORY/` + `DOCS/` pushed regularly) |
-| APK signing | Temporary self-signed keystore (stable alias → updates install over prior builds) |
+| Origin | Built **on the foundations of** aniyomi (https://github.com/aniyomiorg/aniyomi) — reuses aniyomi's extension system, SQLDelight DB pattern, Injekt DI, and MPV player. NOT a copy of aniyomi; uses its own techniques in most places. |
+| Reference folders | `REFERENCE/` (pristine aniyomi snapshot, commit `2f5cf77`, READ-ONLY) + `REFERENCE-STAGING/` (empty; for upstream review) |
+| Backup | GitHub (`MEMORY/` + `DOCS/` pushed regularly; secrets gitignored) |
+| APK signing | Debug: committed `app/debug.keystore` (alias `debug`, password `android`). Release: unsigned (not yet set up). Distribution target: GitHub releases (NOT Play Store). |
 | Account | Currently a **test account** (`testplay-byte`); may migrate later |
-| Status | **Repo setup phase** — structure created, pushed to GitHub. Awaiting dev start. |
+| Status | **Phases 0–7 complete on `main`.** Player user-verified on-device. Full download system merged. Phase 7.5 (episode list enhancements) is next. See `DOCS/CURRENT-STATE.md`. |
 
 ---
 
@@ -164,18 +166,21 @@ We keep **two** reference folders:
 ## 7. Notification Rule
 
 - After **each completed task / response**, send a notification to:
-  `ntfy.sh/THEANIMEAPPTASKISDONE`
-- Method: HTTP POST to `https://ntfy.sh/THEANIMEAPPTASKISDONE`
+  `ntfy.sh/TASKISDONE`
+- Method: HTTP POST to `https://ntfy.sh/TASKISDONE`
+- (Changed from `THEANIMEAPPTASKISDONE` to `TASKISDONE` in Session 30. The CI
+  workflow `.github/workflows/build-apk.yml` uses `TASKISDONE`.)
 
 ---
 
 ## 8. Quick Checklist (read every session)
 
-- [ ] Read `MEMORY/CORE-RULES.md` (this file)
-- [ ] Read `MEMORY/SESSION-START-GUIDE.md`
-- [ ] Read `MEMORY/PROJECT-CONTEXT.md`
-- [ ] Read latest entry in `MEMORY/SESSION-LOGS/`
+- [ ] Read `DOCS/ENGINEERING/AI-AGENT-ONBOARDING.md` (the entry point)
+- [ ] Read `DOCS/CURRENT-STATE.md` (live status)
+- [ ] Read `DOCS/ENGINEERING/WORKING-RULES.md` (binding change rules)
+- [ ] Read `MEMORY/CORE-RULES.md` (this file — philosophy + 4 core rules)
 - [ ] Check `MEMORY/DECISIONS/` for prior decisions
+- [ ] Check the tail of `worklog.md` for recent activity
 - [ ] Confirm current goal with user before acting
 - [ ] Work in small, documented steps
 - [ ] On finish: update session log, push to GitHub, send ntfy

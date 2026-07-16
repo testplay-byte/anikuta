@@ -203,7 +203,7 @@ is fully featured.
 
 ---
 
-## Phase 9 — Polish + backup + trackers
+## Phase 10 — Polish + backup + trackers
 
 **Goal:** Production-ready.
 
@@ -226,9 +226,9 @@ is fully featured.
 ## Open questions (roadmap-level)
 
 - [ ] Is the phase order right? (e.g. should downloads come before the 4 designs?)
-- [ ] Phase 6 (4 designs): build all 4 at once, or 1 per phase?
+- [ ] Phase 9 (4 designs): build all 4 at once, or 1 per phase?
 - [ ] Should we do a "design preview" subpage on the web to mock the 4 designs before building?
 
 ---
 
-_Last updated: Session 27. Phase 7 done. Phase 7.5 (episode list enhancements) is next._
+_Last updated: 2026-07-16. Phase 7 done (on `main`). Phase 7.5 (episode list enhancements) is next. (Previously "Session 27" — fixed the duplicate Phase 9 numbering: the second "Phase 9" is now Phase 10, matching `README.md`.)_

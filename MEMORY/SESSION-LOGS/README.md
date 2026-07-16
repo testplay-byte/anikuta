@@ -26,6 +26,12 @@ One file per session, named `YYYY-MM-DD-SESSION-N.md`.
 
 ## Index
 
+> **Note:** This index is maintained intermittently. For the most recent
+> activity (Sessions 32+), read the tail of `worklog.md` (repo root), which
+> is the authoritative session-by-session log. The structured session logs in
+> this folder stop at Session 31; later work (download-system rebuild, etc.)
+> is recorded only in `worklog.md`.
+
 - `Session 0` — Setup: rules, folder structure, live preview page.
 - `Session 1` — Repo setup: all-caps folders, REFERENCE-STAGING, MEMORY/DOCS expansion, GitHub push.
 - `Session 2` — Copied aniyomi into REFERENCE/ (snapshot 2f5cf77); filled reference-navigation guide §1-2.
@@ -47,3 +53,7 @@ One file per session, named `YYYY-MM-DD-SESSION-N.md`.
 - `Session 18` — Sandbox restart recovery: cloned from GitHub, restored credentials, rebuilt live preview.
 - `Session 19` — Player pipeline fixes: extension URL crash, TLS, 403/headers, error overlay, stale header read. Builds b25c8fa→1d5f7d2 green.
 - `Session 20` — User on-device verification (PLAYER FULLY WORKING) + documentation backup + GitHub push.
+- `Sessions 21–27` — Phase 7 (backend improvements): extension trust + repos, episode caching, 3-stage pull-to-refresh, video picker redesign, downloads drag-and-drop, floating nav, onboarding permissions. (See `worklog.md` for per-session detail — numbering has collisions in `worklog.md`.)
+- `Sessions 28–31` — Episode metadata, dynamic theming, settings redesign, Library/History/Search revamp (merged via `library-history-search-revamp` branch, commit `ca644ad`). Latest structured log: `2026-07-15-session-31.md`.
+- `Sessions 32+` — Player UI iteration + full download-system rebuild (modular engines, segment resume, foreground service, downloads page v1–v4). Recorded **only in `worklog.md`** (not in structured logs). This work was on a `player-experiment` branch which has since been **merged into `main`** (commit `a05d07c`) and deleted. All on `main` now.
+- `2026-07-16` — Full-codebase discovery + documentation cleanup (engineering docs created at `DOCS/ENGINEERING/`, stale docs fixed, `DOCS/CURRENT-STATE.md` created). See `DOCS/ENGINEERING/AI-AGENT-ONBOARDING.md`.
