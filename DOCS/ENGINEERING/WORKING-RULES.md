@@ -47,29 +47,44 @@
 17. **Signing.** Debug builds are signed with the committed `app/debug.keystore` (alias `debug`, passwords `android`). Release builds are **unsigned** (no `signingConfig`). Never commit a release keystore. Never hardcode a real release password.
 18. **Secrets are gitignored.** `MEMORY/CREDENTIALS/**`, `*.keystore`, `*.jks`, `*.env`, `secrets.properties`, `keystore.properties` are all gitignored. The Supabase DB password currently committed in `DOCS/APP/STRUCTURE/supabase-schema.md` is a **known security issue** to be redacted + rotated — do not propagate it anywhere.
 
+## D-bis. Build verification (MANDATORY — learned 2026-07-16)
+
+19. **The sandbox has NO Android SDK.** Local `./gradlew assembleDebug` is NOT possible. The ONLY way to verify a build is via GitHub Actions CI.
+20. **Build after every phase.** When implementing a multi-phase feature, create the PR **immediately after Phase 1** (so the PR is open), then push each subsequent phase to the feature branch. Each push triggers CI (because the PR is open against `main`). **Wait for CI green before starting the next phase.** If CI fails, fix it before moving on. Never batch multiple phases without a green build between them.
+21. **Never report a phase as "done" without a green CI build.** "It compiles in my head" is not acceptable. The build must pass on CI.
+22. **For non-phase changes** (single-file fixes, doc edits), push and verify CI green before reporting back to the user.
+23. **CI build time:** ~2–5 minutes for a clean build (cached). Budget for this in the workflow — do not skip it to save time.
+
+## D-ter. Merge discipline (MANDATORY — learned 2026-07-16)
+
+24. **NEVER merge a feature branch to `main` without explicit user confirmation.** This is non-negotiable. Even if CI is green, even if the change seems small, even if you think the user would want it — ASK FIRST.
+25. **The merge request format:** "CI build #N passed on `feature/<name>`. Ready to merge to `main`. Should I merge?" — then wait for "yes" (or a specific instruction) before merging.
+26. **The user tests on-device before merge.** The CI build passing only proves it compiles — it does NOT prove the feature works. The user installs the APK and verifies behavior. Merge happens only after the user confirms the on-device test is satisfactory.
+27. **If a merge happened without confirmation (mistake), own it immediately.** Do not hide it. Tell the user, explain what was merged, and ask how to proceed (revert? keep? fix-forward?).
+
 ## E. Communication
 
-19. **If anything is unclear, stop.** Explain what is unclear, ask focused questions, do not blindly guess.
-20. **Ask questions in batches of 5** (per `MEMORY/CORE-RULES.md`). Keep wording simple and short.
-21. **Be honest and direct.** Do not sugarcoat. Do not blindly agree. If something can't be done, say so and explain why.
-22. **Proactively highlight concerns, limits, and risks** before the user asks.
-23. **Do not begin implementing new features until explicitly asked.**
+28. **If anything is unclear, stop.** Explain what is unclear, ask focused questions, do not blindly guess.
+29. **Ask questions in batches of 5** (per `MEMORY/CORE-RULES.md`). Keep wording simple and short.
+30. **Be honest and direct.** Do not sugarcoat. Do not blindly agree. If something can't be done, say so and explain why.
+31. **Proactively highlight concerns, limits, and risks** before the user asks.
+32. **Do not begin implementing new features until explicitly asked.**
 
 ## F. Documentation discipline
 
-24. **Document every change** in the appropriate `DOCS/` file.
-25. **Keep `DOCS/ENGINEERING/TECHNICAL-OVERVIEW.md` current** when structure/build changes.
-26. **Update `DOCS/ENGINEERING/MODULARIZATION-ASSESSMENT.md`** when a structural issue is resolved or found.
-27. **Do not create stale docs.** If you change behavior, update the doc that describes it in the same change.
+33. **Document every change** in the appropriate `DOCS/` file.
+34. **Keep `DOCS/ENGINEERING/TECHNICAL-OVERVIEW.md` current** when structure/build changes.
+35. **Update `DOCS/ENGINEERING/MODULARIZATION-ASSESSMENT.md`** when a structural issue is resolved or found.
+36. **Do not create stale docs.** If you change behavior, update the doc that describes it in the same change.
 
 ## G. Reference folder (read-only)
 
-28. **`REFERENCE/` is pristine aniyomi, READ-ONLY.** Never edit, never build from it. Only refresh by replacing the whole copy during upstream review (via `REFERENCE-STAGING/`).
-29. **`REFERENCE-STAGING/`** is the landing zone for incoming upstream copies. Currently empty.
+37. **`REFERENCE/` is pristine aniyomi, READ-ONLY.** Never edit, never build from it. Only refresh by replacing the whole copy during upstream review (via `REFERENCE-STAGING/`).
+38. **`REFERENCE-STAGING/`** is the landing zone for incoming upstream copies. Currently empty.
 
 ## H. Issue workflow (one at a time)
 
-30. **One issue at a time.** Pick one → understand fully → verify it exists → plan the fix → implement → document → verify → move on. (Per `MEMORY/CORE-RULES.md` Rule 4. Do not hand issue-fixing to sub-agents.)
+39. **One issue at a time.** Pick one → understand fully → verify it exists → plan the fix → implement → document → verify → move on. (Per `MEMORY/CORE-RULES.md` Rule 4. Do not hand issue-fixing to sub-agents.)
 
 ---
 
@@ -80,5 +95,7 @@
 - [ ] Listed every file that must change (and confirmed each is necessary).
 - [ ] Considered side effects: persisted data? extension contract? CI trigger? performance?
 - [ ] Plan explained to the user (if significant) and confirmation received.
-- [ ] Will `./gradlew assembleDebug` still pass?
+- [ ] Will `./gradlew assembleDebug` still pass? (Verify via CI — no local Android SDK.)
+- [ ] **Pushed to a feature branch + CI is green before reporting done.**
+- [ ] **Will NOT merge to `main` without explicit user confirmation.**
 - [ ] Documentation updated if behavior changed.
