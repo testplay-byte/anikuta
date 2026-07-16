@@ -2,9 +2,8 @@ package app.anikuta.ui.detail
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.item
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bell
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Subtitles
@@ -52,7 +51,7 @@ fun AnimeSettingsSheet(
 
     // Get current per-anime state (or defaults from global)
     val tracked by produceState(initialValue = trackingStore.get(anilistId), anilistId) {
-        trackingStore.changes().collectLatest { map ->
+        trackingStore.changes.collectLatest { map ->
             value = map[anilistId.toString()]
         }
     }
@@ -103,7 +102,7 @@ fun AnimeSettingsSheet(
             }
             item {
                 PerAnimeSwitchRow(
-                    icon = Icons.Default.Bell,
+                    icon = Icons.Default.Notifications,
                     title = "Notify on new episodes",
                     subtitle = if (tracked?.notifyOnNew == null) "Global default: ON" else null,
                     checked = notifyOnNew,

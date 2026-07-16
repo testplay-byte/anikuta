@@ -16,6 +16,12 @@ import app.anikuta.data.cache.EpisodeCacheStore
 import app.anikuta.data.cache.LocalCache
 import app.anikuta.data.cache.SubDubStore
 import app.anikuta.data.cache.ExtensionLinkStore
+import app.anikuta.data.cache.ReleaseTrackingStore
+import app.anikuta.notification.NotificationPreferences
+import app.anikuta.notification.ReleaseCheckPlanner
+import app.anikuta.notification.SubDubResolver
+import app.anikuta.notification.ReleaseTracker
+import app.anikuta.notification.NotificationDispatcher
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
@@ -225,18 +231,18 @@ class AppModule(val app: Application) : InjektModule {
 
         // ---- Phase N (Notifications) — release tracking system ----
         // Release-tracking state store (per-anime tracking + offset learning)
-        addSingletonFactory { app.anikuta.data.cache.ReleaseTrackingStore(get<PreferenceStore>()) }
+        addSingletonFactory { ReleaseTrackingStore(get<PreferenceStore>()) }
         // Global notification + auto-download preferences
-        addSingletonFactory { app.anikuta.notification.NotificationPreferences(get<PreferenceStore>()) }
+        addSingletonFactory { NotificationPreferences(get<PreferenceStore>()) }
         // The scheduler (computes next check time, schedules WorkManager)
-        addSingletonFactory { app.anikuta.notification.ReleaseCheckPlanner(get<Context>(), get()) }
+        addSingletonFactory { ReleaseCheckPlanner(get<Context>(), get()) }
         // Sub/dub resolver (resolves videos for one episode to detect audio versions)
-        addSingletonFactory { app.anikuta.notification.SubDubResolver() }
+        addSingletonFactory { SubDubResolver() }
         // Notification dispatcher (builds + fires Android notifications)
-        addSingletonFactory { app.anikuta.notification.NotificationDispatcher(get<Context>(), get()) }
+        addSingletonFactory { NotificationDispatcher(get<Context>(), get()) }
         // The release-tracking brain (delegates to store, detector, resolver, dispatcher, planner)
         addSingletonFactory {
-            app.anikuta.notification.ReleaseTracker(
+            ReleaseTracker(
                 store = get(),
                 sourceManager = get(),
                 bridge = get(),
