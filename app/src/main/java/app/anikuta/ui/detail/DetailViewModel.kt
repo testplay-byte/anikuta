@@ -1084,8 +1084,26 @@ class DetailViewModel(
         val nowSaved = !_isSaved.value
         if (nowSaved) {
             store.save(anime)
+            // Phase N: Start release tracking when added to library
+            try {
+                val tracker = uy.kohesive.injekt.Injekt.get<app.anikuta.notification.ReleaseTracker>()
+                tracker.startTracking(
+                    anilistId = anilistId,
+                    title = anime.title.preferred(),
+                    coverUrl = anime.coverImage?.large,
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not start release tracking: ${e.message}")
+            }
         } else {
             store.remove(anilistId)
+            // Phase N: Stop release tracking when removed from library
+            try {
+                val tracker = uy.kohesive.injekt.Injekt.get<app.anikuta.notification.ReleaseTracker>()
+                tracker.stopTracking(anilistId)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not stop release tracking: ${e.message}")
+            }
         }
         _isSaved.value = nowSaved
         Log.d(TAG, "Save toggled: $nowSaved (anilistId=$anilistId)")

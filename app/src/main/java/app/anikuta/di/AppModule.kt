@@ -232,7 +232,9 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { app.anikuta.notification.ReleaseCheckPlanner(get<Context>(), get()) }
         // Sub/dub resolver (resolves videos for one episode to detect audio versions)
         addSingletonFactory { app.anikuta.notification.SubDubResolver() }
-        // The release-tracking brain (delegates to store, detector, resolver, planner)
+        // Notification dispatcher (builds + fires Android notifications)
+        addSingletonFactory { app.anikuta.notification.NotificationDispatcher(get<Context>(), get()) }
+        // The release-tracking brain (delegates to store, detector, resolver, dispatcher, planner)
         addSingletonFactory {
             app.anikuta.notification.ReleaseTracker(
                 store = get(),
@@ -244,6 +246,7 @@ class AppModule(val app: Application) : InjektModule {
                 libraryStore = get(),
                 subDubStore = get(),
                 anilistRepository = get(),
+                notificationDispatcher = get(),
             )
         }
     }

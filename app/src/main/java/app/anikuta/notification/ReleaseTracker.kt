@@ -42,6 +42,7 @@ class ReleaseTracker(
     private val libraryStore: LibraryStore,
     private val subDubStore: SubDubStore,
     private val anilistRepository: AniListRepository,
+    private val notificationDispatcher: NotificationDispatcher,
 ) {
 
     companion object {
@@ -156,13 +157,11 @@ class ReleaseTracker(
                 checkTime = now,
             )
 
-            // 9. Fire notifications (Phase N-3 will add NotificationDispatcher)
-            // For now (Phase N-2), just log.
-            Log.d(TAG, "checkSingleAnime: would notify: '${tracked.title}' " +
-                "newEps=${diffResult.newEpisodes} sub=$resolvedHasSub dub=$resolvedHasDub")
+            // 9. Fire notifications via NotificationDispatcher
+            fireNotifications(tracked, diffResult, resolvedHasSub, resolvedHasDub, anilistAiringAt)
 
             // 10. Trigger auto-download (Phase N-5 will add the download hook)
-            // For now (Phase N-2), just log.
+            // For now (Phase N-3), just log.
             if (shouldAutoDownload(tracked, resolvedHasSub, resolvedHasDub)) {
                 Log.d(TAG, "checkSingleAnime: would auto-download new episode for '${tracked.title}'")
             }
@@ -267,6 +266,121 @@ class ReleaseTracker(
         } catch (e: Exception) {
             Log.w(TAG, "fetchEpisodes: failed for '${tracked.title}': ${e.message}")
             null
+        }
+    }
+
+    /**
+     * Fire notifications based on the notify mode + per-anime settings.
+     *
+     * Mode 1 (anilist): notify at airing time — no sub/dub distinction.
+     * Mode 2 (extension): notify only when extension confirms — sub/dub distinction.
+     * Mode 3 (both): both notifications.
+     */
+    private fun fireNotifications(
+        tracked: ReleaseTrackingStore.TrackedAnime,
+        diffResult: NewEpisodeDetector.DiffResult,
+        hasSub: Boolean,
+        hasDub: Boolean,
+        anilistAiringAt: Long,
+    ) {
+        val notifyEnabled = tracked.notifyOnNew ?: prefs.globalNotifyEnabled().get()
+        if (!notifyEnabled) return
+
+        val mode = prefs.notifyMode().get()
+        val notifySub = tracked.notifySub ?: prefs.globalNotifySub().get()
+        val notifyDub = tracked.notifyDub ?: prefs.globalNotifyDub().get()
+
+        val notifications = mutableListOf<NotificationDispatcher.NewEpisodeNotification>()
+
+        // Mode 1 or 3: AniList-based notification (no sub/dub distinction)
+        if (mode == "anilist" || mode == "both") {
+            if (diffResult.newEpisodes.isNotEmpty()) {
+                notifications.add(
+                    NotificationDispatcher.NewEpisodeNotification(
+                        anilistId = tracked.anilistId,
+                        title = tracked.title,
+                        episodeNumber = diffResult.newEpisodes.maxOrNull() ?: 0f,
+                        episodeName = null,
+                        coverUrl = tracked.coverUrl,
+                        hasSub = false,
+                        hasDub = false,
+                        isAniListOnly = true,
+                    )
+                )
+            }
+        }
+
+        // Mode 2 or 3: Extension-confirmed notification (with sub/dub)
+        if (mode == "extension" || mode == "both") {
+            if (diffResult.newEpisodes.isNotEmpty()) {
+                // Sub notification
+                if (notifySub && hasSub) {
+                    notifications.add(
+                        NotificationDispatcher.NewEpisodeNotification(
+                            anilistId = tracked.anilistId,
+                            title = tracked.title,
+                            episodeNumber = diffResult.newEpisodes.maxOrNull() ?: 0f,
+                            episodeName = null,
+                            coverUrl = tracked.coverUrl,
+                            hasSub = true,
+                            hasDub = false,
+                            isAniListOnly = false,
+                        )
+                    )
+                }
+                // Dub notification
+                if (notifyDub && hasDub) {
+                    notifications.add(
+                        NotificationDispatcher.NewEpisodeNotification(
+                            anilistId = tracked.anilistId,
+                            title = tracked.title,
+                            episodeNumber = diffResult.newEpisodes.maxOrNull() ?: 0f,
+                            episodeName = null,
+                            coverUrl = tracked.coverUrl,
+                            hasSub = false,
+                            hasDub = true,
+                            isAniListOnly = false,
+                        )
+                    )
+                }
+                // If neither sub nor dub was detected but we still have a new episode,
+                // send a generic notification (audio = ANY)
+                if (!hasSub && !hasDub && (notifySub || notifyDub)) {
+                    notifications.add(
+                        NotificationDispatcher.NewEpisodeNotification(
+                            anilistId = tracked.anilistId,
+                            title = tracked.title,
+                            episodeNumber = diffResult.newEpisodes.maxOrNull() ?: 0f,
+                            episodeName = null,
+                            coverUrl = tracked.coverUrl,
+                            hasSub = false,
+                            hasDub = false,
+                            isAniListOnly = false,
+                        )
+                    )
+                }
+            }
+
+            // Dub-lag: new dub detected for an older episode
+            if (diffResult.newDubDetected && notifyDub && !diffResult.newEpisodes.isNotEmpty()) {
+                notifications.add(
+                    NotificationDispatcher.NewEpisodeNotification(
+                        anilistId = tracked.anilistId,
+                        title = tracked.title,
+                        episodeNumber = 0f,  // unknown — dub lag
+                        episodeName = "New dub episode available",
+                        coverUrl = tracked.coverUrl,
+                        hasSub = false,
+                        hasDub = true,
+                        isAniListOnly = false,
+                    )
+                )
+            }
+        }
+
+        if (notifications.isNotEmpty()) {
+            notificationDispatcher.notifyNewEpisodes(notifications)
+            Log.d(TAG, "fireNotifications: sent ${notifications.size} notification(s) for '${tracked.title}'")
         }
     }
 
