@@ -52,6 +52,8 @@ import app.anikuta.download.AudioFallback
 import app.anikuta.download.PriorityMode
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * Phase 7 — Downloads settings screen with drag-and-drop priority lists.
