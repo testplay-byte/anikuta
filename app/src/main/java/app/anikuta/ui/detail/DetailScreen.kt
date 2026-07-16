@@ -240,6 +240,7 @@ fun DetailScreen(
                         anime = anime,
                         coverColor = coverColor,
                         isSaved = isSaved,
+                        episodeState = episodeState,
                         onBack = onBack,
                         onSave = {
                             viewModel.toggleSaved()
@@ -726,6 +727,7 @@ private fun DetailHeader(
     anime: AniListAnime,
     coverColor: Color,
     isSaved: Boolean,
+    episodeState: EpisodeState,
     onBack: () -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
@@ -790,9 +792,26 @@ private fun DetailHeader(
                 IconButton(onClick = onShare) {
                     Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
                 }
-                // Phase N-4: Three-dot menu for per-anime notification + download settings
-                var showAnimeSettings by remember { mutableStateOf(false) }
+                // Three-dot menu: Notification settings + Auto Download
+                // Both are hidden for fully-released anime (no new episodes to notify about or download).
+                // If both are hidden, shows "Nothing to configure".
+                var showNotificationSettings by remember { mutableStateOf(false) }
+                var showDownloadSettings by remember { mutableStateOf(false) }
                 var showMenu by remember { mutableStateOf(false) }
+
+                // Check if all episodes are released. Uses multiple signals:
+                // 1. AniList status == FINISHED
+                // 2. No nextAiringEpisode (no upcoming episode scheduled)
+                // 3. The loaded extension episode count >= AniList's total episode count
+                val loadedEpisodeCount = (episodeState as? EpisodeState.Loaded)?.episodeList?.size ?: 0
+                val isFullyReleased = remember(anime, loadedEpisodeCount) {
+                    anime.status?.uppercase() == "FINISHED" &&
+                    anime.nextAiringEpisode == null &&
+                    anime.episodes != null &&
+                    anime.episodes > 0 &&
+                    loadedEpisodeCount >= anime.episodes
+                }
+
                 IconButton(onClick = { showMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = Color.White)
                 }
@@ -800,25 +819,42 @@ private fun DetailHeader(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Notification settings") },
-                        onClick = {
-                            showMenu = false
-                            showAnimeSettings = true
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Download settings") },
-                        onClick = {
-                            showMenu = false
-                            showAnimeSettings = true
-                        },
-                    )
+                    if (isFullyReleased) {
+                        // Both options hidden — show "Nothing to configure"
+                        DropdownMenuItem(
+                            text = { Text("Nothing to configure", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                            onClick = { /* no-op — disabled */ },
+                            enabled = false,
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text("Notification settings") },
+                            onClick = {
+                                showMenu = false
+                                showNotificationSettings = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Auto Download") },
+                            onClick = {
+                                showMenu = false
+                                showDownloadSettings = true
+                            },
+                        )
+                    }
                 }
-                if (showAnimeSettings) {
+                if (showNotificationSettings) {
                     AnimeSettingsSheet(
                         anilistId = anilistId,
-                        onDismiss = { showAnimeSettings = false },
+                        mode = SettingsMode.NOTIFICATIONS,
+                        onDismiss = { showNotificationSettings = false },
+                    )
+                }
+                if (showDownloadSettings) {
+                    AnimeSettingsSheet(
+                        anilistId = anilistId,
+                        mode = SettingsMode.DOWNLOADS,
+                        onDismiss = { showDownloadSettings = false },
                     )
                 }
             }

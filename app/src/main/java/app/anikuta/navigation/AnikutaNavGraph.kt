@@ -359,7 +359,16 @@ fun AnikutaNavGraph() {
                 app.anikuta.ui.settings.SearchSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable("settings/notifications") {
-                app.anikuta.ui.settings.NotificationSettingsScreen(onBack = { navController.popBackStack() })
+                app.anikuta.ui.settings.NotificationSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onNavigate = { route -> navController.navigate(route) },
+                )
+            }
+            composable("settings/notifications/tracked") {
+                app.anikuta.ui.settings.TrackedAnimeScreen(
+                    mode = app.anikuta.ui.detail.SettingsMode.NOTIFICATIONS,
+                    onBack = { navController.popBackStack() },
+                )
             }
             composable("settings/data") {
                 app.anikuta.ui.settings.StorageSettingsScreen(onBack = { navController.popBackStack() })
@@ -422,7 +431,16 @@ fun AnikutaNavGraph() {
                 )
             }
             composable("settings/downloads/settings") {
-                app.anikuta.ui.settings.DownloadsSettingsScreen(onBack = { navController.popBackStack() })
+                app.anikuta.ui.settings.DownloadsSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onNavigate = { route -> navController.navigate(route) },
+                )
+            }
+            composable("settings/downloads/tracked") {
+                app.anikuta.ui.settings.TrackedAnimeScreen(
+                    mode = app.anikuta.ui.detail.SettingsMode.DOWNLOADS,
+                    onBack = { navController.popBackStack() },
+                )
             }
             composable("settings/tracking") {
                 app.anikuta.ui.settings.TrackingSettingsScreen(onBack = { navController.popBackStack() })

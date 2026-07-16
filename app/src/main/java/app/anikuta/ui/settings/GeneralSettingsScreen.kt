@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,8 +20,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Phase 6 task 6.18 — General settings subpage.
- * Clear cache + storage info.
+ * General settings — cache + battery optimization.
  */
 @Composable
 fun GeneralSettingsScreen(onBack: () -> Unit) {
@@ -44,6 +44,44 @@ fun GeneralSettingsScreen(onBack: () -> Unit) {
                             scope.launch {
                                 try { localCache?.clear() } catch (_: Exception) {}
                                 Toast.makeText(context, "Cache cleared", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                    )
+                }
+            }
+            // Battery optimization (moved here from Notifications — it's a general concern)
+            item {
+                SettingsGroupCard(title = "Background reliability") {
+                    val powerManager = remember {
+                        context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+                    }
+                    var isIgnoringBattery by remember {
+                        mutableStateOf(powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: false)
+                    }
+                    ClickableSettingsRow(
+                        icon = Icons.Default.BatteryFull,
+                        title = "Disable battery optimization",
+                        subtitle = if (isIgnoringBattery)
+                            "✓ App is exempt — background tracking will work reliably"
+                        else
+                            "Required for reliable background episode tracking. Some OEMs kill background apps without this.",
+                        onClick = {
+                            try {
+                                val intent = android.content.Intent(
+                                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                                ).apply {
+                                    data = android.net.Uri.parse("package:${context.packageName}")
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                try {
+                                    val intent = android.content.Intent(
+                                        android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+                                    )
+                                    context.startActivity(intent)
+                                } catch (e2: Exception) {
+                                    Toast.makeText(context, "Could not open battery settings", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         },
                     )
