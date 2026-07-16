@@ -46,27 +46,14 @@ class ReleaseTrackerWorker(
             return Result.success()
         }
 
-        val now = System.currentTimeMillis()
-        val dueAnime = store.getDueChecks(now)
-
-        if (dueAnime.isEmpty()) {
-            Log.d(TAG, "doWork: no anime due for check")
-            planner.scheduleNextCheck()
-            return Result.success()
-        }
-
-        Log.d(TAG, "doWork: ${dueAnime.size} anime due for check")
-
-        // Phase N-2 will add the actual checking logic here via ReleaseTracker.
-        // For now (Phase N-1 skeleton), just log and reschedule.
-        for (anime in dueAnime) {
-            Log.d(TAG, "doWork: would check: ${anime.title} (anilistId=${anime.anilistId})")
-        }
+        // Phase N-2: delegate to the ReleaseTracker for actual detection.
+        val tracker: ReleaseTracker = Injekt.get()
+        val checked = tracker.checkDueAnime()
 
         // Re-schedule the next check.
         planner.scheduleNextCheck()
 
-        Log.d(TAG, "doWork: ← worker finished")
+        Log.d(TAG, "doWork: ← worker finished (checked $checked anime)")
         return Result.success()
     }
 }

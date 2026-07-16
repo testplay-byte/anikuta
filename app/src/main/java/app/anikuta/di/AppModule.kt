@@ -230,5 +230,21 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { app.anikuta.notification.NotificationPreferences(get<PreferenceStore>()) }
         // The scheduler (computes next check time, schedules WorkManager)
         addSingletonFactory { app.anikuta.notification.ReleaseCheckPlanner(get<Context>(), get()) }
+        // Sub/dub resolver (resolves videos for one episode to detect audio versions)
+        addSingletonFactory { app.anikuta.notification.SubDubResolver() }
+        // The release-tracking brain (delegates to store, detector, resolver, planner)
+        addSingletonFactory {
+            app.anikuta.notification.ReleaseTracker(
+                store = get(),
+                sourceManager = get(),
+                bridge = get(),
+                subDubResolver = get(),
+                prefs = get(),
+                planner = get(),
+                libraryStore = get(),
+                subDubStore = get(),
+                anilistRepository = get(),
+            )
+        }
     }
 }

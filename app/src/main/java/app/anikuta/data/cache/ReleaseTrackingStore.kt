@@ -43,6 +43,11 @@ class ReleaseTrackingStore(
         val anilistId: Int,
         val title: String,
         val coverUrl: String? = null,
+        // ---- Source mapping (cached so the tracker doesn't re-search every time) ----
+        /** The extension source ID that matches this anime. Null if not yet matched. */
+        val sourceId: Long? = null,
+        /** The extension anime URL (the SAnime.url). Null if not yet matched. */
+        val animeUrl: String? = null,
         // ---- Tracking state ----
         val lastKnownEpisodeCount: Int = 0,
         val lastKnownSubCount: Int = 0,
@@ -171,6 +176,16 @@ class ReleaseTrackingStore(
     fun setNextScheduledCheck(anilistId: Int, time: Long) {
         val anime = get(anilistId) ?: return
         put(anime.copy(nextScheduledCheck = time))
+    }
+
+    /**
+     * Update the cached source mapping (sourceId + animeUrl) for a tracked anime.
+     * Called when the tracker first matches the anime to an extension source,
+     * or when the detail page resolves the source.
+     */
+    fun updateSourceMapping(anilistId: Int, sourceId: Long, animeUrl: String) {
+        val anime = get(anilistId) ?: return
+        put(anime.copy(sourceId = sourceId, animeUrl = animeUrl))
     }
 
     /**
