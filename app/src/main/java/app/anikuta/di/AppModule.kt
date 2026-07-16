@@ -16,6 +16,12 @@ import app.anikuta.data.cache.EpisodeCacheStore
 import app.anikuta.data.cache.LocalCache
 import app.anikuta.data.cache.SubDubStore
 import app.anikuta.data.cache.ExtensionLinkStore
+import app.anikuta.data.cache.ReleaseTrackingStore
+import app.anikuta.notification.NotificationPreferences
+import app.anikuta.notification.ReleaseCheckPlanner
+import app.anikuta.notification.SubDubResolver
+import app.anikuta.notification.ReleaseTracker
+import app.anikuta.notification.NotificationDispatcher
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
@@ -222,5 +228,33 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { SubDubStore(get<PreferenceStore>()) }
         // Phase I — Extension-to-AniList link cache
         addSingletonFactory { ExtensionLinkStore(get<PreferenceStore>()) }
+
+        // ---- Phase N (Notifications) — release tracking system ----
+        // Release-tracking state store (per-anime tracking + offset learning)
+        addSingletonFactory { ReleaseTrackingStore(get<PreferenceStore>()) }
+        // Global notification + auto-download preferences
+        addSingletonFactory { NotificationPreferences(get<PreferenceStore>()) }
+        // The scheduler (computes next check time, schedules WorkManager)
+        addSingletonFactory { ReleaseCheckPlanner(get<Context>(), get()) }
+        // Sub/dub resolver (resolves videos for one episode to detect audio versions)
+        addSingletonFactory { SubDubResolver() }
+        // Notification dispatcher (builds + fires Android notifications)
+        addSingletonFactory { NotificationDispatcher(get<Context>(), get()) }
+        // The release-tracking brain (delegates to store, detector, resolver, dispatcher, planner)
+        addSingletonFactory {
+            ReleaseTracker(
+                store = get(),
+                sourceManager = get(),
+                bridge = get(),
+                subDubResolver = get(),
+                prefs = get(),
+                planner = get(),
+                libraryStore = get(),
+                subDubStore = get(),
+                anilistRepository = get(),
+                notificationDispatcher = get(),
+                downloadManager = get(),
+            )
+        }
     }
 }

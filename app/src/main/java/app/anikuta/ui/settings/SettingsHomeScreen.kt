@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LibraryBooks
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -73,6 +74,7 @@ fun SettingsHomeScreen(
         SettingsCategory("settings/library", "Library", "Display mode, categories, badges", Icons.Default.LibraryBooks, "amber"),
         SettingsCategory("settings/history", "History", "Watch threshold, retention", Icons.Default.History, "rose"),
         SettingsCategory("settings/search", "Search", "Default source, result count", Icons.Default.Search, "sky"),
+        SettingsCategory("settings/notifications", "Notifications", "New episodes, auto-download, quiet hours", Icons.Default.Notifications, "rose"),
         SettingsCategory("settings/data", "Data & Storage", "Storage folder, downloads location", Icons.Default.Folder, "blue"),
         SettingsCategory("settings/player", "Player", "Speed, hardware decoding, audio", Icons.Default.PlayCircle, "violet"),
         SettingsCategory("settings/details", "Details", "Episode list display, thumbnails, titles", Icons.Default.Info, "indigo"),

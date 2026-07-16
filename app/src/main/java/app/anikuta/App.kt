@@ -1,15 +1,21 @@
 package app.anikuta
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import android.util.Log
 import androidx.work.WorkManager
 import app.anikuta.core.preference.AndroidPreferenceStore
+import app.anikuta.data.notification.Notifications
 import app.anikuta.di.AppModule
 import app.anikuta.di.DomainModule
 import app.anikuta.di.PreferenceModule
 import app.anikuta.download.DownloadManager
 import app.anikuta.download.DownloadNotifier
 import app.anikuta.error.AnikutaCrashHandler
+import app.anikuta.notification.NotificationPreferences
+import app.anikuta.notification.ReleaseCheckPlanner
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -60,12 +66,70 @@ class App : Application() {
             } catch (e: Exception) {
                 Log.w("AnikutaApp", "⚠ Could not create notification channels: ${e.message}")
             }
+
+            // Create notification channels for the new-episode system (Phase N)
+            createNewEpisodeNotificationChannels()
+
+            // Schedule the initial release-tracking check (Phase N-1)
+            // The planner finds the earliest due check and schedules a WorkManager job.
+            try {
+                val planner = Injekt.get<ReleaseCheckPlanner>()
+                val notifPrefs = Injekt.get<NotificationPreferences>()
+                if (notifPrefs.globalNotifyEnabled().get()) {
+                    planner.scheduleNextCheck()
+                    Log.d("AnikutaApp", "✓ Release tracker initial schedule set")
+                } else {
+                    Log.d("AnikutaApp", "Notifications disabled — skipping initial release tracker schedule")
+                }
+            } catch (e: Exception) {
+                Log.w("AnikutaApp", "⚠ Could not schedule release tracker: ${e.message}")
+            }
         } catch (e: Exception) {
             Log.e("AnikutaApp", "❌ DI setup FAILED", e)
             // Re-throw so the crash handler catches it and shows ErrorActivity.
             throw e
         }
         Log.d("AnikutaApp", "=== App.onCreate finished ===")
+    }
+
+    /**
+     * Create notification channels for the new-episode system (Phase N).
+     * Two channels:
+     *  - CHANNEL_NEW_EPISODES (default importance) — extension-confirmed new episodes
+     *  - CHANNEL_NEW_EPISODES_ANILIST (low importance) — AniList "aired" notifications
+     */
+    private fun createNewEpisodeNotificationChannels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+
+        try {
+            // Main new-episode channel (extension-confirmed)
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    Notifications.CHANNEL_NEW_EPISODES,
+                    "New Episodes",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = "Notifications when a new episode is available to watch."
+                    enableVibration(true)
+                }
+            )
+
+            // AniList-aired channel (lower importance — informational)
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    Notifications.CHANNEL_NEW_EPISODES_ANILIST,
+                    "Episode Airings (AniList)",
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = "Notifications when an episode airs according to AniList (may not be watchable yet)."
+                }
+            )
+
+            Log.d("AnikutaApp", "✓ New-episode notification channels created")
+        } catch (e: Exception) {
+            Log.w("AnikutaApp", "⚠ Could not create new-episode channels: ${e.message}")
+        }
     }
 
     /**

@@ -1255,6 +1255,26 @@ class PlayerActivity : ComponentActivity() {
         // Show loading state — this triggers the loading overlay in the UI
         vm.setSwitchingEpisode(true)
         vm.setCurrentEpisodeIndex(index)
+
+        // Phase N-6: Watch-flow auto-download — if the episode being switched to
+        // is downloaded, pre-download the next one. Filesystem check (safe, no MPV dependency).
+        if (anilistId > 0 && sourceId > 0 && animeTitle.isNotBlank()) {
+            val srcName = try {
+                uy.kohesive.injekt.Injekt.get<app.anikuta.domain.source.anime.service.AnimeSourceManager>()
+                    .get(sourceId)?.name ?: ""
+            } catch (e: Exception) { "" }
+            if (srcName.isNotBlank()) {
+                WatchFlowAutoDownload.maybePreDownloadNext(
+                    anilistId = anilistId,
+                    animeTitle = animeTitle,
+                    sourceId = sourceId,
+                    sourceName = srcName,
+                    currentEpisodeIndex = index,
+                    episodes = episodes,
+                )
+            }
+        }
+
         // Hide controls during loading
         vm.setControlsVisible(false)
         // Reset user flags for new episode

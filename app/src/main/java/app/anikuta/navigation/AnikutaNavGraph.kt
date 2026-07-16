@@ -68,6 +68,19 @@ fun AnikutaNavGraph() {
     val currentDestination = backStackEntry?.destination
     val showBottomBar = currentDestination?.route in bottomNavScreens.map { it.route }
 
+    // Phase N-3: Check for pending deep-link navigation from a notification tap.
+    // NotificationDispatcher sets NotificationDeepLink.pendingDetailId before
+    // launching MainActivity; this LaunchedEffect reads + clears it on start.
+    LaunchedEffect(Unit) {
+        app.anikuta.notification.NotificationDeepLink.consumePendingNavigation()?.let { (anilistId, autoPlayUrl) ->
+            if (autoPlayUrl != null) {
+                navController.navigate("detail/$anilistId?autoPlayUrl=$autoPlayUrl")
+            } else {
+                navController.navigate("detail/$anilistId")
+            }
+        }
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
@@ -344,6 +357,9 @@ fun AnikutaNavGraph() {
             }
             composable("settings/search") {
                 app.anikuta.ui.settings.SearchSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settings/notifications") {
+                app.anikuta.ui.settings.NotificationSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable("settings/data") {
                 app.anikuta.ui.settings.StorageSettingsScreen(onBack = { navController.popBackStack() })

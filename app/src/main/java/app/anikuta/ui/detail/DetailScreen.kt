@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -235,6 +236,7 @@ fun DetailScreen(
                 // Edge-to-edge banner with cover image + theme color tint
                 item(key = "header") {
                     DetailHeader(
+                        anilistId = anilistId,
                         anime = anime,
                         coverColor = coverColor,
                         isSaved = isSaved,
@@ -720,6 +722,7 @@ fun DetailScreen(
 
 @Composable
 private fun DetailHeader(
+    anilistId: Int,
     anime: AniListAnime,
     coverColor: Color,
     isSaved: Boolean,
@@ -765,7 +768,7 @@ private fun DetailHeader(
             )
         }
 
-        // Top bar buttons (back + save + share) — over the banner, respecting status bar
+        // Top bar buttons (back + save + share + three-dot menu) — over the banner
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -786,6 +789,37 @@ private fun DetailHeader(
                 }
                 IconButton(onClick = onShare) {
                     Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
+                }
+                // Phase N-4: Three-dot menu for per-anime notification + download settings
+                var showAnimeSettings by remember { mutableStateOf(false) }
+                var showMenu by remember { mutableStateOf(false) }
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = Color.White)
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Notification settings") },
+                        onClick = {
+                            showMenu = false
+                            showAnimeSettings = true
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Download settings") },
+                        onClick = {
+                            showMenu = false
+                            showAnimeSettings = true
+                        },
+                    )
+                }
+                if (showAnimeSettings) {
+                    AnimeSettingsSheet(
+                        anilistId = anilistId,
+                        onDismiss = { showAnimeSettings = false },
+                    )
                 }
             }
         }
