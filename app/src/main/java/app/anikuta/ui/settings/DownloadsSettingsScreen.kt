@@ -1,5 +1,6 @@
 package app.anikuta.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +21,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,13 +33,20 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.anikuta.download.AudioFallback
 import app.anikuta.download.PriorityMode
@@ -48,7 +60,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
  * toggle + audio fallback radio + WiFi/delete toggles.
  */
 @Composable
-fun DownloadsSettingsScreen(onBack: () -> Unit) {
+fun DownloadsSettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit = {}) {
     val viewModel: DownloadsViewModel = viewModel()
     val qualityOrder by viewModel.qualityOrder.collectAsState()
     val audioOrder by viewModel.audioOrder.collectAsState()
@@ -211,7 +223,153 @@ fun DownloadsSettingsScreen(onBack: () -> Unit) {
                     )
                 }
             }
+
+            // ---- Auto-download (new releases) ----
+            AutoDownloadSection()
+
+            // ---- Tracked anime (per-anime auto-download config) ----
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onNavigate("settings/downloads/tracked") },
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 0.dp,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Default.VideoLibrary,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Tracked Anime", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                        Text("Per-anime auto-download settings", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
+    }
+}
+
+/**
+ * Auto-download section — new releases + watch-flow.
+ * Lives in Downloads settings (not Notifications) because it's a download feature.
+ */
+@Composable
+private fun AutoDownloadSection() {
+    val prefs: app.anikuta.notification.NotificationPreferences = remember { uy.kohesive.injekt.Injekt.get() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val autoDlEnabled by prefs.globalAutoDownloadEnabled().collectAsState(initial = prefs.globalAutoDownloadEnabled().get())
+    val autoDlSub by prefs.globalAutoDownloadSub().collectAsState(initial = prefs.globalAutoDownloadSub().get())
+    val autoDlDub by prefs.globalAutoDownloadDub().collectAsState(initial = prefs.globalAutoDownloadDub().get())
+    val autoDlQuality by prefs.globalAutoDownloadQuality().collectAsState(initial = prefs.globalAutoDownloadQuality().get())
+    val autoDlAudio by prefs.globalAutoDownloadAudio().collectAsState(initial = prefs.globalAutoDownloadAudio().get())
+    val watchFlowEnabled by prefs.watchFlowAutoDownloadEnabled().collectAsState(initial = prefs.watchFlowAutoDownloadEnabled().get())
+
+    var showAutoDlDialog by remember { mutableStateOf(false) }
+
+    SettingsGroupCard(title = "Auto-download new releases") {
+        ToggleRow(
+            label = "Auto-download new episodes",
+            checked = autoDlEnabled,
+            onCheckedChange = { newValue ->
+                if (newValue) showAutoDlDialog = true
+                else prefs.globalAutoDownloadEnabled().set(false)
+            },
+        )
+        if (autoDlEnabled) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            ToggleRow(
+                label = "Auto-download SUB",
+                checked = autoDlSub,
+                onCheckedChange = { prefs.globalAutoDownloadSub().set(it) },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            ToggleRow(
+                label = "Auto-download DUB",
+                checked = autoDlDub,
+                onCheckedChange = { prefs.globalAutoDownloadDub().set(it) },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            // Quality selector
+            Column(Modifier.padding(16.dp)) {
+                Text("Preferred quality", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                Spacer(modifier = Modifier.height(8.dp))
+                listOf("best" to "Best available", "1080" to "1080p", "720" to "720p", "360" to "360p").forEach { (q, label) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { prefs.globalAutoDownloadQuality().set(q) }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = autoDlQuality == q, onClick = { prefs.globalAutoDownloadQuality().set(q) })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            // Audio selector
+            Column(Modifier.padding(16.dp)) {
+                Text("Preferred audio", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                Spacer(modifier = Modifier.height(8.dp))
+                listOf("SUB" to "Sub", "DUB" to "Dub", "ANY" to "Any").forEach { (value, label) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { prefs.globalAutoDownloadAudio().set(value) }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = autoDlAudio == value, onClick = { prefs.globalAutoDownloadAudio().set(value) })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    }
+
+    SettingsGroupCard(title = "Watch-flow auto-download") {
+        ToggleRow(
+            label = "Auto-download next episode while watching",
+            checked = watchFlowEnabled,
+            onCheckedChange = { prefs.watchFlowAutoDownloadEnabled().set(it) },
+        )
+    }
+
+    if (showAutoDlDialog) {
+        AlertDialog(
+            onDismissRequest = { showAutoDlDialog = false },
+            icon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
+            title = { Text("Enable auto-download?") },
+            text = {
+                Text("When enabled, all anime in your library that have new episodes released " +
+                     "will be automatically downloaded in the background. " +
+                     "You can configure which anime to auto-download and whether to prefer sub or dub.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    prefs.globalAutoDownloadEnabled().set(true)
+                    showAutoDlDialog = false
+                    Toast.makeText(context, "Auto-download enabled", Toast.LENGTH_SHORT).show()
+                }) { Text("Enable") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAutoDlDialog = false }) { Text("Cancel") }
+            },
+        )
     }
 }
 
