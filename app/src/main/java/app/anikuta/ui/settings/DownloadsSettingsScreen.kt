@@ -275,12 +275,12 @@ private fun AutoDownloadSection() {
     val prefs: app.anikuta.notification.NotificationPreferences = remember { uy.kohesive.injekt.Injekt.get() }
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    val autoDlEnabled by prefs.globalAutoDownloadEnabled().collectAsState(initial = prefs.globalAutoDownloadEnabled().get())
-    val autoDlSub by prefs.globalAutoDownloadSub().collectAsState(initial = prefs.globalAutoDownloadSub().get())
-    val autoDlDub by prefs.globalAutoDownloadDub().collectAsState(initial = prefs.globalAutoDownloadDub().get())
-    val autoDlQuality by prefs.globalAutoDownloadQuality().collectAsState(initial = prefs.globalAutoDownloadQuality().get())
-    val autoDlAudio by prefs.globalAutoDownloadAudio().collectAsState(initial = prefs.globalAutoDownloadAudio().get())
-    val watchFlowEnabled by prefs.watchFlowAutoDownloadEnabled().collectAsState(initial = prefs.watchFlowAutoDownloadEnabled().get())
+    val autoDlEnabled by prefs.globalAutoDownloadEnabled().changes().collectAsState(initial = prefs.globalAutoDownloadEnabled().get())
+    val autoDlSub by prefs.globalAutoDownloadSub().changes().collectAsState(initial = prefs.globalAutoDownloadSub().get())
+    val autoDlDub by prefs.globalAutoDownloadDub().changes().collectAsState(initial = prefs.globalAutoDownloadDub().get())
+    val autoDlQuality by prefs.globalAutoDownloadQuality().changes().collectAsState(initial = prefs.globalAutoDownloadQuality().get())
+    val autoDlAudio by prefs.globalAutoDownloadAudio().changes().collectAsState(initial = prefs.globalAutoDownloadAudio().get())
+    val watchFlowEnabled by prefs.watchFlowAutoDownloadEnabled().changes().collectAsState(initial = prefs.watchFlowAutoDownloadEnabled().get())
 
     var showAutoDlDialog by remember { mutableStateOf(false) }
 
