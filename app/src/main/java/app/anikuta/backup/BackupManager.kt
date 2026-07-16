@@ -12,6 +12,8 @@ import app.anikuta.ui.library.CategoryStore
 import app.anikuta.ui.library.LibraryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -173,8 +175,12 @@ class BackupManager(
             val recentPref = prefs.getObject(
                 key = "search_recent_terms",  // Must match SearchViewModel.RECENT_KEY
                 defaultValue = emptyList<String>(),
-                serializer = { json.encodeToString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), it) },
-                deserializer = { json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), it) },
+                serializer = { terms: List<String> ->
+                    json.encodeToString(ListSerializer(String.serializer()), terms)
+                },
+                deserializer = { raw: String ->
+                    json.decodeFromString(ListSerializer(String.serializer()), raw)
+                },
             )
             recentPref.get()
         } catch (e: Exception) {
@@ -355,8 +361,12 @@ class BackupManager(
                 val recentPref = prefs.getObject(
                     key = "search_recent_terms",  // Must match SearchViewModel.RECENT_KEY
                     defaultValue = emptyList<String>(),
-                    serializer = { json.encodeToString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), it) },
-                    deserializer = { json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), it) },
+                    serializer = { terms: List<String> ->
+                        json.encodeToString(ListSerializer(String.serializer()), terms)
+                    },
+                    deserializer = { raw: String ->
+                        json.decodeFromString(ListSerializer(String.serializer()), raw)
+                    },
                 )
                 recentPref.set(backup.recentSearches)
                 searchCount = backup.recentSearches.size

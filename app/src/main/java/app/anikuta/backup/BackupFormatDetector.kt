@@ -34,7 +34,7 @@ object BackupFormatDetector {
      */
     fun detect(input: InputStream): Format {
         return try {
-            input.mark(8)
+            input.mark(8192)
             val header = ByteArray(8)
             val read = input.read(header)
             input.reset()
@@ -42,19 +42,19 @@ object BackupFormatDetector {
             if (read >= 8 && String(header, 0, 8) == AnikutaBackup.MAGIC) {
                 Format.ANIKUTA
             } else {
-                // Try protobuf (aniyomi format) — if it decodes, it's aniyomi
+                // Read the full stream for protobuf detection
+                val allBytes = input.readBytes()
+                input.reset()
+
+                // Try gzip + protobuf (aniyomi format)
                 try {
-                    // Read the full stream, try protobuf decode
-                    input.reset()
-                    val bytes = input.readBytes()
-                    // Try decoding as aniyomi protobuf
-                    val gzipped = GZIPInputStream(bytes.inputStream()).use { it.readBytes() }
-                    ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), gzipped)
+                    val decompressed = GZIPInputStream(allBytes.inputStream()).use { it.readBytes() }
+                    ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), decompressed)
                     Format.ANIYOMI
                 } catch (e: Exception) {
                     // Maybe not gzipped — try raw protobuf
                     try {
-                        ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), bytes)
+                        ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), allBytes)
                         Format.ANIYOMI
                     } catch (e2: Exception) {
                         Format.UNKNOWN

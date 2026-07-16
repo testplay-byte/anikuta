@@ -16,7 +16,7 @@ import kotlinx.serialization.protobuf.ProtoNumber
  */
 @Serializable
 data class AniyomiBackup(
-    @ProtoNumber(1) val backupManga: List<AniyomiBackupManga> = emptyList(),
+    @ProtoNumber(1) val backupManga: List<AniyomiBackupAnime> = emptyList(),  // We don't have manga, reuse anime model
     @ProtoNumber(2) val backupCategories: List<AniyomiBackupCategory> = emptyList(),
     @ProtoNumber(3) val backupAnime: List<AniyomiBackupAnime> = emptyList(),
     @ProtoNumber(4) val backupAnimeCategories: List<AniyomiBackupCategory> = emptyList(),
