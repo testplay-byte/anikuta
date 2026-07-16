@@ -11,48 +11,96 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
+import app.anikuta.data.anilist.model.AniListAnime
 import app.anikuta.data.cache.ReleaseTrackingStore
+import app.anikuta.data.cache.SubDubStore
 import app.anikuta.notification.NotificationPreferences
+import app.anikuta.ui.library.LibraryStore
 import kotlinx.coroutines.flow.collectLatest
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Phase N-4 (Settings UI) — Per-anime notification + auto-download settings.
+ * Per-anime notification + auto-download settings.
  *
- * Shown as a ModalBottomSheet from the three-dot menu on the detail page.
- * Per-anime settings override global defaults (null = inherit global).
+ * [mode] determines which section is shown:
+ *  - [SettingsMode.NOTIFICATIONS] → only the notification toggles
+ *  - [SettingsMode.DOWNLOADS] → only the auto-download toggles
  *
- * Dependency rule (§4.1): if autoDownloadNew is OFF, the sub/dub toggles
- * below it are disabled. Same for notifyOnNew → notifySub/notifyDub.
+ * UI fixes (v2):
+ *  - No drag handle (clean top edge)
+ *  - No anime name at the top
+ *  - Better explanation text on auto-download sub/dub
+ *  - Auto-creates a tracking entry if the anime isn't tracked yet (fixes toggle bug)
+ *  - Blocks auto-download for fully-released anime + shows a toast
  */
+enum class SettingsMode { NOTIFICATIONS, DOWNLOADS }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnimeSettingsSheet(
     anilistId: Int,
+    mode: SettingsMode,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
     val trackingStore: ReleaseTrackingStore? = remember {
         try { Injekt.get() } catch (e: Exception) { null }
     }
     val prefs: NotificationPreferences? = remember {
         try { Injekt.get() } catch (e: Exception) { null }
     }
+    val libraryStore: LibraryStore? = remember {
+        try { Injekt.get() } catch (e: Exception) { null }
+    }
+    val subDubStore: SubDubStore? = remember {
+        try { Injekt.get() } catch (e: Exception) { null }
+    }
+
+    val title = when (mode) {
+        SettingsMode.NOTIFICATIONS -> "Notification Settings"
+        SettingsMode.DOWNLOADS -> "Auto Download"
+    }
 
     if (trackingStore == null || prefs == null) {
-        // DI not available
-        ModalBottomSheet(onDismissRequest = onDismiss) {
+        ModalBottomSheet(onDismissRequest = onDismiss, dragHandle = {}) {
             Text("Settings unavailable", modifier = Modifier.padding(16.dp))
         }
         return
     }
 
+    // Look up the anime from the library to get status + episodes for the all-released check
+    val anime: AniListAnime? = remember(anilistId) { libraryStore?.get(anilistId) }
+    val subDubInfo = remember(anilistId) { subDubStore?.get(anilistId) }
+
     // Get current per-anime state (or defaults from global)
-    val tracked by produceState(initialValue = trackingStore.get(anilistId), anilistId) {
+    var tracked by remember(anilistId) { mutableStateOf(trackingStore.get(anilistId)) }
+
+    // Reactively update when the store changes
+    LaunchedEffect(anilistId) {
         trackingStore.changes.collectLatest { map ->
-            value = map[anilistId.toString()]
+            tracked = map[anilistId.toString()]
+        }
+    }
+
+    // If not tracked yet, create a tracking entry on the fly (fixes the toggle bug
+    // for library anime that were added before the notification feature existed).
+    LaunchedEffect(anilistId, tracked) {
+        if (tracked == null) {
+            val libAnime = libraryStore?.get(anilistId)
+            if (libAnime != null) {
+                trackingStore.put(
+                    ReleaseTrackingStore.TrackedAnime(
+                        anilistId = anilistId,
+                        title = libAnime.title.preferred(),
+                        coverUrl = libAnime.coverImage.best(),
+                    )
+                )
+            }
         }
     }
 
@@ -62,7 +110,6 @@ fun AnimeSettingsSheet(
     val globalAutoDlSub by prefs.globalAutoDownloadSub().stateInAsState()
     val globalAutoDlDub by prefs.globalAutoDownloadDub().stateInAsState()
 
-    // Effective values (per-anime override or global default)
     val notifyOnNew = tracked?.notifyOnNew ?: true
     val notifySub = tracked?.notifySub ?: globalNotifySub
     val notifyDub = tracked?.notifyDub ?: globalNotifyDub
@@ -70,106 +117,124 @@ fun AnimeSettingsSheet(
     val autoDlSub = tracked?.autoDownloadSub ?: globalAutoDlSub
     val autoDlDub = tracked?.autoDownloadDub ?: globalAutoDlDub
 
+    // Check if all episodes are released (sub + dub)
+    val isFullyReleased = remember(anime, subDubInfo, tracked) {
+        isAnimeFullyReleased(anime, subDubInfo, tracked)
+    }
+
     fun update(block: (ReleaseTrackingStore.TrackedAnime) -> ReleaseTrackingStore.TrackedAnime) {
         val current = tracked ?: return
         trackingStore.put(block(current))
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, dragHandle = {}) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
                 Text(
-                    "Notification & Download Settings",
+                    title,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(
-                    tracked?.title ?: "Anime",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // ---- Notifications ----
-            item {
-                Text("Notifications", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.Notifications,
-                    title = "Notify on new episodes",
-                    subtitle = if (tracked?.notifyOnNew == null) "Global default: ON" else null,
-                    checked = notifyOnNew,
-                    onCheckedChange = { newValue -> update { it.copy(notifyOnNew = newValue) } },
-                )
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.Subtitles,
-                    title = "Notify on SUB",
-                    subtitle = if (tracked?.notifySub == null) "Global default: ${if (globalNotifySub) "ON" else "OFF"}" else null,
-                    checked = notifySub,
-                    enabled = notifyOnNew,
-                    onCheckedChange = { newValue -> update { it.copy(notifySub = newValue) } },
-                )
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.GraphicEq,
-                    title = "Notify on DUB",
-                    subtitle = if (tracked?.notifyDub == null) "Global default: ${if (globalNotifyDub) "ON" else "OFF"}" else null,
-                    checked = notifyDub,
-                    enabled = notifyOnNew,
-                    onCheckedChange = { newValue -> update { it.copy(notifyDub = newValue) } },
-                )
+            when (mode) {
+                SettingsMode.NOTIFICATIONS -> {
+                    item {
+                        PerAnimeSwitchRow(
+                            icon = Icons.Default.Notifications,
+                            title = "Notify on new episodes",
+                            subtitle = "Get a notification when a new episode is available" +
+                                if (tracked?.notifyOnNew == null) " (global default: ON)" else "",
+                            checked = notifyOnNew,
+                            onCheckedChange = { newValue -> update { it.copy(notifyOnNew = newValue) } },
+                        )
+                    }
+                    item {
+                        PerAnimeSwitchRow(
+                            icon = Icons.Default.Subtitles,
+                            title = "Notify on new SUB episodes",
+                            subtitle = "Get notified when a new subbed episode is available" +
+                                if (tracked?.notifySub == null) " (global default: ${if (globalNotifySub) "ON" else "OFF"})" else "",
+                            checked = notifySub,
+                            enabled = notifyOnNew,
+                            onCheckedChange = { newValue -> update { it.copy(notifySub = newValue) } },
+                        )
+                    }
+                    item {
+                        PerAnimeSwitchRow(
+                            icon = Icons.Default.GraphicEq,
+                            title = "Notify on new DUB episodes",
+                            subtitle = "Get notified when a new dubbed episode is available. " +
+                                "Dub episodes are often released later than sub." +
+                                if (tracked?.notifyDub == null) " (global default: ${if (globalNotifyDub) "ON" else "OFF"})" else "",
+                            checked = notifyDub,
+                            enabled = notifyOnNew,
+                            onCheckedChange = { newValue -> update { it.copy(notifyDub = newValue) } },
+                        )
+                    }
+                }
+                SettingsMode.DOWNLOADS -> {
+                    item {
+                        PerAnimeSwitchRow(
+                            icon = Icons.Default.CloudDownload,
+                            title = "Auto-download new episodes",
+                            subtitle = if (isFullyReleased) {
+                                "⚠ All episodes have already been released. Auto-download is not available."
+                            } else {
+                                "When a new episode is released, automatically download it in the background" +
+                                if (tracked?.autoDownloadNew == null) " (global default: ${if (globalAutoDlEnabled) "ON" else "OFF"})" else ""
+                            },
+                            checked = autoDlNew && !isFullyReleased,
+                            enabled = !isFullyReleased,
+                            onCheckedChange = { newValue ->
+                                if (isFullyReleased) {
+                                    Toast.makeText(
+                                        context,
+                                        "Cannot turn this on — all episodes have already been released.",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                } else {
+                                    update { it.copy(autoDownloadNew = newValue) }
+                                }
+                            },
+                        )
+                    }
+                    if (!isFullyReleased && autoDlNew) {
+                        item {
+                            PerAnimeSwitchRow(
+                                icon = Icons.Default.Subtitles,
+                                title = "Auto-download SUB",
+                                subtitle = "Download the subbed version when a new episode releases. " +
+                                    "If both SUB and DUB are on, both versions will be downloaded." +
+                                    if (tracked?.autoDownloadSub == null) " (global default: ${if (globalAutoDlSub) "ON" else "OFF"})" else "",
+                                checked = autoDlSub,
+                                enabled = autoDlNew,
+                                onCheckedChange = { newValue -> update { it.copy(autoDownloadSub = newValue) } },
+                            )
+                        }
+                        item {
+                            PerAnimeSwitchRow(
+                                icon = Icons.Default.GraphicEq,
+                                title = "Auto-download DUB",
+                                subtitle = "Download the dubbed version when a new dub releases. " +
+                                    "Dub episodes are often released later than sub." +
+                                    if (tracked?.autoDownloadDub == null) " (global default: ${if (globalAutoDlDub) "ON" else "OFF"})" else "",
+                                checked = autoDlDub,
+                                enabled = autoDlNew,
+                                onCheckedChange = { newValue -> update { it.copy(autoDownloadDub = newValue) } },
+                            )
+                        }
+                    }
+                }
             }
 
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-
-            // ---- Auto-download ----
             item {
-                Text("Auto-download", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.CloudDownload,
-                    title = "Auto-download new episodes",
-                    subtitle = if (tracked?.autoDownloadNew == null) "Global default: ${if (globalAutoDlEnabled) "ON" else "OFF"}" else null,
-                    checked = autoDlNew,
-                    onCheckedChange = { newValue -> update { it.copy(autoDownloadNew = newValue) } },
-                )
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.Subtitles,
-                    title = "Auto-download SUB",
-                    subtitle = if (tracked?.autoDownloadSub == null) "Global default: ${if (globalAutoDlSub) "ON" else "OFF"}" else null,
-                    checked = autoDlSub,
-                    enabled = autoDlNew,  // Dependency: disabled if autoDlNew is off
-                    onCheckedChange = { newValue -> update { it.copy(autoDownloadSub = newValue) } },
-                )
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.GraphicEq,
-                    title = "Auto-download DUB",
-                    subtitle = if (tracked?.autoDownloadDub == null) "Global default: ${if (globalAutoDlDub) "ON" else "OFF"}" else null,
-                    checked = autoDlDub,
-                    enabled = autoDlNew,  // Dependency: disabled if autoDlNew is off
-                    onCheckedChange = { newValue -> update { it.copy(autoDownloadDub = newValue) } },
-                )
-            }
-
-            // ---- Reset to defaults ----
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 TextButton(
                     onClick = {
                         update { it.copy(
@@ -187,11 +252,34 @@ fun AnimeSettingsSheet(
     }
 }
 
+/**
+ * Check if an anime is fully released (all sub + dub episodes available).
+ * Used to block auto-download (no point auto-downloading if everything is already out).
+ *
+ * Conditions:
+ *  - AniList status == "FINISHED"
+ *  - SubDubStore has data (subCount > 0, dubCount > 0)
+ *  - subCount >= totalEpisodes AND dubCount >= totalEpisodes
+ *
+ * If we don't have enough data, returns false (better to allow than to block).
+ */
+private fun isAnimeFullyReleased(
+    anime: AniListAnime?,
+    subDubInfo: SubDubStore.SubDubInfo?,
+    tracked: ReleaseTrackingStore.TrackedAnime?,
+): Boolean {
+    if (anime?.status?.uppercase() != "FINISHED") return false
+    val subInfo = subDubInfo ?: return false
+    if (subInfo.totalEpisodes <= 0) return false
+    return subInfo.subCount >= subInfo.totalEpisodes &&
+           subInfo.dubCount >= subInfo.totalEpisodes
+}
+
 @Composable
 private fun PerAnimeSwitchRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
-    subtitle: String?,
+    subtitle: String,
     checked: Boolean,
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
@@ -204,9 +292,7 @@ private fun PerAnimeSwitchRow(
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline)
-            if (subtitle != null) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }

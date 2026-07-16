@@ -790,9 +790,24 @@ private fun DetailHeader(
                 IconButton(onClick = onShare) {
                     Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
                 }
-                // Phase N-4: Three-dot menu for per-anime notification + download settings
-                var showAnimeSettings by remember { mutableStateOf(false) }
+                // Three-dot menu: Notification settings + Auto Download (hidden if fully released)
+                var showNotificationSettings by remember { mutableStateOf(false) }
+                var showDownloadSettings by remember { mutableStateOf(false) }
                 var showMenu by remember { mutableStateOf(false) }
+
+                // Check if all episodes are released (to hide the Auto Download option)
+                val subDubStore = remember(anilistId) {
+                    try { uy.kohesive.injekt.Injekt.get<app.anikuta.data.cache.SubDubStore>() } catch (e: Exception) { null }
+                }
+                val subDubInfo = remember(anilistId) { subDubStore?.get(anilistId) }
+                val isFullyReleased = remember(anime, subDubInfo) {
+                    anime.status?.uppercase() == "FINISHED" &&
+                    subDubInfo != null &&
+                    subDubInfo.totalEpisodes > 0 &&
+                    subDubInfo.subCount >= subDubInfo.totalEpisodes &&
+                    subDubInfo.dubCount >= subDubInfo.totalEpisodes
+                }
+
                 IconButton(onClick = { showMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = Color.White)
                 }
@@ -804,21 +819,32 @@ private fun DetailHeader(
                         text = { Text("Notification settings") },
                         onClick = {
                             showMenu = false
-                            showAnimeSettings = true
+                            showNotificationSettings = true
                         },
                     )
-                    DropdownMenuItem(
-                        text = { Text("Download settings") },
-                        onClick = {
-                            showMenu = false
-                            showAnimeSettings = true
-                        },
-                    )
+                    // Hide "Auto Download" for fully-released anime (no new episodes to download)
+                    if (!isFullyReleased) {
+                        DropdownMenuItem(
+                            text = { Text("Auto Download") },
+                            onClick = {
+                                showMenu = false
+                                showDownloadSettings = true
+                            },
+                        )
+                    }
                 }
-                if (showAnimeSettings) {
+                if (showNotificationSettings) {
                     AnimeSettingsSheet(
                         anilistId = anilistId,
-                        onDismiss = { showAnimeSettings = false },
+                        mode = SettingsMode.NOTIFICATIONS,
+                        onDismiss = { showNotificationSettings = false },
+                    )
+                }
+                if (showDownloadSettings) {
+                    AnimeSettingsSheet(
+                        anilistId = anilistId,
+                        mode = SettingsMode.DOWNLOADS,
+                        onDismiss = { showDownloadSettings = false },
                     )
                 }
             }
