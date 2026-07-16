@@ -13,6 +13,7 @@ import app.anikuta.data.cache.SubDubStore
 import app.anikuta.domain.source.anime.service.AnimeSourceManager
 import app.anikuta.source.bridge.AniyomiSourceBridge
 import app.anikuta.source.bridge.SourceMatchResult
+import app.anikuta.download.DownloadManager
 import app.anikuta.ui.library.LibraryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -43,6 +44,7 @@ class ReleaseTracker(
     private val subDubStore: SubDubStore,
     private val anilistRepository: AniListRepository,
     private val notificationDispatcher: NotificationDispatcher,
+    private val downloadManager: DownloadManager,
 ) {
 
     companion object {
@@ -160,10 +162,9 @@ class ReleaseTracker(
             // 9. Fire notifications via NotificationDispatcher
             fireNotifications(tracked, diffResult, resolvedHasSub, resolvedHasDub, anilistAiringAt)
 
-            // 10. Trigger auto-download (Phase N-5 will add the download hook)
-            // For now (Phase N-3), just log.
+            // 10. Trigger auto-download (Phase N-5)
             if (shouldAutoDownload(tracked, resolvedHasSub, resolvedHasDub)) {
-                Log.d(TAG, "checkSingleAnime: would auto-download new episode for '${tracked.title}'")
+                triggerAutoDownload(tracked, source, episodes, diffResult.newEpisodes)
             }
         } else {
             Log.d(TAG, "checkSingleAnime: no new content for '${tracked.title}'")
@@ -381,6 +382,41 @@ class ReleaseTracker(
         if (notifications.isNotEmpty()) {
             notificationDispatcher.notifyNewEpisodes(notifications)
             Log.d(TAG, "fireNotifications: sent ${notifications.size} notification(s) for '${tracked.title}'")
+        }
+    }
+
+    /**
+     * Trigger auto-download for new episodes via the DownloadManager.
+     * Called when a new episode is detected AND the user opted in for auto-download.
+     *
+     * The DownloadManager resolves videos internally (via DownloadVideoResolver)
+     * and picks the best quality. The user's preferred audio (SUB/DUB) from
+     * NotificationPreferences is logged but NOT yet wired into the resolver —
+     * that's a future enhancement (documented in the plan §2.5 Supabase note).
+     */
+    private fun triggerAutoDownload(
+        tracked: ReleaseTrackingStore.TrackedAnime,
+        source: AnimeCatalogueSource,
+        episodes: List<SEpisode>,
+        newEpisodeNumbers: List<Float>,
+    ) {
+        val sourceId = tracked.sourceId ?: source.id
+        val sourceName = source.name
+
+        for (episodeNumber in newEpisodeNumbers) {
+            val episode = episodes.find { it.episode_number == episodeNumber } ?: continue
+            try {
+                val downloadId = downloadManager.enqueueDownload(
+                    anilistId = tracked.anilistId,
+                    sourceId = sourceId,
+                    sourceName = sourceName,
+                    animeTitle = tracked.title,
+                    episode = episode,
+                )
+                Log.d(TAG, "triggerAutoDownload: ✓ enqueued '${episode.name}' for '${tracked.title}' (dlId=$downloadId)")
+            } catch (e: Exception) {
+                Log.e(TAG, "triggerAutoDownload: failed to enqueue '${episode.name}' for '${tracked.title}'", e)
+            }
         }
     }
 

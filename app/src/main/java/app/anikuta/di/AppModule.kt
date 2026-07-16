@@ -247,6 +247,7 @@ class AppModule(val app: Application) : InjektModule {
                 subDubStore = get(),
                 anilistRepository = get(),
                 notificationDispatcher = get(),
+                downloadManager = get(),
             )
         }
     }
