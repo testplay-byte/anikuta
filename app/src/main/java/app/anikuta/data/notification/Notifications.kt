@@ -1,7 +1,8 @@
 package app.anikuta.data.notification
 
 /**
- * Notification channel IDs + notification IDs for the download system.
+ * Notification channel IDs + notification IDs for the download system
+ * and the new-episode notification system.
  *
  * Channels are created in [app.anikuta.App.onCreate].
  */
@@ -19,6 +20,14 @@ object Notifications {
     /** Default importance — download completion. */
     const val CHANNEL_DOWNLOADER_COMPLETE = "downloader_complete"
 
+    // ---- New episode notification channels (Phase N) ----
+
+    /** Default importance — new episode available. The main notification channel. */
+    const val CHANNEL_NEW_EPISODES = "new_episodes"
+
+    /** Low importance — AniList-based "episode aired" notifications (Mode 1/3). */
+    const val CHANNEL_NEW_EPISODES_ANILIST = "new_episodes_anilist"
+
     // ---- Notification IDs ----
 
     /** Foreground service notification (single, reused for active downloads). */
@@ -29,4 +38,13 @@ object Notifications {
 
     /** Per-download completion notifications. */
     const val ID_DOWNLOAD_COMPLETE_BASE = -500
+
+    /** Per-anime new-episode notifications (offset by anilistId for uniqueness). */
+    const val ID_NEW_EPISODE_BASE = -600
+
+    /** Per-anime AniList-aired notifications (offset by anilistId for uniqueness). */
+    const val ID_NEW_EPISODE_ANILIST_BASE = -700
+
+    /** Summary notification ID for grouped new-episode notifications. */
+    const val ID_NEW_EPISODE_SUMMARY = -800
 }

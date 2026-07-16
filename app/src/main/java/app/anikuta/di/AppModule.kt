@@ -222,5 +222,13 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { SubDubStore(get<PreferenceStore>()) }
         // Phase I — Extension-to-AniList link cache
         addSingletonFactory { ExtensionLinkStore(get<PreferenceStore>()) }
+
+        // ---- Phase N (Notifications) — release tracking system ----
+        // Release-tracking state store (per-anime tracking + offset learning)
+        addSingletonFactory { app.anikuta.data.cache.ReleaseTrackingStore(get<PreferenceStore>()) }
+        // Global notification + auto-download preferences
+        addSingletonFactory { app.anikuta.notification.NotificationPreferences(get<PreferenceStore>()) }
+        // The scheduler (computes next check time, schedules WorkManager)
+        addSingletonFactory { app.anikuta.notification.ReleaseCheckPlanner(get<Context>(), get()) }
     }
 }
