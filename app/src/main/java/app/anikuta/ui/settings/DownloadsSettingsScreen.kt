@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -271,18 +272,28 @@ fun DownloadsSettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit = {
 /**
  * Auto-download section — new releases + watch-flow.
  * Lives in Downloads settings (not Notifications) because it's a download feature.
+ *
+ * Uses produceState (not collectAsState) for reactive state — proven to work
+ * with SharedPreferences-backed Preference flows.
  */
 @Composable
 private fun AutoDownloadSection() {
     val prefs: app.anikuta.notification.NotificationPreferences = remember { uy.kohesive.injekt.Injekt.get<app.anikuta.notification.NotificationPreferences>() }
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    val autoDlEnabled by prefs.globalAutoDownloadEnabled().changes().collectAsState(initial = prefs.globalAutoDownloadEnabled().get())
-    val autoDlSub by prefs.globalAutoDownloadSub().changes().collectAsState(initial = prefs.globalAutoDownloadSub().get())
-    val autoDlDub by prefs.globalAutoDownloadDub().changes().collectAsState(initial = prefs.globalAutoDownloadDub().get())
-    val autoDlQuality by prefs.globalAutoDownloadQuality().changes().collectAsState(initial = prefs.globalAutoDownloadQuality().get())
-    val autoDlAudio by prefs.globalAutoDownloadAudio().changes().collectAsState(initial = prefs.globalAutoDownloadAudio().get())
-    val watchFlowEnabled by prefs.watchFlowAutoDownloadEnabled().changes().collectAsState(initial = prefs.watchFlowAutoDownloadEnabled().get())
+    // Use produceState (proven pattern) — collectAsState with cold Flow was buggy
+    val autoDlEnabled by produceState(initialValue = prefs.globalAutoDownloadEnabled().get(), prefs) {
+        prefs.globalAutoDownloadEnabled().changes().collect { value = it }
+    }
+    val autoDlAudio by produceState(initialValue = prefs.globalAutoDownloadAudio().get(), prefs) {
+        prefs.globalAutoDownloadAudio().changes().collect { value = it }
+    }
+    val autoDlQuality by produceState(initialValue = prefs.globalAutoDownloadQuality().get(), prefs) {
+        prefs.globalAutoDownloadQuality().changes().collect { value = it }
+    }
+    val watchFlowEnabled by produceState(initialValue = prefs.watchFlowAutoDownloadEnabled().get(), prefs) {
+        prefs.watchFlowAutoDownloadEnabled().changes().collect { value = it }
+    }
 
     var showAutoDlDialog by remember { mutableStateOf(false) }
 
@@ -297,17 +308,31 @@ private fun AutoDownloadSection() {
         )
         if (autoDlEnabled) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            ToggleRow(
-                label = "Auto-download SUB",
-                checked = autoDlSub,
-                onCheckedChange = { prefs.globalAutoDownloadSub().set(it) },
-            )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            ToggleRow(
-                label = "Auto-download DUB",
-                checked = autoDlDub,
-                onCheckedChange = { prefs.globalAutoDownloadDub().set(it) },
-            )
+            // Which version to download (Sub / Dub / Any) — single radio selector
+            Column(Modifier.padding(16.dp)) {
+                Text("Download which version?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                Text("Choose which audio version to auto-download when a new episode releases",
+                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(8.dp))
+                listOf(
+                    "SUB" to "Sub only" to "Download only subbed episodes",
+                    "DUB" to "Dub only" to "Download only dubbed episodes",
+                    "ANY" to "Any available" to "Download whichever version is available",
+                ).forEach { (pair, desc) ->
+                    val (value, label) = pair
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { prefs.globalAutoDownloadAudio().set(value) }.padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = autoDlAudio == value, onClick = { prefs.globalAutoDownloadAudio().set(value) })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             // Quality selector
             Column(Modifier.padding(16.dp)) {
@@ -319,22 +344,6 @@ private fun AutoDownloadSection() {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = autoDlQuality == q, onClick = { prefs.globalAutoDownloadQuality().set(q) })
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(label, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            // Audio selector
-            Column(Modifier.padding(16.dp)) {
-                Text("Preferred audio", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-                Spacer(modifier = Modifier.height(8.dp))
-                listOf("SUB" to "Sub", "DUB" to "Dub", "ANY" to "Any").forEach { (value, label) ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { prefs.globalAutoDownloadAudio().set(value) }.padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = autoDlAudio == value, onClick = { prefs.globalAutoDownloadAudio().set(value) })
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(label, style = MaterialTheme.typography.bodyMedium)
                     }
@@ -359,7 +368,7 @@ private fun AutoDownloadSection() {
             text = {
                 Text("When enabled, all anime in your library that have new episodes released " +
                      "will be automatically downloaded in the background. " +
-                     "You can configure which anime to auto-download and whether to prefer sub or dub.")
+                     "You can configure which version (sub, dub, or any) and quality below.")
             },
             confirmButton = {
                 TextButton(onClick = {
