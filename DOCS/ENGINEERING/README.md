@@ -20,6 +20,7 @@
 | `TECHNICAL-OVERVIEW.md` | The comprehensive, verified map of the whole project: identity, stack, 5-module architecture, every folder explained, build process, CI/CD, data flows. | You need to understand how anything works or where anything lives. |
 | `MODULARIZATION-ASSESSMENT.md` | Prioritized list (P0–P3) of structural problems: god-objects, mixed concerns, naming collisions, missing feature modules, doc staleness, security issues. | You are about to refactor, or you want to know what's fragile and why. |
 | `WORKING-RULES.md` | The deployment/working rules the primary engineer must follow on every change (understand-before-change, minimize changes, CI safety, communication, etc.). | Before making ANY change to the repo. |
+| `TESTING.md` | The testing strategy: manual (on-device) + thin automated unit tests for pure-logic pieces. How to run tests, how to add new ones, the manual testing checklist. | You're adding/verifying a test, or planning a change that needs verification. |
 
 Also see `DOCS/CURRENT-STATE.md` (one level up) — the single-source-of-truth
 status snapshot, updated after every merge to `main`.

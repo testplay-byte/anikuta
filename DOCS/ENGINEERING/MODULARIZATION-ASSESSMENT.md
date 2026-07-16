@@ -161,9 +161,14 @@ P1 feature-module extraction → P2 consistency pass → P3 cleanup.
 - compileSdk/minSdk/jvmTarget/Java-version duplicated across 5 `build.gradle.kts` files.
 - **Fix:** Add a `build-logic/` convention plugin (or `buildSrc`) to centralize Android config and prevent drift.
 
-### P2.11 Test scaffolding is theatrical
-- Every module declares `testImplementation(libs.junit)`; `app` declares `testInstrumentationRunner`; but **zero test sources exist** and no AndroidX test deps.
-- **Fix:** Either add real tests (start with pure-logic `EpisodeRecognition`/`SeasonRecognition` regex `object`s + `AnimeFetchInterval` + `GetApplicationRelease`) or remove the cargo-culted declarations.
+### P2.11 Test scaffolding is theatrical (PARTIALLY RESOLVED 2026-07-16)
+- Every module declares `testImplementation(libs.junit)`; `app` declares `testInstrumentationRunner`; previously **zero test sources existed**.
+- **Status:** A thin unit-test layer has been added for 4 pure-logic pieces in `:domain` (`EpisodeRecognition`, `SeasonRecognition`, `AnimeFetchInterval`, `GetApplicationRelease`) — see `DOCS/ENGINEERING/TESTING.md`. The `app` module's test scaffolding remains cargo-culted (no instrumented tests yet). CI does not yet run `./gradlew :domain:test` (planned follow-up).
+
+### P2.13 `CreateAnimeExtensionRepo` not unit-testable (concrete service dependency)
+- `CreateAnimeExtensionRepo` depends on `ExtensionRepoService`, which is a **concrete class** (not an interface) whose constructor needs `NetworkHelper` → Android `Context`. The interactor cannot be constructed in a pure JVM unit test.
+- The URL-normalization + regex validation logic (the most bug-prone part) is inline-private, so it can't be tested directly either.
+- **Fix (small refactor, not yet done):** Either (a) extract an `IExtensionRepoService` interface and have the concrete class implement it, so `CreateAnimeExtensionRepo` depends on the interface (fakeable); or (b) extract the URL-normalization into a pure top-level function and test that directly. Option (b) is the smallest change and tests the most bug-prone piece. See `DOCS/ENGINEERING/TESTING.md` → "Testability gap".
 
 ### P2.12 Missing standard onboarding docs
 - No CONTRIBUTING, no RELEASE, no TESTING-PLAN, no module-level READMEs, no ADR status tracking, no dependency-update policy, no CI explainer, no LICENSE at repo root.
