@@ -1,9 +1,12 @@
 package app.anikuta.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Notifications
@@ -16,11 +19,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import app.anikuta.core.preference.Preference
+import app.anikuta.data.cache.ReleaseTrackingStore
 import app.anikuta.notification.NotificationPreferences
+import app.anikuta.ui.detail.AnimeSettingsSheet
+import app.anikuta.ui.detail.SettingsMode
 import kotlinx.coroutines.flow.collectLatest
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -243,7 +253,148 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                     )
                 }
             }
+
+            // ---- Tracked anime (per-anime config list) ----
+            item {
+                TrackedAnimeSection()
+            }
         }
+    }
+}
+
+/**
+ * Section showing all tracked anime with cover + title + quick toggles.
+ * Tap a card to open the per-anime settings sheet.
+ */
+@Composable
+private fun TrackedAnimeSection() {
+    val trackingStore: ReleaseTrackingStore? = remember {
+        try { Injekt.get() } catch (e: Exception) { null }
+    }
+    val prefs: NotificationPreferences? = remember {
+        try { Injekt.get() } catch (e: Exception) { null }
+    }
+
+    if (trackingStore == null || prefs == null) return
+
+    val trackedMap by trackingStore.changes.collectAsState(initial = trackingStore.getAll())
+    val trackedList = trackedMap.values.toList().sortedBy { it.title }
+
+    var selectedAnimeId by remember { mutableStateOf<Int?>(null) }
+    var selectedMode by remember { mutableStateOf(SettingsMode.NOTIFICATIONS) }
+
+    SettingsGroupCard(title = "Tracked anime (${trackedList.size})") {
+        if (trackedList.isEmpty()) {
+            Text(
+                "No tracked anime yet. Add anime to your library to start tracking new episodes.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            )
+        } else {
+            trackedList.forEach { anime ->
+                TrackedAnimeRow(
+                    anime = anime,
+                    globalNotifyDefault = prefs.globalNotifyEnabled().get(),
+                    globalAutoDlDefault = prefs.globalAutoDownloadEnabled().get(),
+                    onClick = {
+                        selectedAnimeId = anime.anilistId
+                        selectedMode = SettingsMode.NOTIFICATIONS
+                    },
+                )
+                HorizontalDivider()
+            }
+        }
+    }
+
+    // Show the per-anime sheet when a row is tapped
+    selectedAnimeId?.let { id ->
+        AnimeSettingsSheet(
+            anilistId = id,
+            mode = selectedMode,
+            onDismiss = { selectedAnimeId = null },
+        )
+    }
+}
+
+@Composable
+private fun TrackedAnimeRow(
+    anime: ReleaseTrackingStore.TrackedAnime,
+    globalNotifyDefault: Boolean,
+    globalAutoDlDefault: Boolean,
+    onClick: () -> Unit,
+) {
+    val notifyOn = anime.notifyOnNew ?: globalNotifyDefault
+    val autoDlOn = anime.autoDownloadNew ?: globalAutoDlDefault
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Cover image
+        if (anime.coverUrl != null) {
+            AsyncImage(
+                model = anime.coverUrl,
+                contentDescription = anime.title,
+                modifier = Modifier
+                    .width(44.dp)
+                    .height(64.dp)
+                    .clip(RoundedCornerShape(6.dp)),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .width(44.dp)
+                    .height(64.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Default.Notifications,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        // Title + status badges
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                anime.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (notifyOn) {
+                    AssistChip(
+                        onClick = onClick,
+                        label = { Text("Notify", style = MaterialTheme.typography.labelSmall) },
+                        leadingIcon = { Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                    )
+                }
+                if (autoDlOn) {
+                    AssistChip(
+                        onClick = onClick,
+                        label = { Text("Auto-DL", style = MaterialTheme.typography.labelSmall) },
+                        leadingIcon = { Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = "Open settings",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

@@ -791,7 +791,8 @@ private fun DetailHeader(
                     Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
                 }
                 // Phase N-4: Three-dot menu for per-anime notification + download settings
-                var showAnimeSettings by remember { mutableStateOf(false) }
+                var showNotificationSettings by remember { mutableStateOf(false) }
+                var showDownloadSettings by remember { mutableStateOf(false) }
                 var showMenu by remember { mutableStateOf(false) }
                 IconButton(onClick = { showMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = Color.White)
@@ -804,21 +805,29 @@ private fun DetailHeader(
                         text = { Text("Notification settings") },
                         onClick = {
                             showMenu = false
-                            showAnimeSettings = true
+                            showNotificationSettings = true
                         },
                     )
                     DropdownMenuItem(
                         text = { Text("Download settings") },
                         onClick = {
                             showMenu = false
-                            showAnimeSettings = true
+                            showDownloadSettings = true
                         },
                     )
                 }
-                if (showAnimeSettings) {
+                if (showNotificationSettings) {
                     AnimeSettingsSheet(
                         anilistId = anilistId,
-                        onDismiss = { showAnimeSettings = false },
+                        mode = SettingsMode.NOTIFICATIONS,
+                        onDismiss = { showNotificationSettings = false },
+                    )
+                }
+                if (showDownloadSettings) {
+                    AnimeSettingsSheet(
+                        anilistId = anilistId,
+                        mode = SettingsMode.DOWNLOADS,
+                        onDismiss = { showDownloadSettings = false },
                     )
                 }
             }
@@ -866,6 +875,17 @@ private fun DetailHeader(
                         if (anime.episodes != null) {
                             Text("· ${anime.episodes} eps", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                    }
+                    // Next episode airing info (Phase N polish)
+                    anime.nextAiringEpisode?.let { airing ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val timeRemaining = formatTimeRemaining(airing.timeUntilAiring ?: 0)
+                        Text(
+                            "Ep ${airing.episode} in $timeRemaining",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium,
+                        )
                     }
                 }
             }
@@ -1638,6 +1658,24 @@ private fun formatDate(epochMillis: Long): String {
         sdf.format(java.util.Date(epochMillis))
     } catch (e: Exception) {
         ""
+    }
+}
+
+/**
+ * Formats a time-until-airing value (in seconds) into a human-readable string.
+ * Examples: "2d 5h", "5h 30m", "30m", "now".
+ * Used on the detail page header to show when the next episode airs.
+ */
+private fun formatTimeRemaining(secondsUntilAiring: Int): String {
+    if (secondsUntilAiring <= 0) return "soon"
+    val days = secondsUntilAiring / 86400
+    val hours = (secondsUntilAiring % 86400) / 3600
+    val minutes = (secondsUntilAiring % 3600) / 60
+    return when {
+        days > 0 -> "${days}d ${hours}h"
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "soon"
     }
 }
 

@@ -25,13 +25,23 @@ import uy.kohesive.injekt.api.get
  * Shown as a ModalBottomSheet from the three-dot menu on the detail page.
  * Per-anime settings override global defaults (null = inherit global).
  *
- * Dependency rule (§4.1): if autoDownloadNew is OFF, the sub/dub toggles
- * below it are disabled. Same for notifyOnNew → notifySub/notifyDub.
+ * [mode] determines which section is shown:
+ *  - [SettingsMode.NOTIFICATIONS] → only the notification toggles
+ *  - [SettingsMode.DOWNLOADS] → only the auto-download toggles
+ *
+ * UI fixes (2026-07-16, user feedback):
+ *  - No drag handle (clean top edge)
+ *  - No anime name at the top (just the section title)
+ *  - Better explanation text on auto-download sub/dub
+ *  - Dependency rule: if autoDownloadNew is OFF, sub/dub toggles disabled
  */
+enum class SettingsMode { NOTIFICATIONS, DOWNLOADS }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnimeSettingsSheet(
     anilistId: Int,
+    mode: SettingsMode,
     onDismiss: () -> Unit,
 ) {
     val trackingStore: ReleaseTrackingStore? = remember {
@@ -41,9 +51,14 @@ fun AnimeSettingsSheet(
         try { Injekt.get() } catch (e: Exception) { null }
     }
 
+    val title = when (mode) {
+        SettingsMode.NOTIFICATIONS -> "Notification Settings"
+        SettingsMode.DOWNLOADS -> "Download Settings"
+    }
+
     if (trackingStore == null || prefs == null) {
-        // DI not available
-        ModalBottomSheet(onDismissRequest = onDismiss) {
+        // DI not available — no drag handle
+        ModalBottomSheet(onDismissRequest = onDismiss, dragHandle = {}) {
             Text("Settings unavailable", modifier = Modifier.padding(16.dp))
         }
         return
@@ -75,101 +90,100 @@ fun AnimeSettingsSheet(
         trackingStore.put(block(current))
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    // No drag handle — clean top edge with just the title
+    ModalBottomSheet(onDismissRequest = onDismiss, dragHandle = {}) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Title only — no anime name (user feedback)
             item {
                 Text(
-                    "Notification & Download Settings",
+                    title,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(
-                    tracked?.title ?: "Anime",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // ---- Notifications ----
-            item {
-                Text("Notifications", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.Notifications,
-                    title = "Notify on new episodes",
-                    subtitle = if (tracked?.notifyOnNew == null) "Global default: ON" else null,
-                    checked = notifyOnNew,
-                    onCheckedChange = { newValue -> update { it.copy(notifyOnNew = newValue) } },
-                )
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.Subtitles,
-                    title = "Notify on SUB",
-                    subtitle = if (tracked?.notifySub == null) "Global default: ${if (globalNotifySub) "ON" else "OFF"}" else null,
-                    checked = notifySub,
-                    enabled = notifyOnNew,
-                    onCheckedChange = { newValue -> update { it.copy(notifySub = newValue) } },
-                )
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.GraphicEq,
-                    title = "Notify on DUB",
-                    subtitle = if (tracked?.notifyDub == null) "Global default: ${if (globalNotifyDub) "ON" else "OFF"}" else null,
-                    checked = notifyDub,
-                    enabled = notifyOnNew,
-                    onCheckedChange = { newValue -> update { it.copy(notifyDub = newValue) } },
-                )
-            }
-
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-
-            // ---- Auto-download ----
-            item {
-                Text("Auto-download", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.CloudDownload,
-                    title = "Auto-download new episodes",
-                    subtitle = if (tracked?.autoDownloadNew == null) "Global default: ${if (globalAutoDlEnabled) "ON" else "OFF"}" else null,
-                    checked = autoDlNew,
-                    onCheckedChange = { newValue -> update { it.copy(autoDownloadNew = newValue) } },
-                )
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.Subtitles,
-                    title = "Auto-download SUB",
-                    subtitle = if (tracked?.autoDownloadSub == null) "Global default: ${if (globalAutoDlSub) "ON" else "OFF"}" else null,
-                    checked = autoDlSub,
-                    enabled = autoDlNew,  // Dependency: disabled if autoDlNew is off
-                    onCheckedChange = { newValue -> update { it.copy(autoDownloadSub = newValue) } },
-                )
-            }
-            item {
-                PerAnimeSwitchRow(
-                    icon = Icons.Default.GraphicEq,
-                    title = "Auto-download DUB",
-                    subtitle = if (tracked?.autoDownloadDub == null) "Global default: ${if (globalAutoDlDub) "ON" else "OFF"}" else null,
-                    checked = autoDlDub,
-                    enabled = autoDlNew,  // Dependency: disabled if autoDlNew is off
-                    onCheckedChange = { newValue -> update { it.copy(autoDownloadDub = newValue) } },
-                )
+            when (mode) {
+                SettingsMode.NOTIFICATIONS -> {
+                    item {
+                        PerAnimeSwitchRow(
+                            icon = Icons.Default.Notifications,
+                            title = "Notify on new episodes",
+                            subtitle = "Get a notification when a new episode is available" +
+                                if (tracked?.notifyOnNew == null) " (global default: ON)" else "",
+                            checked = notifyOnNew,
+                            onCheckedChange = { newValue -> update { it.copy(notifyOnNew = newValue) } },
+                        )
+                    }
+                    item {
+                        PerAnimeSwitchRow(
+                            icon = Icons.Default.Subtitles,
+                            title = "Notify on new SUB episodes",
+                            subtitle = "Get notified when a new subbed episode is available" +
+                                if (tracked?.notifySub == null) " (global default: ${if (globalNotifySub) "ON" else "OFF"})" else "",
+                            checked = notifySub,
+                            enabled = notifyOnNew,
+                            onCheckedChange = { newValue -> update { it.copy(notifySub = newValue) } },
+                        )
+                    }
+                    item {
+                        PerAnimeSwitchRow(
+                            icon = Icons.Default.GraphicEq,
+                            title = "Notify on new DUB episodes",
+                            subtitle = "Get notified when a new dubbed episode is available. " +
+                                "Dub episodes are often released later than sub." +
+                                if (tracked?.notifyDub == null) " (global default: ${if (globalNotifyDub) "ON" else "OFF"})" else "",
+                            checked = notifyDub,
+                            enabled = notifyOnNew,
+                            onCheckedChange = { newValue -> update { it.copy(notifyDub = newValue) } },
+                        )
+                    }
+                }
+                SettingsMode.DOWNLOADS -> {
+                    item {
+                        PerAnimeSwitchRow(
+                            icon = Icons.Default.CloudDownload,
+                            title = "Auto-download new episodes",
+                            subtitle = "When a new episode is released, automatically download it in the background" +
+                                if (tracked?.autoDownloadNew == null) " (global default: ${if (globalAutoDlEnabled) "ON" else "OFF"})" else "",
+                            checked = autoDlNew,
+                            onCheckedChange = { newValue -> update { it.copy(autoDownloadNew = newValue) } },
+                        )
+                    }
+                    item {
+                        PerAnimeSwitchRow(
+                            icon = Icons.Default.Subtitles,
+                            title = "Auto-download SUB",
+                            subtitle = "When a new episode is released, download the subbed version. " +
+                                "If both SUB and DUB are on, both versions will be downloaded." +
+                                if (tracked?.autoDownloadSub == null) " (global default: ${if (globalAutoDlSub) "ON" else "OFF"})" else "",
+                            checked = autoDlSub,
+                            enabled = autoDlNew,
+                            onCheckedChange = { newValue -> update { it.copy(autoDownloadSub = newValue) } },
+                        )
+                    }
+                    item {
+                        PerAnimeSwitchRow(
+                            icon = Icons.Default.GraphicEq,
+                            title = "Auto-download DUB",
+                            subtitle = "When a new dubbed episode is released, download the dub version. " +
+                                "Dub episodes are often released later than sub." +
+                                if (tracked?.autoDownloadDub == null) " (global default: ${if (globalAutoDlDub) "ON" else "OFF"})" else "",
+                            checked = autoDlDub,
+                            enabled = autoDlNew,
+                            onCheckedChange = { newValue -> update { it.copy(autoDownloadDub = newValue) } },
+                        )
+                    }
+                }
             }
 
             // ---- Reset to defaults ----
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 TextButton(
                     onClick = {
                         update { it.copy(
@@ -191,7 +205,7 @@ fun AnimeSettingsSheet(
 private fun PerAnimeSwitchRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
-    subtitle: String?,
+    subtitle: String,
     checked: Boolean,
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
@@ -204,9 +218,7 @@ private fun PerAnimeSwitchRow(
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline)
-            if (subtitle != null) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
