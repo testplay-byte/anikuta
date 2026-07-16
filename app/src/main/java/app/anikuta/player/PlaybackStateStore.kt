@@ -96,6 +96,9 @@ class PlaybackStateStore(
         return store.get()[key(anilistId, episodeUrl)]
     }
 
+    /** Get all playback states (for backup). */
+    fun getAll(): Map<String, PlaybackState> = store.get()
+
     /** Clear the playback state for an episode. */
     fun clear(anilistId: Int, episodeUrl: String) {
         val map = store.get().toMutableMap()

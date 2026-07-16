@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Notifications
@@ -82,6 +83,7 @@ fun SettingsHomeScreen(
         SettingsCategory("settings/downloads", "Downloads", "Queue, quality, offline", Icons.Default.CloudDownload, "sky"),
         SettingsCategory("settings/tracking", "Tracking", "AniList login + sync", Icons.Default.TrackChanges, "rose"),
         SettingsCategory("settings/about", "About", "Version, GitHub, debug", Icons.Default.Info, "teal"),
+        SettingsCategory("settings/backup", "Backup & Restore", "Export/import library, history, settings", Icons.Default.Backup, "indigo"),
     )
 
     Box(modifier = Modifier.fillMaxSize()) {

@@ -58,6 +58,9 @@ class ExtensionLinkStore(
         return store.get()[key(sourceId, animeUrl)]
     }
 
+    /** Get all links (for backup). Key format: "$sourceId:$animeUrl" → AniList ID. */
+    fun getAll(): Map<String, Int> = store.get()
+
     /** Cache the link between an extension anime and its AniList ID. */
     fun link(sourceId: Long, animeUrl: String, anilistId: Int) {
         val map = store.get().toMutableMap()

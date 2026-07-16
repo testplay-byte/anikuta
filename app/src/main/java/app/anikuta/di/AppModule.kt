@@ -256,5 +256,19 @@ class AppModule(val app: Application) : InjektModule {
                 downloadManager = get(),
             )
         }
+
+        // ---- Backup system ----
+        addSingletonFactory {
+            app.anikuta.backup.BackupManager(
+                context = get(),
+                libraryStore = get(),
+                watchProgressStore = get(),
+                categoryStore = get(),
+                releaseTrackingStore = get(),
+                subDubStore = get(),
+                extensionLinkStore = get(),
+                playbackStateStore = get(),
+            )
+        }
     }
 }
