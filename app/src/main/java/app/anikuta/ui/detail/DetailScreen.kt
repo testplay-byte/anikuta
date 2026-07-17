@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -452,7 +453,7 @@ fun DetailScreen(
                                 val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
                                 val showDownloadOutside = downloadButtonPlacement == "episode_row" ||
                                     (downloadButtonPlacement == "synopsis" && !hasSummary)
-                                Box(modifier = Modifier.weight(1f)) {
+                                Box(modifier = Modifier.weight(1f).zIndex(1f)) {
                                     EpisodeRow(
                                         episode = episode,
                                         onClick = { viewModel.playEpisode(episode) },
@@ -610,7 +611,7 @@ fun DetailScreen(
                                                 val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
                                                 val showDownloadOutside = downloadButtonPlacement == "episode_row" ||
                                                     (downloadButtonPlacement == "synopsis" && !hasSummary)
-                                                Box(modifier = Modifier.weight(1f)) {
+                                                Box(modifier = Modifier.weight(1f).zIndex(1f)) {
                                                     EpisodeRow(
                                                         episode = episode,
                                                         onClick = { viewModel.playEpisode(episode) },
@@ -1204,8 +1205,8 @@ private fun EpisodeRow(
     // Swipe state — uses Animatable for smooth snap-back animation
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    // Capture row width for percentage-based thresholds
     var rowWidthPx by remember { mutableStateOf(0f) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     Box(
         modifier = Modifier
@@ -1214,41 +1215,90 @@ private fun EpisodeRow(
                 rowWidthPx = size.width.toFloat()
             }
             .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        val threshold = rowWidthPx * 0.20f  // 20% commit threshold
-                        val maxSwipe = rowWidthPx * 0.30f  // 30% max cap
-                        val currentOffset = offsetX.value
-                        android.util.Log.d("SwipeGesture", "onDragEnd: offset=$currentOffset, threshold=$threshold (20%), maxSwipe=$maxSwipe (30%), rowWidthPx=$rowWidthPx")
-                        when {
-                            currentOffset > threshold -> {
-                                android.util.Log.d("SwipeGesture", "→ RIGHT swipe triggered")
-                                onSwipeRight()
+                // Use awaitPointerEventScope to handle BOTH drag AND long-press.
+                // detectHorizontalDragGestures consumes all events, preventing
+                // combinedClickable's onLongClick from firing. So we handle
+                // long-press detection manually here.
+                awaitPointerEventScope {
+                    while (true) {
+                        val downTime = System.currentTimeMillis()
+                        var totalDragX = 0f
+                        var totalDragY = 0f
+                        var isDragging = false
+                        var isLongPressed = false
+                        val longPressTimeout = 500L  // 500ms for long-press
+
+                        // Wait for first down event
+                        val firstEvent = awaitPointerEvent()
+                        val down = firstEvent.changes.firstOrNull() ?: continue
+
+                        // Loop: track movement + time for long-press
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+
+                            if (!change.pressed) {
+                                // Finger lifted — determine action
+                                val pressDuration = System.currentTimeMillis() - downTime
+                                if (isDragging) {
+                                    // Was dragging — check swipe threshold
+                                    val threshold = rowWidthPx * 0.20f
+                                    when {
+                                        offsetX.value > threshold -> {
+                                            android.util.Log.d("SwipeGesture", "→ RIGHT swipe triggered")
+                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                            onSwipeRight()
+                                        }
+                                        offsetX.value < -threshold -> {
+                                            android.util.Log.d("SwipeGesture", "← LEFT swipe triggered")
+                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                            onSwipeLeft()
+                                        }
+                                        else -> {
+                                            android.util.Log.d("SwipeGesture", "Swipe below threshold — no action")
+                                        }
+                                    }
+                                    // Snap back
+                                    scope.launch { offsetX.animateTo(0f, tween(300)) }
+                                } else if (!isLongPressed) {
+                                    // Quick tap (not long-press, not drag)
+                                    android.util.Log.d("SwipeGesture", "TAP detected (duration=${pressDuration}ms)")
+                                    onClick()
+                                }
+                                // Reset
+                                offsetX.value  // read to ensure no stale state
+                                break
                             }
-                            currentOffset < -threshold -> {
-                                android.util.Log.d("SwipeGesture", "← LEFT swipe triggered")
-                                onSwipeLeft()
+
+                            val dx = change.positionChange().x
+                            val dy = change.positionChange().y
+                            totalDragX += dx
+                            totalDragY += dy
+
+                            // Check for horizontal drag start
+                            val dragSlop = 16f
+                            if (!isDragging && kotlin.math.abs(totalDragX) > dragSlop && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.5f) {
+                                isDragging = true
+                                android.util.Log.d("SwipeGesture", "Swipe started (totalX=$totalDragX)")
                             }
-                            else -> {
-                                android.util.Log.d("SwipeGesture", "Swipe below threshold — no action")
+
+                            if (isDragging) {
+                                change.consume()
+                                val maxSwipe = rowWidthPx * 0.30f
+                                val newOffset = (offsetX.value + dx).coerceIn(-maxSwipe, maxSwipe)
+                                scope.launch { offsetX.snapTo(newOffset) }
+                            }
+
+                            // Check for long-press (only if NOT dragging)
+                            val pressDuration = System.currentTimeMillis() - downTime
+                            if (!isDragging && !isLongPressed && pressDuration >= longPressTimeout) {
+                                isLongPressed = true
+                                android.util.Log.d("SwipeGesture", "LONG PRESS detected (duration=${pressDuration}ms)")
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                onLongClick()
+                                break
                             }
                         }
-                        // Smooth snap-back animation (300ms tween)
-                        scope.launch {
-                            offsetX.animateTo(0f, tween(300))
-                        }
-                    },
-                    onDragCancel = {
-                        android.util.Log.d("SwipeGesture", "Drag cancelled")
-                        scope.launch {
-                            offsetX.animateTo(0f, tween(300))
-                        }
-                    },
-                ) { _, dragAmount ->
-                    val maxSwipe = rowWidthPx * 0.30f  // 30% max cap
-                    val newOffset = (offsetX.value + dragAmount).coerceIn(-maxSwipe, maxSwipe)
-                    scope.launch {
-                        offsetX.snapTo(newOffset)
                     }
                 }
             },
@@ -1298,19 +1348,18 @@ private fun EpisodeRow(
                     } else {
                         Modifier
                     }
-                )
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick,
                 ),
             shape = RoundedCornerShape(12.dp),
             color = cardColor,
+            // NOTE: onClick + onLongClick handled by parent Box's pointerInput.
+            // combinedClickable conflicts with detectHorizontalDragGestures.
         ) {
-        // Wrap content in a Box that applies the greyed-out (desaturated) effect
-        // when the episode is seen. Uses alpha for a faded look.
+        // Wrap content in a Box that applies the greyed-out effect when seen.
+        // Combines: alpha (fade) + blur (on Surface, Android 12+).
+        // For grayscale, we use colorFilter with a saturation matrix.
         Box(
             modifier = Modifier.then(
-                if (isSeen) Modifier.graphicsLayer(alpha = 0.4f) else Modifier
+                if (isSeen) Modifier.graphicsLayer(alpha = 0.45f) else Modifier
             )
         ) {
         if (isRich) {
