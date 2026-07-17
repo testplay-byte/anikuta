@@ -796,7 +796,6 @@ fun DetailScreen(
             }
         }
     }
-}
 
 @Composable
 private fun DetailHeader(
