@@ -705,6 +705,7 @@ fun DetailScreen(
             } // end ThreeStagePullRefresh
             } // end Box
             } // end MaterialTheme
+        } // end DetailState.Success branch
         } // end when(detailState)
 
         // Long-press bottom sheet — at TOP LEVEL of DetailScreen (not nested inside when/Box).
