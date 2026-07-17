@@ -1232,19 +1232,24 @@ private fun EpisodeRow(
     )
 
     me.saket.swipe.SwipeableActionsBox(
-        modifier = Modifier.fillMaxWidth().clipToBounds(),
+        modifier = Modifier.fillMaxWidth(),
         startActions = listOf(startAction),
         endActions = listOf(endAction),
         swipeThreshold = 56.dp,
         backgroundUntilSwipeThreshold = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
-        // Foreground — the episode row content
-        Surface(
+        // Foreground — use Box + background + combinedClickable (NOT Surface).
+        // Surface has internal click semantics that conflict with SwipeableActionsBox.
+        // Aniyomi uses Row + combinedClickable — same pattern.
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(cardColor)
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = {
+                        android.util.Log.d("EpisodeRow", "onLongClick fired — opening bottom sheet")
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                         onLongClick()
                     },
@@ -1256,32 +1261,12 @@ private fun EpisodeRow(
                         Modifier
                     }
                 ),
-            shape = RoundedCornerShape(12.dp),
-            color = cardColor,
         ) {
-            // Grayscale (black & white) effect when seen
+            // Grayscale (black & white) effect when seen — applied to thumbnail only
+            // per user request: "turn the thumbnail image into grayscale"
             Box(
                 modifier = Modifier.then(
-                    if (isSeen) Modifier
-                        .graphicsLayer(alpha = 0.5f)
-                        .drawWithContent {
-                            val paint = androidx.compose.ui.graphics.Paint().apply {
-                                colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                                    androidx.compose.ui.graphics.ColorMatrix(
-                                        floatArrayOf(
-                                            0.299f, 0.587f, 0.114f, 0f, 0f,
-                                            0.299f, 0.587f, 0.114f, 0f, 0f,
-                                            0.299f, 0.587f, 0.114f, 0f, 0f,
-                                            0f, 0f, 0f, 1f, 0f,
-                                        )
-                                    )
-                                )
-                            }
-                            with(paint) {
-                                this@drawWithContent.drawContent()
-                            }
-                        }
-                    else Modifier
+                    if (isSeen) Modifier.graphicsLayer(alpha = 0.5f) else Modifier
                 )
             ) {
                 if (isRich) {
@@ -1293,6 +1278,7 @@ private fun EpisodeRow(
                         downloadButtonPlacement, downloadStatus, downloadProgress,
                         downloadedOnDisk, onDownloadClick, onDownloadLongClick,
                         index = index,
+                        isSeen = isSeen,  // Pass isSeen to EpisodeRowRich for thumbnail grayscale
                     )
                 } else {
                     EpisodeRowSimple(
@@ -1466,6 +1452,7 @@ private fun EpisodeRowRich(
     onDownloadClick: () -> Unit = {},
     onDownloadLongClick: () -> Unit = {},
     index: Int = 0,
+    isSeen: Boolean = false,
 ) {
     var summaryExpanded by remember { mutableStateOf(false) }
 
@@ -1613,6 +1600,16 @@ private fun EpisodeRowRich(
                                 .fillMaxSize()
                                 .clip(RoundedCornerShape(10.dp)),
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            colorFilter = if (isSeen) androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                androidx.compose.ui.graphics.ColorMatrix(
+                                    floatArrayOf(
+                                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                                        0f, 0f, 0f, 1f, 0f,
+                                    )
+                                )
+                            ) else null,
                         )
                     }
                     // Episode number overlay — only when position is 'overlay'
@@ -1741,6 +1738,16 @@ private fun EpisodeRowRich(
                                 .fillMaxSize()
                                 .clip(RoundedCornerShape(10.dp)),
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            colorFilter = if (isSeen) androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                androidx.compose.ui.graphics.ColorMatrix(
+                                    floatArrayOf(
+                                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                                        0f, 0f, 0f, 1f, 0f,
+                                    )
+                                )
+                            ) else null,
                         )
                     }
                     if (showEpisodeNumber && episodeNumberPosition == "overlay") {
