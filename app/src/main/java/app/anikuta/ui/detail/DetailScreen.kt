@@ -1233,20 +1233,21 @@ private fun EpisodeRow(
     )
 
     me.saket.swipe.SwipeableActionsBox(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp),  // padding hides background behind rounded corners
         startActions = listOf(startAction),
         endActions = listOf(endAction),
-        swipeThreshold = 56.dp,
+        swipeThreshold = 100.dp,  // higher threshold — harder to trigger (user wants ~80% for download)
         backgroundUntilSwipeThreshold = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
-        // Foreground — use Box + background + combinedClickable (NOT Surface).
-        // Surface has internal click semantics that conflict with SwipeableActionsBox.
-        // Aniyomi uses Row + combinedClickable — same pattern.
+        // Foreground — Box + background + combinedClickable.
+        // NO clip on this Box — clip interferes with combinedClickable's gesture detection.
+        // The rounded corners are achieved by the inner content's clip.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(cardColor)
+                .background(cardColor, RoundedCornerShape(12.dp))
                 .combinedClickable(
                     onClick = {
                         android.util.Log.d("EpisodeRow", ">>> onClick fired (episode: ${episode.name})")
@@ -1259,40 +1260,42 @@ private fun EpisodeRow(
                         onLongClick()
                         android.util.Log.d("EpisodeRow", ">>> onLongClick() returned — longPressEpisode should be set")
                     },
-                )
-                .then(
-                    if (isSeen && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                        Modifier.blur(1.5.dp)
-                    } else {
-                        Modifier
-                    }
                 ),
         ) {
-            // Grayscale (black & white) effect when seen — applied to ALL content
-            // (thumbnail + text + pills) via drawWithContent + ColorMatrix
+            // Content wrapper — applies grayscale + alpha when seen.
+            // Also applies blur on Android 12+.
             Box(
-                modifier = Modifier.then(
-                    if (isSeen) Modifier
-                        .graphicsLayer(alpha = 0.5f)
-                        .drawWithContent {
-                            val paint = androidx.compose.ui.graphics.Paint().apply {
-                                colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                                    androidx.compose.ui.graphics.ColorMatrix(
-                                        floatArrayOf(
-                                            0.299f, 0.587f, 0.114f, 0f, 0f,
-                                            0.299f, 0.587f, 0.114f, 0f, 0f,
-                                            0.299f, 0.587f, 0.114f, 0f, 0f,
-                                            0f, 0f, 0f, 1f, 0f,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .then(
+                        if (isSeen && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                            Modifier.blur(1.5.dp)
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .then(
+                        if (isSeen) Modifier
+                            .graphicsLayer(alpha = 0.5f)
+                            .drawWithContent {
+                                val paint = androidx.compose.ui.graphics.Paint().apply {
+                                    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                        androidx.compose.ui.graphics.ColorMatrix(
+                                            floatArrayOf(
+                                                0.299f, 0.587f, 0.114f, 0f, 0f,
+                                                0.299f, 0.587f, 0.114f, 0f, 0f,
+                                                0.299f, 0.587f, 0.114f, 0f, 0f,
+                                                0f, 0f, 0f, 1f, 0f,
+                                            )
                                         )
                                     )
-                                )
+                                }
+                                with(paint) {
+                                    this@drawWithContent.drawContent()
+                                }
                             }
-                            with(paint) {
-                                this@drawWithContent.drawContent()
-                            }
-                        }
-                    else Modifier
-                )
+                        else Modifier
+                    )
             ) {
                 if (isRich) {
                     EpisodeRowRich(
@@ -1303,7 +1306,7 @@ private fun EpisodeRow(
                         downloadButtonPlacement, downloadStatus, downloadProgress,
                         downloadedOnDisk, onDownloadClick, onDownloadLongClick,
                         index = index,
-                        isSeen = isSeen,  // Pass isSeen to EpisodeRowRich for thumbnail grayscale
+                        isSeen = isSeen,
                     )
                 } else {
                     EpisodeRowSimple(
