@@ -700,6 +700,7 @@ fun DetailScreen(
 
             // Long-press download menu (Q4)
             longPressEpisode?.let { episode ->
+                android.util.Log.d("EpisodeRow", ">>> longPressEpisode is SET — rendering ModalBottomSheet (episode: ${episode.name})")
                 val sheetState = androidx.compose.material3.rememberModalBottomSheetState()
                 androidx.compose.material3.ModalBottomSheet(
                     onDismissRequest = { longPressEpisode = null },
@@ -1247,11 +1248,16 @@ private fun EpisodeRow(
                 .clip(RoundedCornerShape(12.dp))
                 .background(cardColor)
                 .combinedClickable(
-                    onClick = onClick,
+                    onClick = {
+                        android.util.Log.d("EpisodeRow", ">>> onClick fired (episode: ${episode.name})")
+                        onClick()
+                    },
                     onLongClick = {
-                        android.util.Log.d("EpisodeRow", "onLongClick fired — opening bottom sheet")
+                        android.util.Log.d("EpisodeRow", ">>> onLongClick fired — calling callback (episode: ${episode.name})")
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        android.util.Log.d("EpisodeRow", ">>> haptic done, calling onLongClick()")
                         onLongClick()
+                        android.util.Log.d("EpisodeRow", ">>> onLongClick() returned — longPressEpisode should be set")
                     },
                 )
                 .then(
@@ -1262,11 +1268,30 @@ private fun EpisodeRow(
                     }
                 ),
         ) {
-            // Grayscale (black & white) effect when seen — applied to thumbnail only
-            // per user request: "turn the thumbnail image into grayscale"
+            // Grayscale (black & white) effect when seen — applied to ALL content
+            // (thumbnail + text + pills) via drawWithContent + ColorMatrix
             Box(
                 modifier = Modifier.then(
-                    if (isSeen) Modifier.graphicsLayer(alpha = 0.5f) else Modifier
+                    if (isSeen) Modifier
+                        .graphicsLayer(alpha = 0.5f)
+                        .drawWithContent {
+                            val paint = androidx.compose.ui.graphics.Paint().apply {
+                                colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                    androidx.compose.ui.graphics.ColorMatrix(
+                                        floatArrayOf(
+                                            0.299f, 0.587f, 0.114f, 0f, 0f,
+                                            0.299f, 0.587f, 0.114f, 0f, 0f,
+                                            0.299f, 0.587f, 0.114f, 0f, 0f,
+                                            0f, 0f, 0f, 1f, 0f,
+                                        )
+                                    )
+                                )
+                            }
+                            with(paint) {
+                                this@drawWithContent.drawContent()
+                            }
+                        }
+                    else Modifier
                 )
             ) {
                 if (isRich) {
