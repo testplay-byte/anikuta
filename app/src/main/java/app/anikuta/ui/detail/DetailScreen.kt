@@ -1,16 +1,7 @@
 package app.anikuta.ui.detail
 
 import android.content.Intent
-import android.graphics.BlurMaskFilter
-import androidx.compose.animation.animateColor
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -20,52 +11,36 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.DownloadDone
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
-import kotlin.math.roundToInt
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import app.anikuta.data.anilist.model.AniListAnime
+import app.anikuta.ui.detail.components.AiringPill
+import app.anikuta.ui.detail.components.DownloadButtonTall
+import app.anikuta.ui.detail.components.EpisodeDisplaySettings
+import app.anikuta.ui.detail.components.EpisodeOptionsSheet
+import app.anikuta.ui.detail.components.EpisodeRow
+import app.anikuta.ui.detail.components.EpisodeRowContent
+import app.anikuta.ui.detail.components.cleanHtmlTags
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -145,6 +120,24 @@ fun DetailScreen(
     val animeInfoPosition by (playerPrefs?.animeInfoPosition()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("below")).collectAsState()
     val dynamicThemingEnabled by (playerPrefs?.dynamicDetailTheming()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
     val downloadButtonPlacement by (playerPrefs?.downloadButtonPlacement()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("episode_row")).collectAsState()
+
+    // Aggregate display settings into a single object for EpisodeRowContent.
+    // This avoids passing 12+ individual parameters through the composable tree.
+    val displaySettings = EpisodeDisplaySettings(
+        showThumbnails = showThumbnails,
+        showSummaries = showSummaries,
+        showTitles = showTitles,
+        showDates = showDates,
+        showEpisodeNumber = showEpisodeNumber,
+        showAudioPills = showAudioPills,
+        synopsisPosition = synopsisPosition,
+        datePosition = datePosition,
+        thumbnailSize = thumbnailSize,
+        titlePosition = titlePosition,
+        episodeNumberPosition = episodeNumberPosition,
+        thumbnailPosition = thumbnailPosition,
+        downloadButtonPlacement = downloadButtonPlacement,
+    )
 
     // Issue A: Scan filesystem for downloaded episodes when the detail page is entered.
     // This ensures the green checkmark appears for episodes that were downloaded
@@ -459,36 +452,29 @@ fun DetailScreen(
                                 Box(modifier = Modifier.weight(1f).zIndex(1f)) {
                                     EpisodeRow(
                                         episode = episode,
-                                        onClick = { viewModel.playEpisode(episode) },
-                                        showThumbnails = showThumbnails,
-                                        showSummaries = showSummaries,
-                                        showTitles = showTitles,
-                                        showDates = showDates,
-                                        showEpisodeNumber = showEpisodeNumber,
-                                        showAudioPills = showAudioPills,
-                                        synopsisPosition = synopsisPosition,
-                                        datePosition = datePosition,
-                                        thumbnailSize = thumbnailSize,
-                                        titlePosition = titlePosition,
-                                        episodeNumberPosition = episodeNumberPosition,
-                                        thumbnailPosition = thumbnailPosition,
-                                        index = index,
-                                        dynamicColors = null,
-                                        downloadButtonPlacement = downloadButtonPlacement,
-                                        downloadStatus = downloadStatus,
-                                        downloadProgress = downloadProgress,
-                                        downloadedOnDisk = downloadedOnDisk,
                                         isSeen = isEpisodeSeen,
+                                        onClick = { viewModel.playEpisode(episode) },
+                                        onLongClick = { longPressEpisode = episode },
                                         onSwipeRight = {
                                             episodeSeenStore?.toggleSeen(anilistId, episode.url)
                                         },
                                         onSwipeLeft = {
                                             viewModel.onDownloadButtonClick(episode)
                                         },
-                                        onLongClick = { longPressEpisode = episode },
-                                        onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
-                                        onDownloadLongClick = { longPressEpisode = episode },
-                                    )
+                                        index = index,
+                                        dynamicColors = null,
+                                    ) {
+                                        EpisodeRowContent(
+                                            episode = episode,
+                                            settings = displaySettings,
+                                            index = index,
+                                            downloadStatus = downloadStatus,
+                                            downloadProgress = downloadProgress,
+                                            downloadedOnDisk = downloadedOnDisk,
+                                            onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
+                                            onDownloadLongClick = { longPressEpisode = episode },
+                                        )
+                                    }
                                 }
                                 // Download button outside the episode container — only for
                                 // "episode_row" placement, or "synopsis" with no summary (fallback)
@@ -617,35 +603,29 @@ fun DetailScreen(
                                                 Box(modifier = Modifier.weight(1f).zIndex(1f)) {
                                                     EpisodeRow(
                                                         episode = episode,
-                                                        onClick = { viewModel.playEpisode(episode) },
-                                                        showThumbnails = showThumbnails,
-                                                        showSummaries = showSummaries,
-                                                        showTitles = showTitles,
-                                                        showDates = showDates,
-                                                        showEpisodeNumber = showEpisodeNumber,
-                                                        showAudioPills = showAudioPills,
-                                                        synopsisPosition = synopsisPosition,
-                                                        datePosition = datePosition,
-                                                        thumbnailSize = thumbnailSize,
-                                                        titlePosition = titlePosition,
-                                                        episodeNumberPosition = episodeNumberPosition,
-                                                        thumbnailPosition = thumbnailPosition,
-                                                        index = index,
-                                                        dynamicColors = null,
-                                                        downloadButtonPlacement = downloadButtonPlacement,
-                                                        downloadStatus = downloadStatus,
-                                                        downloadProgress = downloadProgress,
-                                                        downloadedOnDisk = downloadedOnDisk,
                                                         isSeen = seenEpisodes.contains("$anilistId:${episode.url}"),
+                                                        onClick = { viewModel.playEpisode(episode) },
+                                                        onLongClick = { longPressEpisode = episode },
                                                         onSwipeRight = {
                                                             episodeSeenStore?.toggleSeen(anilistId, episode.url)
                                                         },
                                                         onSwipeLeft = {
                                                             viewModel.onDownloadButtonClick(episode)
                                                         },
-                                                        onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
-                                                        onDownloadLongClick = { longPressEpisode = episode },
-                                                    )
+                                                        index = index,
+                                                        dynamicColors = null,
+                                                    ) {
+                                                        EpisodeRowContent(
+                                                            episode = episode,
+                                                            settings = displaySettings,
+                                                            index = index,
+                                                            downloadStatus = downloadStatus,
+                                                            downloadProgress = downloadProgress,
+                                                            downloadedOnDisk = downloadedOnDisk,
+                                                            onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
+                                                            onDownloadLongClick = { longPressEpisode = episode },
+                                                        )
+                                                    }
                                                 }
                                                 // Download button outside the episode container —
                                                 // only for "episode_row", or "synopsis" with no summary
@@ -708,93 +688,54 @@ fun DetailScreen(
         } // end DetailState.Success branch
         } // end when(detailState)
 
-        // Long-press bottom sheet — at TOP LEVEL of DetailScreen (not nested inside when/Box).
-        // This ensures Compose recomposes it when longPressEpisode changes.
-        longPressEpisode?.let { episode ->
-            android.util.Log.d("EpisodeRow", ">>> longPressEpisode is SET — rendering ModalBottomSheet (episode: ${episode.name})")
-            val sheetState = androidx.compose.material3.rememberModalBottomSheetState()
-            androidx.compose.material3.ModalBottomSheet(
-                onDismissRequest = { longPressEpisode = null },
-                sheetState = sheetState,
-            ) {
-                val status = downloadStatus[episode.url]
-                val isOnDisk = downloadedOnDisk.contains(episode.url)
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        episode.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(12.dp))
-
-                    // State-dependent options
-                    when {
-                        status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
-                            DownloadMenuOption("Play downloaded", Icons.Default.DownloadDone) {
-                                longPressEpisode = null
-                                viewModel.playEpisode(episode)
-                            }
-                            DownloadMenuOption("Delete download", Icons.Default.Delete, isDestructive = true) {
-                                longPressEpisode = null
-                                viewModel.deleteDownloadedEpisode(episode)
-                            }
-                        }
-                        status == app.anikuta.download.Download.State.DOWNLOADING ||
-                        status == app.anikuta.download.Download.State.QUEUE ||
-                        status == app.anikuta.download.Download.State.RESOLVING ||
-                        status == app.anikuta.download.Download.State.MUXING ||
-                        status == app.anikuta.download.Download.State.RECONNECTING -> {
-                            DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
-                                longPressEpisode = null
-                                viewModel.cancelDownloadForEpisode(episode)
-                            }
-                        }
-                        status == app.anikuta.download.Download.State.PAUSED -> {
-                            DownloadMenuOption("Resume", Icons.Default.Download) {
-                                longPressEpisode = null
-                                viewModel.onDownloadButtonClick(episode)
-                            }
-                            DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
-                                longPressEpisode = null
-                                viewModel.cancelDownloadForEpisode(episode)
-                            }
-                        }
-                        status == app.anikuta.download.Download.State.ERROR -> {
-                            DownloadMenuOption("Retry", Icons.Default.Refresh) {
-                                longPressEpisode = null
-                                viewModel.onDownloadButtonClick(episode)
-                            }
-                            DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
-                                longPressEpisode = null
-                                viewModel.cancelDownloadForEpisode(episode)
-                            }
-                        }
-                        else -> {
-                            DownloadMenuOption("Download", Icons.Default.Download) {
-                                longPressEpisode = null
-                                viewModel.onDownloadButtonClick(episode)
-                            }
-                        }
-                    }
-
-                    // Mark as watched / unwatched
-                    val episodeSeen = seenEpisodes.contains("$anilistId:${episode.url}")
-                    if (episodeSeen) {
-                        DownloadMenuOption("Mark as unwatched", Icons.Default.VisibilityOff) {
-                            episodeSeenStore?.markUnseen(anilistId, episode.url)
-                            longPressEpisode = null
-                        }
-                    } else {
-                        DownloadMenuOption("Mark as watched", Icons.Default.Visibility) {
-                            episodeSeenStore?.markSeen(anilistId, episode.url)
-                            longPressEpisode = null
-                        }
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-        }
+        // Long-press options sheet.
+        //
+        // Extracted into a dedicated composable [EpisodeOptionsSheet] that receives
+        // `longPressEpisode` as a parameter. This ensures reliable recomposition:
+        // when `longPressEpisode` transitions from null to non-null, Compose
+        // recomposes this composable because the parameter changed.
+        //
+        // Previous approach used `longPressEpisode?.let { ModalBottomSheet(...) }`
+        // inline in this 800-line function. Despite the state being mutableStateOf,
+        // Compose did not reliably recompose the let-block — likely due to the
+        // function's complex control flow and recomposition scope boundaries.
+        EpisodeOptionsSheet(
+            episode = longPressEpisode,
+            isSeen = longPressEpisode?.let { seenEpisodes.contains("$anilistId:${it.url}") } ?: false,
+            downloadState = longPressEpisode?.let { downloadStatus[it.url] },
+            isOnDisk = longPressEpisode?.let { downloadedOnDisk.contains(it.url) } ?: false,
+            onDismiss = { longPressEpisode = null },
+            onPlay = {
+                val ep = longPressEpisode
+                longPressEpisode = null
+                ep?.let { viewModel.playEpisode(it) }
+            },
+            onDownload = {
+                val ep = longPressEpisode
+                longPressEpisode = null
+                ep?.let { viewModel.onDownloadButtonClick(it) }
+            },
+            onDelete = {
+                val ep = longPressEpisode
+                longPressEpisode = null
+                ep?.let { viewModel.deleteDownloadedEpisode(it) }
+            },
+            onCancel = {
+                val ep = longPressEpisode
+                longPressEpisode = null
+                ep?.let { viewModel.cancelDownloadForEpisode(it) }
+            },
+            onMarkSeen = {
+                val ep = longPressEpisode
+                longPressEpisode = null
+                ep?.let { episodeSeenStore?.markSeen(anilistId, it.url) }
+            },
+            onMarkUnseen = {
+                val ep = longPressEpisode
+                longPressEpisode = null
+                ep?.let { episodeSeenStore?.markUnseen(anilistId, it.url) }
+            },
+        )
     }
 
 @Composable
@@ -1016,1014 +957,3 @@ private fun InfoCard(title: String, body: String) {
     }
 }
 
-/**
- * Tall download button with a dedicated (state-coloured) background and fully
- * rounded corners. Used for BOTH placement modes:
- *  - "episode_row": rendered beside the episode card; fills the card's height
- *    via the parent Row's IntrinsicSize.Min.
- *  - "synopsis": rendered inside the synopsis area, beside the synopsis text
- *    panel (with a small gap); fills the synopsis height via IntrinsicSize.Min.
- *
- * Shows the same download states as the legacy icon button, but as a proper
- * tall button (width 48dp × parent height) with its own background.
- */
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun DownloadButtonTall(
-    episodeUrl: String,
-    downloadStatus: Map<String, app.anikuta.download.Download.State>,
-    downloadProgress: Map<String, Int>,
-    downloadedOnDisk: Set<String>,
-    onDownload: () -> Unit,
-    onLongClick: () -> Unit = {},
-    index: Int = 0,
-) {
-    val status = downloadStatus[episodeUrl]
-    val progress = downloadProgress[episodeUrl] ?: 0
-    val isOnDisk = downloadedOnDisk.contains(episodeUrl)
-
-    // Alternating default background: contrasts with the episode card's
-    // alternating row color (even=surfaceContainerLow, odd=surfaceContainerHigh).
-    // The button uses the OPPOSITE level so it never blends into the card.
-    val defaultBg = if (index % 2 == 0) {
-        MaterialTheme.colorScheme.surfaceContainerHigh
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
-
-    val backgroundColor = when {
-        status == app.anikuta.download.Download.State.DOWNLOADING -> MaterialTheme.colorScheme.primaryContainer
-        status == app.anikuta.download.Download.State.ERROR -> MaterialTheme.colorScheme.errorContainer
-        status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-        status == app.anikuta.download.Download.State.PAUSED -> defaultBg
-        status == app.anikuta.download.Download.State.RECONNECTING -> MaterialTheme.colorScheme.errorContainer
-        else -> defaultBg
-    }
-
-    val iconColor = when {
-        status == app.anikuta.download.Download.State.ERROR -> MaterialTheme.colorScheme.error
-        status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> MaterialTheme.colorScheme.primary
-        status == app.anikuta.download.Download.State.RECONNECTING -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Surface(
-        modifier = Modifier
-            .width(48.dp)
-            .fillMaxHeight()
-            .combinedClickable(
-                onClick = onDownload,
-                onLongClick = onLongClick,
-            ),
-        shape = RoundedCornerShape(12.dp),
-        color = backgroundColor,
-        tonalElevation = 1.dp,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            when {
-                status == app.anikuta.download.Download.State.DOWNLOADING -> {
-                    CircularProgressIndicator(
-                        progress = { progress / 100f },
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                status == app.anikuta.download.Download.State.QUEUE ||
-                status == app.anikuta.download.Download.State.RESOLVING ||
-                status == app.anikuta.download.Download.State.MUXING -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                status == app.anikuta.download.Download.State.ERROR -> {
-                    Icon(Icons.Default.Error, contentDescription = "Failed", tint = iconColor, modifier = Modifier.size(24.dp))
-                }
-                status == app.anikuta.download.Download.State.PAUSED -> {
-                    Icon(Icons.Default.Download, contentDescription = "Paused", tint = iconColor, modifier = Modifier.size(24.dp))
-                }
-                status == app.anikuta.download.Download.State.RECONNECTING -> {
-                    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "reconnect_synopsis")
-                    val spinnerColor by transition.animateColor(
-                        initialValue = MaterialTheme.colorScheme.error,
-                        targetValue = androidx.compose.ui.graphics.Color(0xFFFFA000),
-                        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                            animation = androidx.compose.animation.core.tween(500),
-                            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
-                        ),
-                        label = "reconnect_synopsis_color",
-                    )
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                        color = spinnerColor,
-                    )
-                }
-                status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
-                    Icon(Icons.Default.DownloadDone, contentDescription = "Downloaded", tint = iconColor, modifier = Modifier.size(24.dp))
-                }
-                else -> {
-                    Icon(Icons.Default.Download, contentDescription = "Download", tint = iconColor, modifier = Modifier.size(24.dp))
-                }
-            }
-        }
-    }
-}
-
-/**
- * A single option row in the long-press download menu (Q4).
- */
-@Composable
-private fun DownloadMenuOption(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    isDestructive: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp)
-            .combinedClickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.width(16.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-@Composable
-private fun EpisodeRow(
-    episode: app.anikuta.source.api.model.SEpisode,
-    onClick: () -> Unit,
-    showThumbnails: Boolean = true,
-    showSummaries: Boolean = true,
-    showTitles: Boolean = true,
-    showDates: Boolean = true,
-    showEpisodeNumber: Boolean = true,
-    showAudioPills: Boolean = true,
-    synopsisPosition: String = "right",
-    datePosition: String = "right_below_synopsis",
-    thumbnailSize: String = "medium",
-    titlePosition: String = "right",
-    episodeNumberPosition: String = "overlay",
-    thumbnailPosition: String = "left",
-    index: Int = 0,
-    dynamicColors: DynamicColorScheme? = null,
-    downloadButtonPlacement: String = "episode_row",
-    downloadStatus: Map<String, app.anikuta.download.Download.State> = emptyMap(),
-    downloadProgress: Map<String, Int> = emptyMap(),
-    downloadedOnDisk: Set<String> = emptySet(),
-    isSeen: Boolean = false,
-    onSwipeRight: () -> Unit = {},
-    onSwipeLeft: () -> Unit = {},
-    onLongClick: () -> Unit = {},
-    onDownloadClick: () -> Unit = {},
-    onDownloadLongClick: () -> Unit = {},
-) {
-    val hasThumbnail = showThumbnails && !episode.preview_url.isNullOrBlank()
-    val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
-    val isRich = hasThumbnail || hasSummary
-
-    val cardColor = if (dynamicColors != null) {
-        if (index % 2 == 0) dynamicColors.surfaceLow else dynamicColors.surfaceHigh
-    } else {
-        if (index % 2 == 0) MaterialTheme.colorScheme.surfaceContainerLow
-        else MaterialTheme.colorScheme.surfaceContainerHigh
-    }
-
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-
-    // Swipe actions — using SwipeableActionsBox (same library aniyomi uses)
-    // This handles: swipe left/right, tap, long-press, AND vertical scroll — all coexisting.
-    val startAction = me.saket.swipe.SwipeAction(
-        icon = {
-            Icon(
-                modifier = Modifier.padding(16.dp),
-                imageVector = if (isSeen) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                contentDescription = if (isSeen) "Mark unwatched" else "Mark watched",
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-        },
-        background = MaterialTheme.colorScheme.primaryContainer,
-        onSwipe = onSwipeRight,
-    )
-
-    val endAction = me.saket.swipe.SwipeAction(
-        icon = {
-            Icon(
-                modifier = Modifier.padding(16.dp),
-                imageVector = Icons.Default.CloudDownload,
-                contentDescription = "Download",
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-        },
-        background = MaterialTheme.colorScheme.secondaryContainer,
-        onSwipe = onSwipeLeft,
-    )
-
-    me.saket.swipe.SwipeableActionsBox(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 6.dp),  // padding hides background behind rounded corners
-        startActions = listOf(startAction),
-        endActions = listOf(endAction),
-        swipeThreshold = 100.dp,  // higher threshold — harder to trigger (user wants ~80% for download)
-        backgroundUntilSwipeThreshold = MaterialTheme.colorScheme.surfaceContainerLowest,
-    ) {
-        // Foreground — Box + background + combinedClickable.
-        // NO clip on this Box — clip interferes with combinedClickable's gesture detection.
-        // The rounded corners are achieved by the inner content's clip.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(cardColor, RoundedCornerShape(12.dp))
-                .combinedClickable(
-                    onClick = {
-                        android.util.Log.d("EpisodeRow", ">>> onClick fired (episode: ${episode.name})")
-                        onClick()
-                    },
-                    onLongClick = {
-                        android.util.Log.d("EpisodeRow", ">>> onLongClick fired — calling callback (episode: ${episode.name})")
-                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        android.util.Log.d("EpisodeRow", ">>> haptic done, calling onLongClick()")
-                        onLongClick()
-                        android.util.Log.d("EpisodeRow", ">>> onLongClick() returned — longPressEpisode should be set")
-                    },
-                ),
-        ) {
-            // Content wrapper — applies grayscale + alpha when seen.
-            // Also applies blur on Android 12+.
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .then(
-                        if (isSeen && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                            Modifier.blur(1.5.dp)
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .then(
-                        if (isSeen) Modifier
-                            .graphicsLayer(alpha = 0.5f)
-                            .drawWithContent {
-                                val paint = androidx.compose.ui.graphics.Paint().apply {
-                                    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                                        androidx.compose.ui.graphics.ColorMatrix(
-                                            floatArrayOf(
-                                                0.299f, 0.587f, 0.114f, 0f, 0f,
-                                                0.299f, 0.587f, 0.114f, 0f, 0f,
-                                                0.299f, 0.587f, 0.114f, 0f, 0f,
-                                                0f, 0f, 0f, 1f, 0f,
-                                            )
-                                        )
-                                    )
-                                }
-                                with(paint) {
-                                    this@drawWithContent.drawContent()
-                                }
-                            }
-                        else Modifier
-                    )
-            ) {
-                if (isRich) {
-                    EpisodeRowRich(
-                        episode, hasThumbnail, hasSummary, showTitles, showDates,
-                        showEpisodeNumber, showAudioPills, synopsisPosition, datePosition,
-                        thumbnailSize, titlePosition,
-                        episodeNumberPosition, thumbnailPosition,
-                        downloadButtonPlacement, downloadStatus, downloadProgress,
-                        downloadedOnDisk, onDownloadClick, onDownloadLongClick,
-                        index = index,
-                        isSeen = isSeen,
-                    )
-                } else {
-                    EpisodeRowSimple(
-                        episode, showTitles, showEpisodeNumber, episodeNumberPosition,
-                        showAudioPills, showDates,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Simple episode row — no thumbnail, no summary.
- * Episode number (circle or badge) + title + date/pills below.
- * Date/pills are BELOW the title (not beside it) so the title isn't cut off.
- * No play button (tapping anywhere plays).
- */
-@Composable
-private fun EpisodeRowSimple(
-    episode: app.anikuta.source.api.model.SEpisode,
-    showTitles: Boolean,
-    showEpisodeNumber: Boolean,
-    episodeNumberPosition: String = "overlay",
-    showAudioPills: Boolean = true,
-    showDates: Boolean = true,
-) {
-    // Audio detection from the scanlator field only.
-    val scanlatorUpper = episode.scanlator?.uppercase() ?: ""
-    val hasSub = scanlatorUpper.contains("SUB")
-    val hasDub = scanlatorUpper.contains("DUB")
-    val hasHsub = scanlatorUpper.contains("HSUB")
-    val hasDate = showDates && episode.date_upload > 0
-    val hasAnyPills = hasDate || (showAudioPills && (hasSub || hasDub || hasHsub))
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        // Top row: episode number circle (if overlay position) + title
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Episode number — circular badge (only when position is NOT 'badge')
-            if (showEpisodeNumber && episodeNumberPosition != "badge") {
-                Surface(
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = EpisodeTitleParser.formatEpisodeNumber(episode.episode_number),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-            }
-
-            // Title with optional badge inside
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = Modifier.weight(1f),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Episode number badge (if position is 'badge')
-                    // Uses primaryContainer so the badge is a clearly distinct
-                    // colored pill, separate from the title's surfaceContainer bg.
-                    if (showEpisodeNumber && episodeNumberPosition == "badge") {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Text(
-                                text = "EP ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text(
-                        text = if (showTitles) {
-                            EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number)
-                        } else {
-                            "Episode ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}"
-                        },
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
-
-        // Date + audio pills BELOW the title (not beside it — prevents title cutoff)
-        if (hasAnyPills) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Date pill
-                if (hasDate) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Text(
-                            text = formatDate(episode.date_upload),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                    }
-                }
-                // Audio pills — adaptive (shortens to S•D when space is tight)
-                if (showAudioPills && (hasSub || hasDub || hasHsub)) {
-                    AudioPills(hasSub = hasSub, hasDub = hasDub, hasHsub = hasHsub)
-                }
-            }
-        }
-    }
-}
-
-/**
- * Rich episode row — with thumbnail and/or summary.
- *
- * Episode number is OVERLAID on the thumbnail (top-left corner).
- * Audio pills come from the scanlator field (not video cache).
- * Date position: right_below_synopsis, right_above_synopsis, or below.
- * Synopsis position: right or below.
- * Thumbnail size: small (100dp), medium (120dp), large (160dp).
- */
-@Composable
-private fun EpisodeRowRich(
-    episode: app.anikuta.source.api.model.SEpisode,
-    hasThumbnail: Boolean,
-    hasSummary: Boolean,
-    showTitles: Boolean,
-    showDates: Boolean,
-    showEpisodeNumber: Boolean,
-    showAudioPills: Boolean,
-    synopsisPosition: String,
-    datePosition: String,
-    thumbnailSize: String,
-    titlePosition: String,
-    episodeNumberPosition: String,
-    thumbnailPosition: String,
-    downloadButtonPlacement: String = "episode_row",
-    downloadStatus: Map<String, app.anikuta.download.Download.State> = emptyMap(),
-    downloadProgress: Map<String, Int> = emptyMap(),
-    downloadedOnDisk: Set<String> = emptySet(),
-    onDownloadClick: () -> Unit = {},
-    onDownloadLongClick: () -> Unit = {},
-    index: Int = 0,
-    isSeen: Boolean = false,
-) {
-    var summaryExpanded by remember { mutableStateOf(false) }
-
-    // Thumbnail dimensions based on size preference
-    val (thumbWidth, thumbHeight) = when (thumbnailSize) {
-        "small" -> 100.dp to 56.dp
-        "large" -> 160.dp to 90.dp
-        else -> 120.dp to 68.dp  // medium (default)
-    }
-
-    // Audio detection from the scanlator field only.
-    // The AniKoto extension puts sub/dub info in SEpisode.scanlator:
-    // "Sub", "Dub", "Sub / Dub", or "Raw" (see Anikoto.kt lines 478-483).
-    val scanlatorUpper = episode.scanlator?.uppercase() ?: ""
-    val hasSub = scanlatorUpper.contains("SUB")
-    val hasDub = scanlatorUpper.contains("DUB")
-    val hasHsub = scanlatorUpper.contains("HSUB")
-    val hasDate = showDates && episode.date_upload > 0
-    val hasAnyPills = hasDate || (showAudioPills && (hasSub || hasDub || hasHsub))
-
-    // Composable for date + audio pills row
-    @Composable
-    fun DateAudioPillsRow() {
-        if (hasAnyPills) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Date pill (separate)
-                if (hasDate) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ) {
-                        Text(
-                            text = formatDate(episode.date_upload),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                    }
-                }
-                // Audio pills — adaptive (shortens to S•D when space is tight)
-                if (showAudioPills && (hasSub || hasDub || hasHsub)) {
-                    AudioPills(hasSub = hasSub, hasDub = hasDub, hasHsub = hasHsub)
-                }
-            }
-        }
-    }
-
-    // Composable for synopsis
-    @Composable
-    fun SynopsisContent() {
-        if (hasSummary) {
-            if (downloadButtonPlacement == "synopsis") {
-                // Two separated panels side-by-side, each with its own background:
-                //  - Left:  synopsis text (reduced width, all corners rounded)
-                //  - Right: a dedicated tall button for the download (own background,
-                //           all corners rounded), with a small gap between them.
-                // Both share the same height (IntrinsicSize.Min + fillMaxHeight).
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                ) {
-                    // Synopsis text — own background, all corners rounded (standalone panel)
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    ) {
-                        Text(
-                            text = episode.summary!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                                .clickable { summaryExpanded = !summaryExpanded },
-                        )
-                    }
-                    // Small gap between the two panels (separated, not joined)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    // Download button — dedicated background, all corners rounded (standalone)
-                    DownloadButtonTall(
-                        episodeUrl = episode.url,
-                        downloadStatus = downloadStatus,
-                        downloadProgress = downloadProgress,
-                        downloadedOnDisk = downloadedOnDisk,
-                        onDownload = onDownloadClick,
-                        onLongClick = onDownloadLongClick,
-                        index = index,
-                    )
-                }
-            } else {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = episode.summary!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = if (summaryExpanded) Int.MAX_VALUE else 3,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                            .clickable { summaryExpanded = !summaryExpanded },
-                    )
-                }
-            }
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-    ) {
-        // Top row: thumbnail + right-side content
-        // Thumbnail position: left (default) or right
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top,
-        ) {
-            // Thumbnail (left, if position is 'left')
-            if (hasThumbnail && thumbnailPosition == "left") {
-                Box(
-                    modifier = Modifier
-                        .width(thumbWidth)
-                        .height(thumbHeight),
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        coil3.compose.AsyncImage(
-                            model = episode.preview_url,
-                            contentDescription = "Episode thumbnail",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(10.dp)),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                            colorFilter = if (isSeen) androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                                androidx.compose.ui.graphics.ColorMatrix(
-                                    floatArrayOf(
-                                        0.299f, 0.587f, 0.114f, 0f, 0f,
-                                        0.299f, 0.587f, 0.114f, 0f, 0f,
-                                        0.299f, 0.587f, 0.114f, 0f, 0f,
-                                        0f, 0f, 0f, 1f, 0f,
-                                    )
-                                )
-                            ) else null,
-                        )
-                    }
-                    // Episode number overlay — only when position is 'overlay'
-                    if (showEpisodeNumber && episodeNumberPosition == "overlay") {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(4.dp),
-                        ) {
-                            Text(
-                                text = "EP ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = androidx.compose.ui.graphics.Color.White,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-            } else if (!hasThumbnail && showEpisodeNumber && episodeNumberPosition != "badge") {
-                // No thumbnail — show episode number badge
-                Surface(
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = EpisodeTitleParser.formatEpisodeNumber(episode.episode_number),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-            }
-
-            // Right side content column
-            Column(modifier = Modifier.weight(1f)) {
-                // Title on the right side (if position is 'right')
-                if (titlePosition == "right" || !hasThumbnail) {
-                    // Title with background — includes episode number badge if position is 'badge'
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            // Episode number badge (if position is 'badge')
-                            // Uses primaryContainer so the badge is a clearly distinct
-                            // colored pill, separate from the title's surfaceContainer bg.
-                            if (showEpisodeNumber && episodeNumberPosition == "badge") {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                ) {
-                                    Text(
-                                        text = "EP ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text(
-                                text = if (showTitles) {
-                                    EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number)
-                                } else {
-                                    "Episode ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}"
-                                },
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                }
-
-                // Date above synopsis (right side — only when there IS a thumbnail)
-                if (hasThumbnail && datePosition == "right_above_synopsis" && hasAnyPills) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    DateAudioPillsRow()
-                }
-
-                // Synopsis on the right side (only when there IS a thumbnail)
-                if (hasThumbnail && synopsisPosition == "right" && hasSummary) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    SynopsisContent()
-                }
-
-                // Date below synopsis (right side — only when there IS a thumbnail)
-                if (hasThumbnail && datePosition == "right_below_synopsis" && hasAnyPills) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    DateAudioPillsRow()
-                }
-            }
-
-            // Thumbnail (right, if position is 'right')
-            if (hasThumbnail && thumbnailPosition == "right") {
-                Spacer(modifier = Modifier.width(12.dp))
-                Box(
-                    modifier = Modifier
-                        .width(thumbWidth)
-                        .height(thumbHeight),
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        coil3.compose.AsyncImage(
-                            model = episode.preview_url,
-                            contentDescription = "Episode thumbnail",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(10.dp)),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                            colorFilter = if (isSeen) androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                                androidx.compose.ui.graphics.ColorMatrix(
-                                    floatArrayOf(
-                                        0.299f, 0.587f, 0.114f, 0f, 0f,
-                                        0.299f, 0.587f, 0.114f, 0f, 0f,
-                                        0.299f, 0.587f, 0.114f, 0f, 0f,
-                                        0f, 0f, 0f, 1f, 0f,
-                                    )
-                                )
-                            ) else null,
-                        )
-                    }
-                    if (showEpisodeNumber && episodeNumberPosition == "overlay") {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(4.dp),
-                        ) {
-                            Text(
-                                text = "EP ${EpisodeTitleParser.formatEpisodeNumber(episode.episode_number)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = androidx.compose.ui.graphics.Color.White,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Below-thumbnail content (full width)
-        if (hasThumbnail) {
-            // Title below thumbnail (if position is 'below')
-            if (titlePosition == "below" && showTitles) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = EpisodeTitleParser.getDisplayTitle(episode.name, episode.episode_number),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    )
-                }
-            }
-
-            // Synopsis below (if position is 'below')
-            if (hasSummary && synopsisPosition == "below") {
-                Spacer(modifier = Modifier.height(8.dp))
-                SynopsisContent()
-            }
-
-            // Date + audio pills below (if position is 'below')
-            if (datePosition == "below" && hasAnyPills) {
-                Spacer(modifier = Modifier.height(8.dp))
-                DateAudioPillsRow()
-            }
-        } else {
-            // No thumbnail — synopsis and date/pills go full-width below the
-            // episode number + title row. This ensures they don't get crammed
-            // into the right-side column next to the episode number circle.
-            // Date above synopsis (if position is right_above_synopsis)
-            if (datePosition == "right_above_synopsis" && hasAnyPills) {
-                Spacer(modifier = Modifier.height(6.dp))
-                DateAudioPillsRow()
-            }
-            // Synopsis (always full-width when no thumbnail)
-            if (hasSummary) {
-                Spacer(modifier = Modifier.height(6.dp))
-                SynopsisContent()
-            }
-            // Date below synopsis (if position is right_below_synopsis or below)
-            if ((datePosition == "right_below_synopsis" || datePosition == "below") && hasAnyPills) {
-                Spacer(modifier = Modifier.height(6.dp))
-                DateAudioPillsRow()
-            }
-        }
-    }
-}
-
-/**
- * Format a date_upload (epoch millis) as a readable date string.
- */
-
-/**
- * Airing pill — shows the next episode's airing time.
- * Click to toggle between:
- *   - Text mode: "Ep 1016 in 2d 5h"
- *   - Countdown mode: "2d 05:23:45" (live updating every second)
- */
-@Composable
-private fun AiringPill(airing: app.anikuta.data.anilist.model.AniListNextAiring) {
-    var showCountdown by remember { mutableStateOf(false) }
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        onClick = { showCountdown = !showCountdown },
-        modifier = Modifier.padding(vertical = 2.dp),
-    ) {
-        if (showCountdown) {
-            // Live countdown mode — updates every second
-            var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    currentTime = System.currentTimeMillis()
-                    kotlinx.coroutines.delay(1000)
-                }
-            }
-            val remainingSecs = (airing.airingAt?.toLong() ?: 0L) * 1000 - currentTime
-            val text = if (remainingSecs > 0) {
-                val days = remainingSecs / 86400000
-                val hours = (remainingSecs % 86400000) / 3600000
-                val mins = (remainingSecs % 3600000) / 60000
-                val secs = (remainingSecs % 60000) / 1000
-                if (days > 0) "Ep ${airing.episode} in ${days}d ${String.format("%02d", hours)}:${String.format("%02d", mins)}:${String.format("%02d", secs)}"
-                else "Ep ${airing.episode} in ${String.format("%02d", hours)}:${String.format("%02d", mins)}:${String.format("%02d", secs)}"
-            } else {
-                "Ep ${airing.episode} airing now!"
-            }
-            Text(
-                text,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            )
-        } else {
-            // Text mode — static "Ep N in Xd Yh"
-            val text = "Ep ${airing.episode} in ${formatTimeRemaining(airing.timeUntilAiring ?: 0)}"
-            Text(
-                text,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            )
-        }
-    }
-}
-
-/**
- * Formats a time-until-airing value (in seconds) into a human-readable string.
- */
-private fun formatTimeRemaining(secondsUntilAiring: Int): String {
-    if (secondsUntilAiring <= 0) return "soon"
-    val days = secondsUntilAiring / 86400
-    val hours = (secondsUntilAiring % 86400) / 3600
-    val minutes = (secondsUntilAiring % 3600) / 60
-    return when {
-        days > 0 -> "${days}d ${hours}h"
-        hours > 0 -> "${hours}h ${minutes}m"
-        minutes > 0 -> "${minutes}m"
-        else -> "soon"
-    }
-}
-
-private fun formatDate(epochMillis: Long): String {
-    if (epochMillis <= 0) return ""
-    return try {
-        val sdf = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
-        sdf.format(java.util.Date(epochMillis))
-    } catch (e: Exception) {
-        ""
-    }
-}
-
-/**
- * Strips HTML formatting tags from AniList descriptions.
- * AniList returns descriptions with <br>, <i>, </i>, <b>, </b>, etc.
- * We convert <br> to newlines and strip all other tags.
- */
-private fun cleanHtmlTags(text: String): String {
-    return text
-        .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-        .replace(Regex("<[^>]+>"), "")  // strip all HTML tags
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&nbsp;", " ")
-        .trim()
-}
-
-/**
- * Audio pills (SUB / DUB / HSUB) — ADAPTIVE: keeps everything on ONE row.
- *
- * Heuristic: when there are 2+ audio versions, the labels shorten to their
- * first letter (SUB→S, DUB→D, HSUB→H) with dot separators, e.g. "S•D".
- * With only 1 version, the full label is shown (always fits). This guarantees
- * the pills are always fully visible on a single row regardless of available
- * width (fixes the character-per-line wrap issue).
- *
- * NOTE: Does NOT use BoxWithConstraints — that is a SubcomposeLayout which
- * crashes when placed inside a Row(height(IntrinsicSize.Min)) because
- * intrinsic measurement of SubcomposeLayouts is not supported.
- *
- * @param hasSub / hasDub / hasHsub  which audio versions are available
- */
-@Composable
-private fun AudioPills(
-    hasSub: Boolean,
-    hasDub: Boolean,
-    hasHsub: Boolean,
-) {
-    if (!hasSub && !hasDub && !hasHsub) return
-
-    // Full labels:   "SUB", "DUB", "HSUB"
-    // Short labels:  "S", "D", "H"  (first letter only)
-    data class Audio(val full: String, val short: String)
-    val parts = buildList {
-        if (hasSub) add(Audio("SUB", "S"))
-        if (hasDub) add(Audio("DUB", "D"))
-        if (hasHsub) add(Audio("HSUB", "H"))
-    }
-
-    // Heuristic: 2+ versions → short labels (S•D), 1 version → full label (SUB)
-    val useShort = parts.size >= 2
-
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.outlineVariant,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            parts.forEachIndexed { idx, audio ->
-                if (idx > 0) {
-                    // Circular dot separator
-                    Box(
-                        modifier = Modifier
-                            .size(3.dp)
-                            .background(
-                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                androidx.compose.foundation.shape.CircleShape,
-                            ),
-                    )
-                }
-                Text(
-                    text = if (useShort) audio.short else audio.full,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    softWrap = false,
-                )
-            }
-        }
-    }
-}
