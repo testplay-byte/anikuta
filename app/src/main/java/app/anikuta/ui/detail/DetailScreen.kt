@@ -1746,15 +1746,20 @@ private fun SwipeableEpisodeRow(
                 // while letting taps pass through to the child.
                 awaitPointerEventScope {
                     while (true) {
-                        val down = awaitFirstDown(requireUnconsumed = false)
+                        // Wait for the first event (down)
                         var totalX = 0f
                         var totalY = 0f
                         var isSwiping = false
-                        var pointer = down.id
+                        var pointerId: androidx.compose.ui.input.pointer.PointerId? = null
 
                         while (true) {
                             val event = awaitPointerEvent()
-                            val change = event.changes.find { it.id == pointer } ?: break
+                            val change = event.changes.firstOrNull() ?: break
+
+                            if (pointerId == null) {
+                                pointerId = change.id
+                            }
+                            if (change.id != pointerId) continue
 
                             if (!change.pressed) {
                                 // Finger lifted — check if swipe threshold was met
