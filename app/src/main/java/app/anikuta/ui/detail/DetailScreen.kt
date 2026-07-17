@@ -418,16 +418,6 @@ fun DetailScreen(
                     // header) and 4dp vertical padding (so 8dp total between episodes).
                     itemsIndexed(loadedEpisodes.episodeList, key = { _, it -> it.url }) { index, episode ->
                         val isEpisodeSeen = seenEpisodes.contains("$anilistId:${episode.url}")
-                        SwipeableEpisodeRow(
-                            isSeen = isEpisodeSeen,
-                            onClick = { viewModel.playEpisode(episode) },
-                            onSwipeRight = {
-                                episodeSeenStore?.toggleSeen(anilistId, episode.url)
-                            },
-                            onSwipeLeft = {
-                                viewModel.onDownloadButtonClick(episode)
-                            },
-                        ) {
                         Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
@@ -463,6 +453,12 @@ fun DetailScreen(
                                         downloadProgress = downloadProgress,
                                         downloadedOnDisk = downloadedOnDisk,
                                         isSeen = isEpisodeSeen,
+                                        onSwipeRight = {
+                                            episodeSeenStore?.toggleSeen(anilistId, episode.url)
+                                        },
+                                        onSwipeLeft = {
+                                            viewModel.onDownloadButtonClick(episode)
+                                        },
                                         onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
                                         onDownloadLongClick = { longPressEpisode = episode },
                                     )
@@ -483,7 +479,6 @@ fun DetailScreen(
                                 }
                             }
                         }
-                        } // end SwipeableEpisodeRow
                     }
                 } else {
                     // Below mode OR not-yet-loaded: episodes in a section with an
@@ -1141,6 +1136,8 @@ private fun EpisodeRow(
     downloadProgress: Map<String, Int> = emptyMap(),
     downloadedOnDisk: Set<String> = emptySet(),
     isSeen: Boolean = false,
+    onSwipeRight: () -> Unit = {},
+    onSwipeLeft: () -> Unit = {},
     onDownloadClick: () -> Unit = {},
     onDownloadLongClick: () -> Unit = {},
 ) {
@@ -1148,9 +1145,7 @@ private fun EpisodeRow(
     val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
     val isRich = hasThumbnail || hasSummary
 
-    // Alternating row colors. When dynamic theming is enabled, colors are
-    // extracted from the cover image (darkMuted for even, muted for odd).
-    // When disabled, fall back to standard M3 surface container levels.
+    // Alternating row colors.
     val cardColor = if (dynamicColors != null) {
         if (index % 2 == 0) dynamicColors.surfaceLow else dynamicColors.surfaceHigh
     } else {
@@ -1161,22 +1156,91 @@ private fun EpisodeRow(
         }
     }
 
-    Surface(
+    // Swipe state — tracks horizontal drag offset
+    var offsetX by remember { mutableStateOf(0f) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val swipeThreshold = with(density) { 80.dp.toPx() }
+
+    // Background — shows action icons during swipe
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (isSeen && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    Modifier.blur(1.5.dp)
-                } else {
-                    Modifier
+            .pointerInput(Unit) {
+                // detectHorizontalDragGestures runs as the PARENT.
+                // It only activates on horizontal movement > touch slop.
+                // Taps (no movement) pass through to Surface(onClick) below.
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        android.util.Log.d("SwipeGesture", "onDragEnd: offset=$offsetX, threshold=$swipeThreshold")
+                        when {
+                            offsetX > swipeThreshold -> {
+                                android.util.Log.d("SwipeGesture", "→ RIGHT swipe triggered")
+                                onSwipeRight()
+                            }
+                            offsetX < -swipeThreshold -> {
+                                android.util.Log.d("SwipeGesture", "← LEFT swipe triggered")
+                                onSwipeLeft()
+                            }
+                        }
+                        offsetX = 0f  // snap back
+                    },
+                    onDragCancel = {
+                        android.util.Log.d("SwipeGesture", "Drag cancelled")
+                        offsetX = 0f
+                    },
+                ) { _, dragAmount ->
+                    offsetX += dragAmount
+                    android.util.Log.d("SwipeGesture", "Drag: amount=$dragAmount, totalOffset=$offsetX")
                 }
-            ),
-        shape = RoundedCornerShape(12.dp),
-        color = cardColor,
-        // NOTE: onClick is handled by SwipeableEpisodeRow (parent) — NOT here.
-        // Surface(onClick) consumes ALL touch events, blocking the parent's
-        // pointerInput from seeing horizontal drags for swipe gestures.
+            },
     ) {
+        // Background icons during swipe
+        if (kotlin.math.abs(offsetX) > 10f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (offsetX > 0) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                contentAlignment = if (offsetX > 0) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
+                if (offsetX > 0) {
+                    Icon(
+                        if (isSeen) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (isSeen) "Mark unwatched" else "Mark watched",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(start = 24.dp),
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.CloudDownload,
+                        contentDescription = "Download",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(end = 24.dp),
+                    )
+                }
+            }
+        }
+
+        // Foreground — the actual episode row, offset by drag
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(offsetX.roundToInt(), 0) }
+                .then(
+                    if (isSeen && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        Modifier.blur(1.5.dp)
+                    } else {
+                        Modifier
+                    }
+                ),
+            shape = RoundedCornerShape(12.dp),
+            color = cardColor,
+            onClick = onClick,
+        ) {
         // Wrap content in a Box that applies the greyed-out (desaturated) effect
         // when the episode is seen. Uses alpha for a faded look.
         Box(
@@ -1201,7 +1265,8 @@ private fun EpisodeRow(
             )
         }
         } // end Box (greyed-out wrapper)
-    }
+    }  // end Surface (foreground)
+    }  // end outer Box (swipe container)
 }
 
 /**
