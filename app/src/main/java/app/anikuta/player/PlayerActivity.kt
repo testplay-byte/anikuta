@@ -618,6 +618,8 @@ class PlayerActivity : ComponentActivity() {
     private var bufferWaitJob: kotlinx.coroutines.Job? = null
     /** Periodic progress save — runs every 10 seconds during playback */
     private var periodicSaveJob: kotlinx.coroutines.Job? = null
+    /** Tracks whether the "marked as watched" toast has been shown for this episode */
+    private var hasShownSeenToast = false
     private fun startBufferWait() {
         bufferWaitJob?.cancel()
         bufferWaitJob = lifecycleScope.launch {
@@ -888,7 +890,41 @@ class PlayerActivity : ComponentActivity() {
             if (dur > 0 && pos >= dur * threshold) {
                 episodeSeenStore?.markSeen(anilistId, episodeUrl)
                 Log.d(TAG, "  ✓✓ Episode MARKED AS SEEN (pos=${pos}s >= ${(dur * threshold).toInt()}s = ${threshold * 100}% threshold)")
-                // Show toast notification — always, even if already seen
+                // Show toast — only ONCE per episode (not on every periodic save)
+                if (!hasShownSeenToast) {
+                    hasShownSeenToast = true
+                    runOnUiThread {
+                        android.widget.Toast.makeText(
+                            this@PlayerActivity,
+                            "Episode marked as watched",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
+            } else {
+                Log.d(TAG, "  Not yet at threshold (${pos}s < ${(dur * threshold).toInt()}s) — not marking seen")
+            }
+        } else if (dur > 0 && pos >= dur - 2) {
+            // Episode finished — save final progress (DON'T clear — keep for history)
+            // The seen flag is handled by EpisodeSeenStore. WatchProgressStore
+            // keeps the entry so the History page can show it.
+            store.save(
+                anilistId = anilistId,
+                episodeUrl = episodeUrl,
+                positionSeconds = pos,
+                durationSeconds = dur,
+                title = vm.title,
+                coverUrl = coverUrl.ifBlank { null },
+                animeTitle = animeTitle.ifBlank { null },
+                episodeNumber = vmEpisodeNumber ?: -1f,
+                thumbnailUrl = vm.episodeList.value.getOrNull(vm.currentEpisodeIndex.value)?.preview_url,
+            )
+            Log.d(TAG, "  ✓✓ Episode FINISHED — saved final progress (kept for history), marked as seen")
+            // Mark as seen
+            episodeSeenStore?.markSeen(anilistId, episodeUrl)
+            // Show toast — only once
+            if (!hasShownSeenToast) {
+                hasShownSeenToast = true
                 runOnUiThread {
                     android.widget.Toast.makeText(
                         this@PlayerActivity,
@@ -896,23 +932,6 @@ class PlayerActivity : ComponentActivity() {
                         android.widget.Toast.LENGTH_SHORT,
                     ).show()
                 }
-            } else {
-                Log.d(TAG, "  Not yet at threshold (${pos}s < ${(dur * threshold).toInt()}s) — not marking seen")
-            }
-        } else if (dur > 0 && pos >= dur - 2) {
-            // Finished — clear the progress so next time we start from 0.
-            store.clear(anilistId, episodeUrl)
-            playbackStateStore?.clear(anilistId, episodeUrl)
-            // Mark as seen (finished = 100% > threshold)
-            episodeSeenStore?.markSeen(anilistId, episodeUrl)
-            Log.d(TAG, "  ✓✓ Episode FINISHED — cleared progress, marked as seen")
-            // Show toast — always
-            runOnUiThread {
-                android.widget.Toast.makeText(
-                    this@PlayerActivity,
-                    "Episode marked as watched",
-                    android.widget.Toast.LENGTH_SHORT,
-                ).show()
             }
             // Sync to AniList
             syncToAniList()
@@ -1311,6 +1330,9 @@ class PlayerActivity : ComponentActivity() {
         // Show loading state — this triggers the loading overlay in the UI
         vm.setSwitchingEpisode(true)
         vm.setCurrentEpisodeIndex(index)
+
+        // Reset the seen-toast flag for the new episode
+        hasShownSeenToast = false
 
         // Phase N-6: Watch-flow auto-download — if the episode being switched to
         // is downloaded, pre-download the next one. Filesystem check (safe, no MPV dependency).

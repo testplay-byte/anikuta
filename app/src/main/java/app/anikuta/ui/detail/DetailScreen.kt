@@ -89,8 +89,25 @@ fun DetailScreen(
         try { uy.kohesive.injekt.Injekt.get<app.anikuta.data.cache.EpisodeSeenStore>() }
         catch (e: Exception) { null }
     }
-    val seenEpisodes by (episodeSeenStore?.changes ?: kotlinx.coroutines.flow.flowOf(emptySet()))
-        .collectAsState(initial = episodeSeenStore?.getAll() ?: emptySet())
+    // Use a mutable state that can be refreshed on resume (when returning from player)
+    var seenEpisodes by remember { mutableStateOf(episodeSeenStore?.getAll() ?: emptySet()) }
+    // Collect changes reactively
+    LaunchedEffect(episodeSeenStore) {
+        episodeSeenStore?.changes?.collect { newSet ->
+            seenEpisodes = newSet
+        }
+    }
+    // Re-read on resume (when returning from PlayerActivity)
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                seenEpisodes = episodeSeenStore?.getAll() ?: emptySet()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // Long-press download menu state (Q4)
     var longPressEpisode by remember { mutableStateOf<app.anikuta.source.api.model.SEpisode?>(null) }
@@ -1156,30 +1173,32 @@ private fun EpisodeRow(
         }
     }
 
-    // Swipe state — tracks horizontal drag offset
+    // Swipe state — tracks horizontal drag offset (in pixels)
     var offsetX by remember { mutableStateOf(0f) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val swipeThreshold = with(density) { 80.dp.toPx() }
 
-    // Background — shows action icons during swipe
-    Box(
+    // Use BoxWithConstraints to get the row width for percentage-based thresholds
+    androidx.compose.foundation.layout.BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .pointerInput(Unit) {
-                // detectHorizontalDragGestures runs as the PARENT.
-                // It only activates on horizontal movement > touch slop.
-                // Taps (no movement) pass through to Surface(onClick) below.
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        android.util.Log.d("SwipeGesture", "onDragEnd: offset=$offsetX, threshold=$swipeThreshold")
+                        // maxWidth is Dp, convert to pixels for comparison with offsetX
+                        val rowWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
+                        val threshold = rowWidthPx * 0.20f  // 20% commit threshold
+                        val maxSwipe = rowWidthPx * 0.30f  // 30% max cap
+                        android.util.Log.d("SwipeGesture", "onDragEnd: offset=$offsetX, threshold=$threshold (20%), maxSwipe=$maxSwipe (30%), rowWidthPx=$rowWidthPx")
                         when {
-                            offsetX > swipeThreshold -> {
+                            offsetX > threshold -> {
                                 android.util.Log.d("SwipeGesture", "→ RIGHT swipe triggered")
                                 onSwipeRight()
                             }
-                            offsetX < -swipeThreshold -> {
+                            offsetX < -threshold -> {
                                 android.util.Log.d("SwipeGesture", "← LEFT swipe triggered")
                                 onSwipeLeft()
+                            }
+                            else -> {
+                                android.util.Log.d("SwipeGesture", "Swipe below threshold — no action")
                             }
                         }
                         offsetX = 0f  // snap back
@@ -1189,11 +1208,16 @@ private fun EpisodeRow(
                         offsetX = 0f
                     },
                 ) { _, dragAmount ->
-                    offsetX += dragAmount
-                    android.util.Log.d("SwipeGesture", "Drag: amount=$dragAmount, totalOffset=$offsetX")
+                    val rowWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
+                    val maxSwipe = rowWidthPx * 0.30f  // 30% max cap
+                    offsetX = (offsetX + dragAmount).coerceIn(-maxSwipe, maxSwipe)
                 }
             },
     ) {
+        val rowWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
+        val threshold = rowWidthPx * 0.20f
+        val maxSwipe = rowWidthPx * 0.30f
+
         // Background icons during swipe
         if (kotlin.math.abs(offsetX) > 10f) {
             Box(
@@ -1266,7 +1290,7 @@ private fun EpisodeRow(
         }
         } // end Box (greyed-out wrapper)
     }  // end Surface (foreground)
-    }  // end outer Box (swipe container)
+    }  // end BoxWithConstraints (swipe container)
 }
 
 /**
