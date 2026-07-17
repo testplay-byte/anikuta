@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1175,16 +1176,18 @@ private fun EpisodeRow(
 
     // Swipe state — tracks horizontal drag offset (in pixels)
     var offsetX by remember { mutableStateOf(0f) }
+    // Capture row width for percentage-based thresholds
+    var rowWidthPx by remember { mutableStateOf(0f) }
 
-    // Use BoxWithConstraints to get the row width for percentage-based thresholds
-    androidx.compose.foundation.layout.BoxWithConstraints(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
+            .onSizeChanged { size ->
+                rowWidthPx = size.width.toFloat()
+            }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        // maxWidth is Dp, convert to pixels for comparison with offsetX
-                        val rowWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
                         val threshold = rowWidthPx * 0.20f  // 20% commit threshold
                         val maxSwipe = rowWidthPx * 0.30f  // 30% max cap
                         android.util.Log.d("SwipeGesture", "onDragEnd: offset=$offsetX, threshold=$threshold (20%), maxSwipe=$maxSwipe (30%), rowWidthPx=$rowWidthPx")
@@ -1208,13 +1211,11 @@ private fun EpisodeRow(
                         offsetX = 0f
                     },
                 ) { _, dragAmount ->
-                    val rowWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
                     val maxSwipe = rowWidthPx * 0.30f  // 30% max cap
                     offsetX = (offsetX + dragAmount).coerceIn(-maxSwipe, maxSwipe)
                 }
             },
     ) {
-        val rowWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
         val threshold = rowWidthPx * 0.20f
         val maxSwipe = rowWidthPx * 0.30f
 
