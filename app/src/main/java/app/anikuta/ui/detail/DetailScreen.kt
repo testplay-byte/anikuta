@@ -46,7 +46,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.matchParentSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1758,7 +1757,7 @@ private fun SwipeableEpisodeRow(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .matchParentSize()
+                    .fillMaxHeight()
                     .clip(RoundedCornerShape(12.dp))
                     .background(
                         if (offsetX > 0) MaterialTheme.colorScheme.primaryContainer
