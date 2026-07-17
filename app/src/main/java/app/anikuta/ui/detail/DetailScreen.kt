@@ -698,99 +698,101 @@ fun DetailScreen(
                 )
             }
 
-            // Long-press download menu (Q4)
-            longPressEpisode?.let { episode ->
-                android.util.Log.d("EpisodeRow", ">>> longPressEpisode is SET — rendering ModalBottomSheet (episode: ${episode.name})")
-                val sheetState = androidx.compose.material3.rememberModalBottomSheetState()
-                androidx.compose.material3.ModalBottomSheet(
-                    onDismissRequest = { longPressEpisode = null },
-                    sheetState = sheetState,
-                ) {
-                    val status = downloadStatus[episode.url]
-                    val isOnDisk = downloadedOnDisk.contains(episode.url)
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            episode.name,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(Modifier.height(12.dp))
+            // Long-press bottom sheet moved to TOP LEVEL of DetailScreen (see below).
+            // It was buried inside ThreeStagePullRefresh > Box > MaterialTheme > when(Success)
+            // which prevented Compose from recomposing it when longPressEpisode changed.
 
-                        // State-dependent options
-                        when {
-                            // Downloaded → Play + Delete file
-                            status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
-                                DownloadMenuOption("Play downloaded", Icons.Default.DownloadDone) {
-                                    longPressEpisode = null
-                                    viewModel.playEpisode(episode)
-                                }
-                                DownloadMenuOption("Delete download", Icons.Default.Delete, isDestructive = true) {
-                                    longPressEpisode = null
-                                    viewModel.deleteDownloadedEpisode(episode)
-                                }
-                            }
-                            // Downloading/Queued/Resolving/Muxing/Reconnecting → Cancel
-                            status == app.anikuta.download.Download.State.DOWNLOADING ||
-                            status == app.anikuta.download.Download.State.QUEUE ||
-                            status == app.anikuta.download.Download.State.RESOLVING ||
-                            status == app.anikuta.download.Download.State.MUXING ||
-                            status == app.anikuta.download.Download.State.RECONNECTING -> {
-                                DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
-                                    longPressEpisode = null
-                                    viewModel.cancelDownloadForEpisode(episode)
-                                }
-                            }
-                            // Paused → Resume + Cancel
-                            status == app.anikuta.download.Download.State.PAUSED -> {
-                                DownloadMenuOption("Resume", Icons.Default.Download) {
-                                    longPressEpisode = null
-                                    viewModel.onDownloadButtonClick(episode)
-                                }
-                                DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
-                                    longPressEpisode = null
-                                    viewModel.cancelDownloadForEpisode(episode)
-                                }
-                            }
-                            // Error → Retry + Cancel
-                            status == app.anikuta.download.Download.State.ERROR -> {
-                                DownloadMenuOption("Retry", Icons.Default.Refresh) {
-                                    longPressEpisode = null
-                                    viewModel.onDownloadButtonClick(episode)
-                                }
-                                DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
-                                    longPressEpisode = null
-                                    viewModel.cancelDownloadForEpisode(episode)
-                                }
-                            }
-                            // Not downloaded → Download
-                            else -> {
-                                DownloadMenuOption("Download", Icons.Default.Download) {
-                                    longPressEpisode = null
-                                    viewModel.onDownloadButtonClick(episode)
-                                }
-                            }
-                        }
-                        // Mark as watched / unwatched
-                        val episodeSeen = seenEpisodes.contains("$anilistId:${episode.url}")
-                        if (episodeSeen) {
-                            DownloadMenuOption("Mark as unwatched", Icons.Default.VisibilityOff) {
-                                episodeSeenStore?.markUnseen(anilistId, episode.url)
-                                longPressEpisode = null
-                            }
-                        } else {
-                            DownloadMenuOption("Mark as watched", Icons.Default.Visibility) {
-                                episodeSeenStore?.markSeen(anilistId, episode.url)
-                                longPressEpisode = null
-                            }
-                        }
-
-                        Spacer(Modifier.height(8.dp))
-                    }
-                }
-            }
             } // end ThreeStagePullRefresh
             } // end Box
             } // end MaterialTheme
+        }
+
+        // Long-press bottom sheet — at TOP LEVEL of DetailScreen (not nested inside when/Box).
+        // This ensures Compose recomposes it when longPressEpisode changes.
+        longPressEpisode?.let { episode ->
+            android.util.Log.d("EpisodeRow", ">>> longPressEpisode is SET — rendering ModalBottomSheet (episode: ${episode.name})")
+            val sheetState = androidx.compose.material3.rememberModalBottomSheetState()
+            androidx.compose.material3.ModalBottomSheet(
+                onDismissRequest = { longPressEpisode = null },
+                sheetState = sheetState,
+            ) {
+                val status = downloadStatus[episode.url]
+                val isOnDisk = downloadedOnDisk.contains(episode.url)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        episode.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    // State-dependent options
+                    when {
+                        status == app.anikuta.download.Download.State.DOWNLOADED || isOnDisk -> {
+                            DownloadMenuOption("Play downloaded", Icons.Default.DownloadDone) {
+                                longPressEpisode = null
+                                viewModel.playEpisode(episode)
+                            }
+                            DownloadMenuOption("Delete download", Icons.Default.Delete, isDestructive = true) {
+                                longPressEpisode = null
+                                viewModel.deleteDownloadedEpisode(episode)
+                            }
+                        }
+                        status == app.anikuta.download.Download.State.DOWNLOADING ||
+                        status == app.anikuta.download.Download.State.QUEUE ||
+                        status == app.anikuta.download.Download.State.RESOLVING ||
+                        status == app.anikuta.download.Download.State.MUXING ||
+                        status == app.anikuta.download.Download.State.RECONNECTING -> {
+                            DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
+                                longPressEpisode = null
+                                viewModel.cancelDownloadForEpisode(episode)
+                            }
+                        }
+                        status == app.anikuta.download.Download.State.PAUSED -> {
+                            DownloadMenuOption("Resume", Icons.Default.Download) {
+                                longPressEpisode = null
+                                viewModel.onDownloadButtonClick(episode)
+                            }
+                            DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
+                                longPressEpisode = null
+                                viewModel.cancelDownloadForEpisode(episode)
+                            }
+                        }
+                        status == app.anikuta.download.Download.State.ERROR -> {
+                            DownloadMenuOption("Retry", Icons.Default.Refresh) {
+                                longPressEpisode = null
+                                viewModel.onDownloadButtonClick(episode)
+                            }
+                            DownloadMenuOption("Cancel download", Icons.Default.Close, isDestructive = true) {
+                                longPressEpisode = null
+                                viewModel.cancelDownloadForEpisode(episode)
+                            }
+                        }
+                        else -> {
+                            DownloadMenuOption("Download", Icons.Default.Download) {
+                                longPressEpisode = null
+                                viewModel.onDownloadButtonClick(episode)
+                            }
+                        }
+                    }
+
+                    // Mark as watched / unwatched
+                    val episodeSeen = seenEpisodes.contains("$anilistId:${episode.url}")
+                    if (episodeSeen) {
+                        DownloadMenuOption("Mark as unwatched", Icons.Default.VisibilityOff) {
+                            episodeSeenStore?.markUnseen(anilistId, episode.url)
+                            longPressEpisode = null
+                        }
+                    } else {
+                        DownloadMenuOption("Mark as watched", Icons.Default.Visibility) {
+                            episodeSeenStore?.markSeen(anilistId, episode.url)
+                            longPressEpisode = null
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
         }
     }
 }
