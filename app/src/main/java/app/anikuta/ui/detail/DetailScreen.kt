@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -1215,10 +1216,6 @@ private fun EpisodeRow(
                 rowWidthPx = size.width.toFloat()
             }
             .pointerInput(Unit) {
-                // Use awaitPointerEventScope to handle BOTH drag AND long-press.
-                // detectHorizontalDragGestures consumes all events, preventing
-                // combinedClickable's onLongClick from firing. So we handle
-                // long-press detection manually here.
                 awaitPointerEventScope {
                     while (true) {
                         val downTime = System.currentTimeMillis()
@@ -1226,22 +1223,73 @@ private fun EpisodeRow(
                         var totalDragY = 0f
                         var isDragging = false
                         var isLongPressed = false
-                        val longPressTimeout = 500L  // 500ms for long-press
+                        var hasHit20Percent = false
+                        var hasHit30Percent = false
+                        val longPressTimeout = 500L
+                        val dragSlop = 16f
 
                         // Wait for first down event
                         val firstEvent = awaitPointerEvent()
                         val down = firstEvent.changes.firstOrNull() ?: continue
+                        android.util.Log.d("SwipeGesture", "Pointer DOWN at ${down.position}")
 
-                        // Loop: track movement + time for long-press
+                        // Inner loop — uses withTimeoutOrNull to break out when
+                        // no events arrive (finger held still for long-press)
                         while (true) {
-                            val event = awaitPointerEvent()
+                            // Calculate remaining time until long-press fires
+                            val elapsed = System.currentTimeMillis() - downTime
+                            val remaining = longPressTimeout - elapsed
+
+                            if (!isDragging && !isLongPressed && remaining <= 0) {
+                                // Long-press timeout reached — fire long-press
+                                isLongPressed = true
+                                android.util.Log.d("SwipeGesture", "LONG PRESS detected (elapsed=${elapsed}ms)")
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                onLongClick()
+                                // Wait for finger up before resetting
+                                while (true) {
+                                    val upEvent = awaitPointerEvent()
+                                    val upChange = upEvent.changes.firstOrNull() ?: break
+                                    if (!upChange.pressed) break
+                                }
+                                break
+                            }
+
+                            // Wait for next event with timeout (for long-press detection)
+                            val waitMs = if (!isDragging && !isLongPressed) {
+                                remaining.coerceAtLeast(1L)
+                            } else {
+                                Long.MAX_VALUE  // No timeout when dragging
+                            }
+
+                            val event = withTimeoutOrNull(waitMs) {
+                                awaitPointerEvent()
+                            }
+
+                            if (event == null) {
+                                // Timeout — no event arrived, check if long-press should fire
+                                val elapsed2 = System.currentTimeMillis() - downTime
+                                if (!isDragging && !isLongPressed && elapsed2 >= longPressTimeout) {
+                                    isLongPressed = true
+                                    android.util.Log.d("SwipeGesture", "LONG PRESS detected (timeout, elapsed=${elapsed2}ms)")
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    onLongClick()
+                                    // Wait for finger up
+                                    while (true) {
+                                        val upEvent = awaitPointerEvent()
+                                        val upChange = upEvent.changes.firstOrNull() ?: break
+                                        if (!upChange.pressed) break
+                                    }
+                                }
+                                break
+                            }
+
                             val change = event.changes.firstOrNull() ?: break
 
                             if (!change.pressed) {
                                 // Finger lifted — determine action
                                 val pressDuration = System.currentTimeMillis() - downTime
                                 if (isDragging) {
-                                    // Was dragging — check swipe threshold
                                     val threshold = rowWidthPx * 0.20f
                                     when {
                                         offsetX.value > threshold -> {
@@ -1258,15 +1306,11 @@ private fun EpisodeRow(
                                             android.util.Log.d("SwipeGesture", "Swipe below threshold — no action")
                                         }
                                     }
-                                    // Snap back
                                     scope.launch { offsetX.animateTo(0f, tween(300)) }
                                 } else if (!isLongPressed) {
-                                    // Quick tap (not long-press, not drag)
                                     android.util.Log.d("SwipeGesture", "TAP detected (duration=${pressDuration}ms)")
                                     onClick()
                                 }
-                                // Reset
-                                offsetX.value  // read to ensure no stale state
                                 break
                             }
 
@@ -1276,10 +1320,10 @@ private fun EpisodeRow(
                             totalDragY += dy
 
                             // Check for horizontal drag start
-                            val dragSlop = 16f
                             if (!isDragging && kotlin.math.abs(totalDragX) > dragSlop && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.5f) {
                                 isDragging = true
                                 android.util.Log.d("SwipeGesture", "Swipe started (totalX=$totalDragX)")
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                             }
 
                             if (isDragging) {
@@ -1287,16 +1331,20 @@ private fun EpisodeRow(
                                 val maxSwipe = rowWidthPx * 0.30f
                                 val newOffset = (offsetX.value + dx).coerceIn(-maxSwipe, maxSwipe)
                                 scope.launch { offsetX.snapTo(newOffset) }
-                            }
 
-                            // Check for long-press (only if NOT dragging)
-                            val pressDuration = System.currentTimeMillis() - downTime
-                            if (!isDragging && !isLongPressed && pressDuration >= longPressTimeout) {
-                                isLongPressed = true
-                                android.util.Log.d("SwipeGesture", "LONG PRESS detected (duration=${pressDuration}ms)")
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                onLongClick()
-                                break
+                                // Haptic at 20% threshold
+                                val threshold20 = rowWidthPx * 0.20f
+                                if (!hasHit20Percent && kotlin.math.abs(offsetX.value) >= threshold20) {
+                                    hasHit20Percent = true
+                                    android.util.Log.d("SwipeGesture", "20% threshold reached")
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                }
+                                // Haptic at 30% max cap
+                                if (!hasHit30Percent && kotlin.math.abs(offsetX.value) >= maxSwipe - 1f) {
+                                    hasHit30Percent = true
+                                    android.util.Log.d("SwipeGesture", "30% max cap reached")
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                }
                             }
                         }
                     }
@@ -1355,11 +1403,24 @@ private fun EpisodeRow(
             // combinedClickable conflicts with detectHorizontalDragGestures.
         ) {
         // Wrap content in a Box that applies the greyed-out effect when seen.
-        // Combines: alpha (fade) + blur (on Surface, Android 12+).
-        // For grayscale, we use colorFilter with a saturation matrix.
+        // Uses alpha (fade) + colorMatrix (desaturation to grayscale).
         Box(
             modifier = Modifier.then(
-                if (isSeen) Modifier.graphicsLayer(alpha = 0.45f) else Modifier
+                if (isSeen) Modifier.graphicsLayer(
+                    alpha = 0.5f,
+                    // Grayscale via colorMatrix — desaturates to black & white
+                    // Works on all API levels (unlike RuntimeShader which needs 33+)
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                        androidx.compose.ui.graphics.ColorMatrix(
+                            floatArrayOf(
+                                0.299f, 0.587f, 0.114f, 0f, 0f,
+                                0.299f, 0.587f, 0.114f, 0f, 0f,
+                                0.299f, 0.587f, 0.114f, 0f, 0f,
+                                0f, 0f, 0f, 1f, 0f,
+                            )
+                        )
+                    ),
+                ) else Modifier
             )
         ) {
         if (isRich) {
