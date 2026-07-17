@@ -705,7 +705,7 @@ fun DetailScreen(
             } // end ThreeStagePullRefresh
             } // end Box
             } // end MaterialTheme
-        }
+        } // end when(detailState)
 
         // Long-press bottom sheet — at TOP LEVEL of DetailScreen (not nested inside when/Box).
         // This ensures Compose recomposes it when longPressEpisode changes.
