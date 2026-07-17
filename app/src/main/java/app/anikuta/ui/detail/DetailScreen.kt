@@ -3,6 +3,9 @@ package app.anikuta.ui.detail
 import android.content.Intent
 import android.graphics.BlurMaskFilter
 import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +39,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -477,6 +481,7 @@ fun DetailScreen(
                                         onSwipeLeft = {
                                             viewModel.onDownloadButtonClick(episode)
                                         },
+                                        onLongClick = { longPressEpisode = episode },
                                         onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
                                         onDownloadLongClick = { longPressEpisode = episode },
                                     )
@@ -627,6 +632,13 @@ fun DetailScreen(
                                                         downloadStatus = downloadStatus,
                                                         downloadProgress = downloadProgress,
                                                         downloadedOnDisk = downloadedOnDisk,
+                                                        isSeen = seenEpisodes.contains("$anilistId:${episode.url}"),
+                                                        onSwipeRight = {
+                                                            episodeSeenStore?.toggleSeen(anilistId, episode.url)
+                                                        },
+                                                        onSwipeLeft = {
+                                                            viewModel.onDownloadButtonClick(episode)
+                                                        },
                                                         onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
                                                         onDownloadLongClick = { longPressEpisode = episode },
                                                     )
@@ -753,6 +765,20 @@ fun DetailScreen(
                                 }
                             }
                         }
+                        // Mark as watched / unwatched
+                        val episodeSeen = seenEpisodes.contains("$anilistId:${episode.url}")
+                        if (episodeSeen) {
+                            DownloadMenuOption("Mark as unwatched", Icons.Default.VisibilityOff) {
+                                episodeSeenStore?.markUnseen(anilistId, episode.url)
+                                longPressEpisode = null
+                            }
+                        } else {
+                            DownloadMenuOption("Mark as watched", Icons.Default.Visibility) {
+                                episodeSeenStore?.markSeen(anilistId, episode.url)
+                                longPressEpisode = null
+                            }
+                        }
+
                         Spacer(Modifier.height(8.dp))
                     }
                 }
@@ -1156,6 +1182,7 @@ private fun EpisodeRow(
     isSeen: Boolean = false,
     onSwipeRight: () -> Unit = {},
     onSwipeLeft: () -> Unit = {},
+    onLongClick: () -> Unit = {},
     onDownloadClick: () -> Unit = {},
     onDownloadLongClick: () -> Unit = {},
 ) {
@@ -1174,8 +1201,9 @@ private fun EpisodeRow(
         }
     }
 
-    // Swipe state — tracks horizontal drag offset (in pixels)
-    var offsetX by remember { mutableStateOf(0f) }
+    // Swipe state — uses Animatable for smooth snap-back animation
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
     // Capture row width for percentage-based thresholds
     var rowWidthPx by remember { mutableStateOf(0f) }
 
@@ -1190,13 +1218,14 @@ private fun EpisodeRow(
                     onDragEnd = {
                         val threshold = rowWidthPx * 0.20f  // 20% commit threshold
                         val maxSwipe = rowWidthPx * 0.30f  // 30% max cap
-                        android.util.Log.d("SwipeGesture", "onDragEnd: offset=$offsetX, threshold=$threshold (20%), maxSwipe=$maxSwipe (30%), rowWidthPx=$rowWidthPx")
+                        val currentOffset = offsetX.value
+                        android.util.Log.d("SwipeGesture", "onDragEnd: offset=$currentOffset, threshold=$threshold (20%), maxSwipe=$maxSwipe (30%), rowWidthPx=$rowWidthPx")
                         when {
-                            offsetX > threshold -> {
+                            currentOffset > threshold -> {
                                 android.util.Log.d("SwipeGesture", "→ RIGHT swipe triggered")
                                 onSwipeRight()
                             }
-                            offsetX < -threshold -> {
+                            currentOffset < -threshold -> {
                                 android.util.Log.d("SwipeGesture", "← LEFT swipe triggered")
                                 onSwipeLeft()
                             }
@@ -1204,15 +1233,23 @@ private fun EpisodeRow(
                                 android.util.Log.d("SwipeGesture", "Swipe below threshold — no action")
                             }
                         }
-                        offsetX = 0f  // snap back
+                        // Smooth snap-back animation (300ms tween)
+                        scope.launch {
+                            offsetX.animateTo(0f, tween(300))
+                        }
                     },
                     onDragCancel = {
                         android.util.Log.d("SwipeGesture", "Drag cancelled")
-                        offsetX = 0f
+                        scope.launch {
+                            offsetX.animateTo(0f, tween(300))
+                        }
                     },
                 ) { _, dragAmount ->
                     val maxSwipe = rowWidthPx * 0.30f  // 30% max cap
-                    offsetX = (offsetX + dragAmount).coerceIn(-maxSwipe, maxSwipe)
+                    val newOffset = (offsetX.value + dragAmount).coerceIn(-maxSwipe, maxSwipe)
+                    scope.launch {
+                        offsetX.snapTo(newOffset)
+                    }
                 }
             },
     ) {
@@ -1220,19 +1257,19 @@ private fun EpisodeRow(
         val maxSwipe = rowWidthPx * 0.30f
 
         // Background icons during swipe
-        if (kotlin.math.abs(offsetX) > 10f) {
+        if (kotlin.math.abs(offsetX.value) > 10f) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (offsetX > 0) MaterialTheme.colorScheme.primaryContainer
+                        if (offsetX.value > 0) MaterialTheme.colorScheme.primaryContainer
                         else MaterialTheme.colorScheme.secondaryContainer
                     ),
-                contentAlignment = if (offsetX > 0) Alignment.CenterStart else Alignment.CenterEnd,
+                contentAlignment = if (offsetX.value > 0) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
-                if (offsetX > 0) {
+                if (offsetX.value > 0) {
                     Icon(
                         if (isSeen) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = if (isSeen) "Mark unwatched" else "Mark watched",
@@ -1254,17 +1291,20 @@ private fun EpisodeRow(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .offset { IntOffset(offsetX.roundToInt(), 0) }
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .then(
                     if (isSeen && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                         Modifier.blur(1.5.dp)
                     } else {
                         Modifier
                     }
+                )
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
                 ),
             shape = RoundedCornerShape(12.dp),
             color = cardColor,
-            onClick = onClick,
         ) {
         // Wrap content in a Box that applies the greyed-out (desaturated) effect
         // when the episode is seen. Uses alpha for a faded look.
@@ -1811,124 +1851,6 @@ private fun EpisodeRowRich(
 /**
  * Format a date_upload (epoch millis) as a readable date string.
  */
-/**
- * Swipeable wrapper for episode rows.
- * - Swipe right → toggle seen (mark as watched/unwatched)
- * - Swipe left → queue for download
- * Shows background icons during swipe. Snaps back after action.
- */
-@Composable
-private fun SwipeableEpisodeRow(
-    isSeen: Boolean,
-    onClick: () -> Unit,
-    onSwipeRight: () -> Unit,
-    onSwipeLeft: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    var offsetX by remember { mutableStateOf(0f) }
-    var isSwiping by remember { mutableStateOf(false) }
-    var totalMovementX by remember { mutableStateOf(0f) }
-    var totalMovementY by remember { mutableStateOf(0f) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val threshold = with(density) { 80.dp.toPx() }
-    val touchSlop = with(density) { 16.dp.toPx() }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        // Reset state for each new gesture
-                        totalMovementX = 0f
-                        totalMovementY = 0f
-                        isSwiping = false
-                        offsetX = 0f
-
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull() ?: break
-
-                            val dx = change.positionChange().x
-                            val dy = change.positionChange().y
-
-                            if (!change.pressed) {
-                                // Finger lifted
-                                if (isSwiping) {
-                                    // Was swiping — check threshold
-                                    when {
-                                        offsetX > threshold -> {
-                                            android.util.Log.d("SwipeGesture", "→ RIGHT swipe (offset=$offsetX, threshold=$threshold)")
-                                            onSwipeRight()
-                                        }
-                                        offsetX < -threshold -> {
-                                            android.util.Log.d("SwipeGesture", "← LEFT swipe (offset=$offsetX, threshold=$threshold)")
-                                            onSwipeLeft()
-                                        }
-                                    }
-                                } else {
-                                    // Was NOT swiping — treat as tap
-                                    android.util.Log.d("SwipeGesture", "TAP detected (totalX=$totalMovementX, totalY=$totalMovementY)")
-                                    onClick()
-                                }
-                                offsetX = 0f
-                                break
-                            }
-
-                            totalMovementX += dx
-                            totalMovementY += dy
-
-                            // Check if movement is primarily horizontal → start swiping
-                            if (!isSwiping && kotlin.math.abs(totalMovementX) > touchSlop && kotlin.math.abs(totalMovementX) > kotlin.math.abs(totalMovementY) * 1.5f) {
-                                isSwiping = true
-                                android.util.Log.d("SwipeGesture", "Swipe started (totalX=$totalMovementX)")
-                            }
-
-                            if (isSwiping) {
-                                change.consume()
-                                offsetX += dx
-                            }
-                        }
-                    }
-                }
-            },
-    ) {
-        // Background — shows action icons during swipe
-        if (kotlin.math.abs(offsetX) > 10f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (offsetX > 0) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.secondaryContainer
-                    ),
-                contentAlignment = if (offsetX > 0) Alignment.CenterStart else Alignment.CenterEnd,
-            ) {
-                if (offsetX > 0) {
-                    Icon(
-                        if (isSeen) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = if (isSeen) "Mark unwatched" else "Mark watched",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(start = 24.dp),
-                    )
-                } else {
-                    Icon(
-                        Icons.Default.CloudDownload,
-                        contentDescription = "Download",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(end = 24.dp),
-                    )
-                }
-            }
-        }
-        // Foreground — the episode row, offset by drag
-        Box(modifier = Modifier.offset { IntOffset(offsetX.roundToInt(), 0) }) {
-            content()
-        }
-    }
-}
 
 /**
  * Airing pill — shows the next episode's airing time.
