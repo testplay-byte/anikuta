@@ -16,6 +16,7 @@ import app.anikuta.data.cache.EpisodeCacheStore
 import app.anikuta.data.cache.LocalCache
 import app.anikuta.data.cache.SubDubStore
 import app.anikuta.data.cache.ExtensionLinkStore
+import app.anikuta.data.cache.EpisodeSeenStore
 import app.anikuta.data.cache.ReleaseTrackingStore
 import app.anikuta.notification.NotificationPreferences
 import app.anikuta.notification.ReleaseCheckPlanner
@@ -229,7 +230,7 @@ class AppModule(val app: Application) : InjektModule {
         // Phase I — Extension-to-AniList link cache
         addSingletonFactory { ExtensionLinkStore(get<PreferenceStore>()) }
         // Episode seen (watched) tracking
-        addSingletonFactory { app.anikuta.data.cache.EpisodeSeenStore(get<PreferenceStore>()) }
+        addSingletonFactory { EpisodeSeenStore(get<PreferenceStore>()) }
 
         // ---- Phase N (Notifications) — release tracking system ----
         // Release-tracking state store (per-anime tracking + offset learning)
