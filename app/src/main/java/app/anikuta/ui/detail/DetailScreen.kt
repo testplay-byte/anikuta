@@ -35,6 +35,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -74,6 +75,14 @@ fun DetailScreen(
     val downloadedOnDisk by viewModel.downloadedOnDisk.collectAsState()
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
+
+    // Episode seen (watched) status — collected reactively from EpisodeSeenStore
+    val episodeSeenStore = remember {
+        try { uy.kohesive.injekt.Injekt.get<app.anikuta.data.cache.EpisodeSeenStore>() }
+        catch (e: Exception) { null }
+    }
+    val seenEpisodes by (episodeSeenStore?.changes ?: kotlinx.coroutines.flow.flowOf(emptySet()))
+        .collectAsState(initial = episodeSeenStore?.getAll() ?: emptySet())
 
     // Long-press download menu state (Q4)
     var longPressEpisode by remember { mutableStateOf<app.anikuta.source.api.model.SEpisode?>(null) }
@@ -434,6 +443,7 @@ fun DetailScreen(
                                         downloadStatus = downloadStatus,
                                         downloadProgress = downloadProgress,
                                         downloadedOnDisk = downloadedOnDisk,
+                                        isSeen = seenEpisodes.contains("$anilistId:${episode.url}"),
                                         onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
                                         onDownloadLongClick = { longPressEpisode = episode },
                                     )
@@ -1105,6 +1115,7 @@ private fun EpisodeRow(
     downloadStatus: Map<String, app.anikuta.download.Download.State> = emptyMap(),
     downloadProgress: Map<String, Int> = emptyMap(),
     downloadedOnDisk: Set<String> = emptySet(),
+    isSeen: Boolean = false,
     onDownloadClick: () -> Unit = {},
     onDownloadLongClick: () -> Unit = {},
 ) {
@@ -1126,11 +1137,26 @@ private fun EpisodeRow(
     }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isSeen && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    Modifier.blur(1.5.dp)
+                } else {
+                    Modifier
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
         color = cardColor,
         onClick = onClick,
     ) {
+        // Wrap content in a Box that applies the greyed-out (desaturated) effect
+        // when the episode is seen. Uses alpha for a faded look.
+        Box(
+            modifier = Modifier.then(
+                if (isSeen) Modifier.graphicsLayer(alpha = 0.4f) else Modifier
+            )
+        ) {
         if (isRich) {
             EpisodeRowRich(
                 episode, hasThumbnail, hasSummary, showTitles, showDates,
@@ -1147,6 +1173,7 @@ private fun EpisodeRow(
                 showAudioPills, showDates,
             )
         }
+        } // end Box (greyed-out wrapper)
     }
 }
 

@@ -228,6 +228,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { SubDubStore(get<PreferenceStore>()) }
         // Phase I — Extension-to-AniList link cache
         addSingletonFactory { ExtensionLinkStore(get<PreferenceStore>()) }
+        // Episode seen (watched) tracking
+        addSingletonFactory { app.anikuta.data.cache.EpisodeSeenStore(get<PreferenceStore>()) }
 
         // ---- Phase N (Notifications) — release tracking system ----
         // Release-tracking state store (per-anime tracking + offset learning)

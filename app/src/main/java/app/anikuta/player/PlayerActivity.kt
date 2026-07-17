@@ -282,6 +282,7 @@ class PlayerActivity : ComponentActivity() {
     private var viewModel: PlayerViewModel? = null
     private val watchProgress: WatchProgressStore? = try { uy.kohesive.injekt.Injekt.get() } catch (e: Exception) { null }
     private val playbackStateStore: PlaybackStateStore? = try { uy.kohesive.injekt.Injekt.get() } catch (e: Exception) { null }
+    private val episodeSeenStore: app.anikuta.data.cache.EpisodeSeenStore? = try { uy.kohesive.injekt.Injekt.get() } catch (e: Exception) { null }
     private var anilistId: Int = -1
     private var episodeUrl: String = ""
     private var resumedPosition: Int? = null
@@ -828,6 +829,14 @@ class PlayerActivity : ComponentActivity() {
         val vm = viewModel ?: return
         val pos = vm.position.value
         val dur = vm.duration.value
+
+        // Read the watch threshold (default 85%) — an episode is "seen" when
+        // the user has watched past this percentage of the duration.
+        val threshold = try {
+            uy.kohesive.injekt.Injekt.get<app.anikuta.core.preference.PreferenceStore>()
+                .getFloat("watch_threshold", 0.85f).get()
+        } catch (e: Exception) { 0.85f }
+
         if (dur > 0 && pos < dur - 2) {  // don't save if basically finished
             store.save(
                 anilistId = anilistId,
@@ -856,11 +865,19 @@ class PlayerActivity : ComponentActivity() {
                 subtitleTrackId = vm.currentSubtitleId.value,
                 sourceId = sourceId,
             )
+
+            // Mark episode as seen if position >= threshold (default 85%)
+            if (dur > 0 && pos >= dur * threshold) {
+                episodeSeenStore?.markSeen(anilistId, episodeUrl)
+                Log.d(TAG, "Episode marked as seen (pos=${pos}s >= ${dur * threshold}s = ${threshold * 100}% threshold)")
+            }
         } else if (dur > 0 && pos >= dur - 2) {
             // Finished — clear the progress so next time we start from 0.
             store.clear(anilistId, episodeUrl)
             playbackStateStore?.clear(anilistId, episodeUrl)
-            Log.d(TAG, "Episode finished — cleared progress + playback state")
+            // Mark as seen (finished = 100% > 85% threshold)
+            episodeSeenStore?.markSeen(anilistId, episodeUrl)
+            Log.d(TAG, "Episode finished — cleared progress + playback state, marked as seen")
             // Sync to AniList: mark episode as watched (task 6.9)
             syncToAniList()
         }
