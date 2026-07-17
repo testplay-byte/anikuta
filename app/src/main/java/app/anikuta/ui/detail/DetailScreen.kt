@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1193,204 +1194,61 @@ private fun EpisodeRow(
     val hasSummary = showSummaries && !episode.summary.isNullOrBlank()
     val isRich = hasThumbnail || hasSummary
 
-    // Alternating row colors.
     val cardColor = if (dynamicColors != null) {
         if (index % 2 == 0) dynamicColors.surfaceLow else dynamicColors.surfaceHigh
     } else {
-        if (index % 2 == 0) {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        }
+        if (index % 2 == 0) MaterialTheme.colorScheme.surfaceContainerLow
+        else MaterialTheme.colorScheme.surfaceContainerHigh
     }
 
-    // Swipe state — uses Animatable for smooth snap-back animation
-    val offsetX = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    var rowWidthPx by remember { mutableStateOf(0f) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .onSizeChanged { size ->
-                rowWidthPx = size.width.toFloat()
-            }
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val downTime = System.currentTimeMillis()
-                        var totalDragX = 0f
-                        var totalDragY = 0f
-                        var isDragging = false
-                        var isLongPressed = false
-                        var hasHit20Percent = false
-                        var hasHit30Percent = false
-                        val longPressTimeout = 500L
-                        val dragSlop = 16f
+    // Swipe actions — using SwipeableActionsBox (same library aniyomi uses)
+    // This handles: swipe left/right, tap, long-press, AND vertical scroll — all coexisting.
+    val startAction = me.saket.swipe.SwipeAction(
+        icon = {
+            Icon(
+                modifier = Modifier.padding(16.dp),
+                imageVector = if (isSeen) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                contentDescription = if (isSeen) "Mark unwatched" else "Mark watched",
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        },
+        background = MaterialTheme.colorScheme.primaryContainer,
+        onSwipe = onSwipeRight,
+    )
 
-                        // Wait for first down event
-                        val firstEvent = awaitPointerEvent()
-                        val down = firstEvent.changes.firstOrNull() ?: continue
-                        android.util.Log.d("SwipeGesture", "Pointer DOWN at ${down.position}")
+    val endAction = me.saket.swipe.SwipeAction(
+        icon = {
+            Icon(
+                modifier = Modifier.padding(16.dp),
+                imageVector = Icons.Default.CloudDownload,
+                contentDescription = "Download",
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        },
+        background = MaterialTheme.colorScheme.secondaryContainer,
+        onSwipe = onSwipeLeft,
+    )
 
-                        // Inner loop — uses withTimeoutOrNull to break out when
-                        // no events arrive (finger held still for long-press)
-                        while (true) {
-                            // Calculate remaining time until long-press fires
-                            val elapsed = System.currentTimeMillis() - downTime
-                            val remaining = longPressTimeout - elapsed
-
-                            if (!isDragging && !isLongPressed && remaining <= 0) {
-                                // Long-press timeout reached — fire long-press
-                                isLongPressed = true
-                                android.util.Log.d("SwipeGesture", "LONG PRESS detected (elapsed=${elapsed}ms)")
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                onLongClick()
-                                // Wait for finger up before resetting
-                                while (true) {
-                                    val upEvent = awaitPointerEvent()
-                                    val upChange = upEvent.changes.firstOrNull() ?: break
-                                    if (!upChange.pressed) break
-                                }
-                                break
-                            }
-
-                            // Wait for next event with timeout (for long-press detection)
-                            val waitMs = if (!isDragging && !isLongPressed) {
-                                remaining.coerceAtLeast(1L)
-                            } else {
-                                Long.MAX_VALUE  // No timeout when dragging
-                            }
-
-                            val event = withTimeoutOrNull(waitMs) {
-                                awaitPointerEvent()
-                            }
-
-                            if (event == null) {
-                                // Timeout — no event arrived, check if long-press should fire
-                                val elapsed2 = System.currentTimeMillis() - downTime
-                                if (!isDragging && !isLongPressed && elapsed2 >= longPressTimeout) {
-                                    isLongPressed = true
-                                    android.util.Log.d("SwipeGesture", "LONG PRESS detected (timeout, elapsed=${elapsed2}ms)")
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    onLongClick()
-                                    // Wait for finger up
-                                    while (true) {
-                                        val upEvent = awaitPointerEvent()
-                                        val upChange = upEvent.changes.firstOrNull() ?: break
-                                        if (!upChange.pressed) break
-                                    }
-                                }
-                                break
-                            }
-
-                            val change = event.changes.firstOrNull() ?: break
-
-                            if (!change.pressed) {
-                                // Finger lifted — determine action
-                                val pressDuration = System.currentTimeMillis() - downTime
-                                if (isDragging) {
-                                    val threshold = rowWidthPx * 0.20f
-                                    when {
-                                        offsetX.value > threshold -> {
-                                            android.util.Log.d("SwipeGesture", "→ RIGHT swipe triggered")
-                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                            onSwipeRight()
-                                        }
-                                        offsetX.value < -threshold -> {
-                                            android.util.Log.d("SwipeGesture", "← LEFT swipe triggered")
-                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                            onSwipeLeft()
-                                        }
-                                        else -> {
-                                            android.util.Log.d("SwipeGesture", "Swipe below threshold — no action")
-                                        }
-                                    }
-                                    scope.launch { offsetX.animateTo(0f, tween(300)) }
-                                } else if (!isLongPressed) {
-                                    android.util.Log.d("SwipeGesture", "TAP detected (duration=${pressDuration}ms)")
-                                    onClick()
-                                }
-                                break
-                            }
-
-                            val dx = change.positionChange().x
-                            val dy = change.positionChange().y
-                            totalDragX += dx
-                            totalDragY += dy
-
-                            // Check for horizontal drag start
-                            if (!isDragging && kotlin.math.abs(totalDragX) > dragSlop && kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.5f) {
-                                isDragging = true
-                                android.util.Log.d("SwipeGesture", "Swipe started (totalX=$totalDragX)")
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                            }
-
-                            if (isDragging) {
-                                change.consume()
-                                val maxSwipe = rowWidthPx * 0.30f
-                                val newOffset = (offsetX.value + dx).coerceIn(-maxSwipe, maxSwipe)
-                                scope.launch { offsetX.snapTo(newOffset) }
-
-                                // Haptic at 20% threshold
-                                val threshold20 = rowWidthPx * 0.20f
-                                if (!hasHit20Percent && kotlin.math.abs(offsetX.value) >= threshold20) {
-                                    hasHit20Percent = true
-                                    android.util.Log.d("SwipeGesture", "20% threshold reached")
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                }
-                                // Haptic at 30% max cap
-                                if (!hasHit30Percent && kotlin.math.abs(offsetX.value) >= maxSwipe - 1f) {
-                                    hasHit30Percent = true
-                                    android.util.Log.d("SwipeGesture", "30% max cap reached")
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                }
-                            }
-                        }
-                    }
-                }
-            },
+    me.saket.swipe.SwipeableActionsBox(
+        modifier = Modifier.fillMaxWidth().clipToBounds(),
+        startActions = listOf(startAction),
+        endActions = listOf(endAction),
+        swipeThreshold = 56.dp,
+        backgroundUntilSwipeThreshold = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
-        val threshold = rowWidthPx * 0.20f
-        val maxSwipe = rowWidthPx * 0.30f
-
-        // Background icons during swipe
-        if (kotlin.math.abs(offsetX.value) > 10f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (offsetX.value > 0) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.secondaryContainer
-                    ),
-                contentAlignment = if (offsetX.value > 0) Alignment.CenterStart else Alignment.CenterEnd,
-            ) {
-                if (offsetX.value > 0) {
-                    Icon(
-                        if (isSeen) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = if (isSeen) "Mark unwatched" else "Mark watched",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(start = 24.dp),
-                    )
-                } else {
-                    Icon(
-                        Icons.Default.CloudDownload,
-                        contentDescription = "Download",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(end = 24.dp),
-                    )
-                }
-            }
-        }
-
-        // Foreground — the actual episode row, offset by drag
+        // Foreground — the episode row content
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        onLongClick()
+                    },
+                )
                 .then(
                     if (isSeen && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                         Modifier.blur(1.5.dp)
@@ -1400,54 +1258,51 @@ private fun EpisodeRow(
                 ),
             shape = RoundedCornerShape(12.dp),
             color = cardColor,
-            // NOTE: onClick + onLongClick handled by parent Box's pointerInput.
-            // combinedClickable conflicts with detectHorizontalDragGestures.
         ) {
-        // Wrap content in a Box that applies the greyed-out effect when seen.
-        // Uses drawWithContent + ColorFilter for grayscale (black & white).
-        Box(
-            modifier = Modifier.then(
-                if (isSeen) Modifier
-                    .graphicsLayer(alpha = 0.5f)
-                    .drawWithContent {
-                        val paint = androidx.compose.ui.graphics.Paint().apply {
-                            colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                                androidx.compose.ui.graphics.ColorMatrix(
-                                    floatArrayOf(
-                                        0.299f, 0.587f, 0.114f, 0f, 0f,
-                                        0.299f, 0.587f, 0.114f, 0f, 0f,
-                                        0.299f, 0.587f, 0.114f, 0f, 0f,
-                                        0f, 0f, 0f, 1f, 0f,
+            // Grayscale (black & white) effect when seen
+            Box(
+                modifier = Modifier.then(
+                    if (isSeen) Modifier
+                        .graphicsLayer(alpha = 0.5f)
+                        .drawWithContent {
+                            val paint = androidx.compose.ui.graphics.Paint().apply {
+                                colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                    androidx.compose.ui.graphics.ColorMatrix(
+                                        floatArrayOf(
+                                            0.299f, 0.587f, 0.114f, 0f, 0f,
+                                            0.299f, 0.587f, 0.114f, 0f, 0f,
+                                            0.299f, 0.587f, 0.114f, 0f, 0f,
+                                            0f, 0f, 0f, 1f, 0f,
+                                        )
                                     )
                                 )
-                            )
+                            }
+                            with(paint) {
+                                this@drawWithContent.drawContent()
+                            }
                         }
-                        with(paint) {
-                            this@drawWithContent.drawContent()
-                        }
-                    }
-                else Modifier
-            )
-        ) {
-        if (isRich) {
-            EpisodeRowRich(
-                episode, hasThumbnail, hasSummary, showTitles, showDates,
-                showEpisodeNumber, showAudioPills, synopsisPosition, datePosition,
-                thumbnailSize, titlePosition,
-                episodeNumberPosition, thumbnailPosition,
-                downloadButtonPlacement, downloadStatus, downloadProgress,
-                downloadedOnDisk, onDownloadClick, onDownloadLongClick,
-                index = index,
-            )
-        } else {
-            EpisodeRowSimple(
-                episode, showTitles, showEpisodeNumber, episodeNumberPosition,
-                showAudioPills, showDates,
-            )
+                    else Modifier
+                )
+            ) {
+                if (isRich) {
+                    EpisodeRowRich(
+                        episode, hasThumbnail, hasSummary, showTitles, showDates,
+                        showEpisodeNumber, showAudioPills, synopsisPosition, datePosition,
+                        thumbnailSize, titlePosition,
+                        episodeNumberPosition, thumbnailPosition,
+                        downloadButtonPlacement, downloadStatus, downloadProgress,
+                        downloadedOnDisk, onDownloadClick, onDownloadLongClick,
+                        index = index,
+                    )
+                } else {
+                    EpisodeRowSimple(
+                        episode, showTitles, showEpisodeNumber, episodeNumberPosition,
+                        showAudioPills, showDates,
+                    )
+                }
+            }
         }
-        } // end Box (greyed-out wrapper)
-    }  // end Surface (foreground)
-    }  // end BoxWithConstraints (swipe container)
+    }
 }
 
 /**

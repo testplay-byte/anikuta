@@ -151,6 +151,8 @@ dependencies {
 
     // Reorderable LazyColumn (Phase 7 — drag-and-drop priority lists)
     implementation(libs.reorderable)
+    // Swipe actions on list items (same library aniyomi uses)
+    implementation(libs.swipe)
 
     // Testing
     testImplementation(libs.junit)

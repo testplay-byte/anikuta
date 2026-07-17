@@ -37,6 +37,7 @@ activity-compose = { group = "androidx.activity", name = "activity-compose", ver
 navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation-compose" }
 preference-ktx = { group = "androidx.preference", name = "preference-ktx", version.ref = "preference-ktx" }
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
+swipe = { group = "me.saket.swipe", name = "swipe", version = "1.3.0" }
 
 # Compose (BOM-managed)
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
