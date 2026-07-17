@@ -420,6 +420,7 @@ fun DetailScreen(
                         val isEpisodeSeen = seenEpisodes.contains("$anilistId:${episode.url}")
                         SwipeableEpisodeRow(
                             isSeen = isEpisodeSeen,
+                            onClick = { viewModel.playEpisode(episode) },
                             onSwipeRight = {
                                 episodeSeenStore?.toggleSeen(anilistId, episode.url)
                             },
@@ -1172,7 +1173,9 @@ private fun EpisodeRow(
             ),
         shape = RoundedCornerShape(12.dp),
         color = cardColor,
-        onClick = onClick,
+        // NOTE: onClick is handled by SwipeableEpisodeRow (parent) — NOT here.
+        // Surface(onClick) consumes ALL touch events, blocking the parent's
+        // pointerInput from seeing horizontal drags for swipe gestures.
     ) {
         // Wrap content in a Box that applies the greyed-out (desaturated) effect
         // when the episode is seen. Uses alpha for a faded look.
@@ -1727,65 +1730,71 @@ private fun EpisodeRowRich(
 @Composable
 private fun SwipeableEpisodeRow(
     isSeen: Boolean,
+    onClick: () -> Unit,
     onSwipeRight: () -> Unit,
     onSwipeLeft: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     var offsetX by remember { mutableStateOf(0f) }
+    var isSwiping by remember { mutableStateOf(false) }
+    var totalMovementX by remember { mutableStateOf(0f) }
+    var totalMovementY by remember { mutableStateOf(0f) }
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val threshold = with(density) { 80.dp.toPx() }  // 80dp swipe threshold
-    val touchSlop = with(density) { 16.dp.toPx() }  // min movement before swipe activates
+    val threshold = with(density) { 80.dp.toPx() }
+    val touchSlop = with(density) { 16.dp.toPx() }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .pointerInput(Unit) {
-                // Manual gesture detection — coexists with child's clickable.
-                // detectHorizontalDragGestures conflicts with Surface(onClick),
-                // so we use awaitPointerEventScope to manually detect swipes
-                // while letting taps pass through to the child.
                 awaitPointerEventScope {
                     while (true) {
-                        // Wait for the first event (down)
-                        var totalX = 0f
-                        var totalY = 0f
-                        var isSwiping = false
-                        var pointerId: androidx.compose.ui.input.pointer.PointerId? = null
+                        // Reset state for each new gesture
+                        totalMovementX = 0f
+                        totalMovementY = 0f
+                        isSwiping = false
+                        offsetX = 0f
 
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull() ?: break
 
-                            if (pointerId == null) {
-                                pointerId = change.id
-                            }
-                            if (change.id != pointerId) continue
+                            val dx = change.positionChange().x
+                            val dy = change.positionChange().y
 
                             if (!change.pressed) {
-                                // Finger lifted — check if swipe threshold was met
+                                // Finger lifted
                                 if (isSwiping) {
+                                    // Was swiping — check threshold
                                     when {
-                                        offsetX > threshold -> { android.util.Log.d("SwipeGesture", "→ RIGHT swipe detected (offset=${offsetX})"); onSwipeRight() }
-                                        offsetX < -threshold -> { android.util.Log.d("SwipeGesture", "← LEFT swipe detected (offset=${offsetX})"); onSwipeLeft() }
+                                        offsetX > threshold -> {
+                                            android.util.Log.d("SwipeGesture", "→ RIGHT swipe (offset=$offsetX, threshold=$threshold)")
+                                            onSwipeRight()
+                                        }
+                                        offsetX < -threshold -> {
+                                            android.util.Log.d("SwipeGesture", "← LEFT swipe (offset=$offsetX, threshold=$threshold)")
+                                            onSwipeLeft()
+                                        }
                                     }
+                                } else {
+                                    // Was NOT swiping — treat as tap
+                                    android.util.Log.d("SwipeGesture", "TAP detected (totalX=$totalMovementX, totalY=$totalMovementY)")
+                                    onClick()
                                 }
                                 offsetX = 0f
                                 break
                             }
 
-                            val dx = change.positionChange().x
-                            val dy = change.positionChange().y
-                            totalX += dx
-                            totalY += dy
+                            totalMovementX += dx
+                            totalMovementY += dy
 
-                            // Determine if this is a horizontal swipe (not a tap or vertical scroll)
-                            if (!isSwiping && kotlin.math.abs(totalX) > touchSlop && kotlin.math.abs(totalX) > kotlin.math.abs(totalY) * 1.5f) {
+                            // Check if movement is primarily horizontal → start swiping
+                            if (!isSwiping && kotlin.math.abs(totalMovementX) > touchSlop && kotlin.math.abs(totalMovementX) > kotlin.math.abs(totalMovementY) * 1.5f) {
                                 isSwiping = true
-                                android.util.Log.d("SwipeGesture", "Swipe started (totalX=$totalX, totalY=$totalY)")
+                                android.util.Log.d("SwipeGesture", "Swipe started (totalX=$totalMovementX)")
                             }
 
                             if (isSwiping) {
-                                // Consume the event so the child doesn't also handle it
                                 change.consume()
                                 offsetX += dx
                             }

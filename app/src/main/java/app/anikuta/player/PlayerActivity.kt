@@ -886,20 +886,15 @@ class PlayerActivity : ComponentActivity() {
 
             // Mark episode as seen if position >= threshold (default 85%)
             if (dur > 0 && pos >= dur * threshold) {
-                val wasAlreadySeen = episodeSeenStore?.isSeen(anilistId, episodeUrl) ?: false
                 episodeSeenStore?.markSeen(anilistId, episodeUrl)
-                if (!wasAlreadySeen) {
-                    Log.d(TAG, "  ✓✓ Episode MARKED AS SEEN (pos=${pos}s >= ${(dur * threshold).toInt()}s = ${threshold * 100}% threshold)")
-                    // Show toast notification
-                    runOnUiThread {
-                        android.widget.Toast.makeText(
-                            this@PlayerActivity,
-                            "Episode marked as watched",
-                            android.widget.Toast.LENGTH_SHORT,
-                        ).show()
-                    }
-                } else {
-                    Log.d(TAG, "  Episode already seen — no change")
+                Log.d(TAG, "  ✓✓ Episode MARKED AS SEEN (pos=${pos}s >= ${(dur * threshold).toInt()}s = ${threshold * 100}% threshold)")
+                // Show toast notification — always, even if already seen
+                runOnUiThread {
+                    android.widget.Toast.makeText(
+                        this@PlayerActivity,
+                        "Episode marked as watched",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
                 }
             } else {
                 Log.d(TAG, "  Not yet at threshold (${pos}s < ${(dur * threshold).toInt()}s) — not marking seen")
@@ -908,18 +903,16 @@ class PlayerActivity : ComponentActivity() {
             // Finished — clear the progress so next time we start from 0.
             store.clear(anilistId, episodeUrl)
             playbackStateStore?.clear(anilistId, episodeUrl)
-            // Mark as seen (finished = 100% > 85% threshold)
-            val wasAlreadySeen = episodeSeenStore?.isSeen(anilistId, episodeUrl) ?: false
+            // Mark as seen (finished = 100% > threshold)
             episodeSeenStore?.markSeen(anilistId, episodeUrl)
             Log.d(TAG, "  ✓✓ Episode FINISHED — cleared progress, marked as seen")
-            if (!wasAlreadySeen) {
-                runOnUiThread {
-                    android.widget.Toast.makeText(
-                        this@PlayerActivity,
-                        "Episode marked as watched",
-                        android.widget.Toast.LENGTH_SHORT,
-                    ).show()
-                }
+            // Show toast — always
+            runOnUiThread {
+                android.widget.Toast.makeText(
+                    this@PlayerActivity,
+                    "Episode marked as watched",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
             }
             // Sync to AniList
             syncToAniList()
