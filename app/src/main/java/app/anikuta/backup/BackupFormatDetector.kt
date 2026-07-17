@@ -18,8 +18,10 @@ import java.util.zip.GZIPOutputStream
  *    Compatible with aniyomi's backup format — can be imported/exported by aniyomi.
  *
  * Auto-detection on restore:
- *  - Read the first 8 bytes. If they match "ANIKUTA1" → our format.
- *  - Otherwise → try protobuf decode (aniyomi format).
+ *  - Read all bytes from the stream ONCE (ContentResolver streams don't support
+ *    mark/reset, so we can't peek and rewind).
+ *  - Check first 8 bytes for magic header → AniKuta format.
+ *  - Otherwise try protobuf decode (gzip first, then raw) → Aniyomi format.
  *  - If both fail → error.
  */
 object BackupFormatDetector {
@@ -30,35 +32,36 @@ object BackupFormatDetector {
     enum class Format { ANIKUTA, ANIYOMI, UNKNOWN }
 
     /**
-     * Detect the format of a backup file by reading its first bytes.
+     * Detect the format of a backup file by reading all bytes ONCE.
+     *
+     * IMPORTANT: ContentResolver.openInputStream() returns streams that do NOT
+     * support mark()/reset(). We must read all bytes in one pass, then work
+     * with the byte array.
      */
-    fun detect(input: InputStream): Format {
+    fun detect(bytes: ByteArray): Format {
         return try {
-            input.mark(8192)
-            val header = ByteArray(8)
-            val read = input.read(header)
-            input.reset()
+            if (bytes.size < 8) return Format.UNKNOWN
 
-            if (read >= 8 && String(header, 0, 8) == AnikutaBackup.MAGIC) {
-                Format.ANIKUTA
-            } else {
-                // Read the full stream for protobuf detection
-                val allBytes = input.readBytes()
-                input.reset()
+            // Check for AniKuta magic header (first 8 bytes)
+            val header = String(bytes, 0, 8, Charsets.UTF_8)
+            if (header == AnikutaBackup.MAGIC) {
+                return Format.ANIKUTA
+            }
 
-                // Try gzip + protobuf (aniyomi format)
+            // Not AniKuta — try Aniyomi (protobuf, possibly gzipped)
+            // Try gzip + protobuf first
+            try {
+                val decompressed = GZIPInputStream(bytes.inputStream()).use { it.readBytes() }
+                ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), decompressed)
+                Format.ANIYOMI
+            } catch (e: Exception) {
+                // Maybe not gzipped — try raw protobuf
                 try {
-                    val decompressed = GZIPInputStream(allBytes.inputStream()).use { it.readBytes() }
-                    ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), decompressed)
+                    ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), bytes)
                     Format.ANIYOMI
-                } catch (e: Exception) {
-                    // Maybe not gzipped — try raw protobuf
-                    try {
-                        ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), allBytes)
-                        Format.ANIYOMI
-                    } catch (e2: Exception) {
-                        Format.UNKNOWN
-                    }
+                } catch (e2: Exception) {
+                    Log.w(TAG, "detect: not AniKuta, not Aniyomi (gzip: ${e.message}, raw: ${e2.message})")
+                    Format.UNKNOWN
                 }
             }
         } catch (e: Exception) {
@@ -67,10 +70,24 @@ object BackupFormatDetector {
         }
     }
 
+    /**
+     * Convenience method: detect format from an InputStream.
+     * Reads all bytes into memory, then calls detect(ByteArray).
+     */
+    fun detect(input: InputStream): Format {
+        return try {
+            detect(input.readBytes())
+        } catch (e: Exception) {
+            Log.w(TAG, "detect(InputStream) failed: ${e.message}")
+            Format.UNKNOWN
+        }
+    }
+
     // ---- AniKuta format (.anikuta) ----
 
     /**
      * Serialize an AniKuta backup to an output stream (JSON with magic header).
+     * Format: [8 bytes magic "ANIKUTA1"] + [JSON string, UTF-8 encoded]
      */
     fun writeAnikuta(backup: AnikutaBackup, output: OutputStream) {
         val jsonStr = json.encodeToString(AnikutaBackup.serializer(), backup)
@@ -80,17 +97,29 @@ object BackupFormatDetector {
     }
 
     /**
-     * Deserialize an AniKuta backup from an input stream.
+     * Deserialize an AniKuta backup from a byte array.
      */
-    fun readAnikuta(input: InputStream): AnikutaBackup? {
+    fun readAnikuta(bytes: ByteArray): AnikutaBackup? {
         return try {
-            val bytes = input.readBytes()
+            if (bytes.size < 8) return null
             val header = String(bytes, 0, 8, Charsets.UTF_8)
             if (header != AnikutaBackup.MAGIC) return null
             val jsonStr = String(bytes, 8, bytes.size - 8, Charsets.UTF_8)
             json.decodeFromString(AnikutaBackup.serializer(), jsonStr)
         } catch (e: Exception) {
             Log.e(TAG, "readAnikuta failed", e)
+            null
+        }
+    }
+
+    /**
+     * Convenience method: deserialize from an InputStream.
+     */
+    fun readAnikuta(input: InputStream): AnikutaBackup? {
+        return try {
+            readAnikuta(input.readBytes())
+        } catch (e: Exception) {
+            Log.e(TAG, "readAnikuta(InputStream) failed", e)
             null
         }
     }
@@ -106,11 +135,11 @@ object BackupFormatDetector {
     }
 
     /**
-     * Deserialize an aniyomi-format backup (try gzip first, then raw protobuf).
+     * Deserialize an aniyomi-format backup from a byte array.
+     * Tries gzip first, then raw protobuf.
      */
-    fun readAniyomi(input: InputStream): AniyomiBackup? {
+    fun readAniyomi(bytes: ByteArray): AniyomiBackup? {
         return try {
-            val bytes = input.readBytes()
             // Try gzip first
             try {
                 val decompressed = GZIPInputStream(bytes.inputStream()).use { it.readBytes() }
@@ -121,6 +150,18 @@ object BackupFormatDetector {
             }
         } catch (e: Exception) {
             Log.e(TAG, "readAniyomi failed", e)
+            null
+        }
+    }
+
+    /**
+     * Convenience method: deserialize from an InputStream.
+     */
+    fun readAniyomi(input: InputStream): AniyomiBackup? {
+        return try {
+            readAniyomi(input.readBytes())
+        } catch (e: Exception) {
+            Log.e(TAG, "readAniyomi(InputStream) failed", e)
             null
         }
     }

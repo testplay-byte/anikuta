@@ -89,32 +89,48 @@ class BackupManager(
     /**
      * Restore a backup from an input Uri. Auto-detects the format.
      * Returns a result with what was restored.
+     *
+     * IMPORTANT: reads all bytes ONCE into memory, then passes the byte array
+     * to both detect() and read(). ContentResolver streams don't support
+     * mark/reset, so we can't read the stream twice.
      */
     suspend fun restoreBackup(inputUri: Uri): RestoreResult = withContext(Dispatchers.IO) {
         try {
-            val input = context.contentResolver.openInputStream(inputUri)
+            // Read all bytes ONCE
+            val bytes = context.contentResolver.openInputStream(inputUri)?.use { it.readBytes() }
                 ?: return@withContext RestoreResult.Error("Could not open file")
 
-            val format = BackupFormatDetector.detect(input)
-            input.close()
+            if (bytes.isEmpty()) {
+                return@withContext RestoreResult.Error("Backup file is empty")
+            }
+
+            Log.d(TAG, "Restore: read ${bytes.size} bytes, first 8: ${String(bytes, 0, minOf(8, bytes.size), Charsets.UTF_8)}")
+
+            // Detect format from the byte array
+            val format = BackupFormatDetector.detect(bytes)
+            Log.d(TAG, "Restore: detected format = $format")
 
             when (format) {
                 BackupFormatDetector.Format.ANIKUTA -> {
-                    val freshInput = context.contentResolver.openInputStream(inputUri)!!
-                    val backup = BackupFormatDetector.readAnikuta(freshInput)
-                    freshInput.close()
-                    if (backup != null) restoreAnikutaBackup(backup)
-                    else RestoreResult.Error("Could not parse AniKuta backup")
+                    val backup = BackupFormatDetector.readAnikuta(bytes)
+                    if (backup != null) {
+                        Log.d(TAG, "Restore: AniKuta backup parsed — ${backup.library.size} anime, ${backup.history.size} history")
+                        restoreAnikutaBackup(backup)
+                    } else {
+                        RestoreResult.Error("Could not parse AniKuta backup (JSON decode failed)")
+                    }
                 }
                 BackupFormatDetector.Format.ANIYOMI -> {
-                    val freshInput = context.contentResolver.openInputStream(inputUri)!!
-                    val backup = BackupFormatDetector.readAniyomi(freshInput)
-                    freshInput.close()
-                    if (backup != null) restoreAniyomiBackup(backup)
-                    else RestoreResult.Error("Could not parse Aniyomi backup")
+                    val backup = BackupFormatDetector.readAniyomi(bytes)
+                    if (backup != null) {
+                        Log.d(TAG, "Restore: Aniyomi backup parsed — ${backup.backupAnime.size} anime")
+                        restoreAniyomiBackup(backup)
+                    } else {
+                        RestoreResult.Error("Could not parse Aniyomi backup (protobuf decode failed)")
+                    }
                 }
                 BackupFormatDetector.Format.UNKNOWN -> {
-                    RestoreResult.Error("Unknown backup format")
+                    RestoreResult.Error("Unknown backup format (first 8 bytes: ${String(bytes, 0, minOf(8, bytes.size), Charsets.UTF_8)})")
                 }
             }
         } catch (e: Exception) {
