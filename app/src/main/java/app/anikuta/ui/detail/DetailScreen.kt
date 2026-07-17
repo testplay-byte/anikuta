@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -1403,22 +1404,29 @@ private fun EpisodeRow(
             // combinedClickable conflicts with detectHorizontalDragGestures.
         ) {
         // Wrap content in a Box that applies the greyed-out effect when seen.
-        // Uses alpha (fade) + colorMatrix (desaturation to grayscale).
+        // Uses drawWithContent + ColorFilter for grayscale (black & white).
         Box(
             modifier = Modifier.then(
-                if (isSeen) Modifier.graphicsLayer {
-                    this.alpha = 0.5f
-                    this.colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                        androidx.compose.ui.graphics.ColorMatrix(
-                            floatArrayOf(
-                                0.299f, 0.587f, 0.114f, 0f, 0f,
-                                0.299f, 0.587f, 0.114f, 0f, 0f,
-                                0.299f, 0.587f, 0.114f, 0f, 0f,
-                                0f, 0f, 0f, 1f, 0f,
+                if (isSeen) Modifier
+                    .graphicsLayer(alpha = 0.5f)
+                    .drawWithContent {
+                        val paint = androidx.compose.ui.graphics.Paint().apply {
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                androidx.compose.ui.graphics.ColorMatrix(
+                                    floatArrayOf(
+                                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                                        0f, 0f, 0f, 1f, 0f,
+                                    )
+                                )
                             )
-                        )
-                    )
-                } else Modifier
+                        }
+                        with(paint) {
+                            this@drawWithContent.drawContent()
+                        }
+                    }
+                else Modifier
             )
         ) {
         if (isRich) {
