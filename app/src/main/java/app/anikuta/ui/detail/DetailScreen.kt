@@ -1406,11 +1406,9 @@ private fun EpisodeRow(
         // Uses alpha (fade) + colorMatrix (desaturation to grayscale).
         Box(
             modifier = Modifier.then(
-                if (isSeen) Modifier.graphicsLayer(
-                    alpha = 0.5f,
-                    // Grayscale via colorMatrix — desaturates to black & white
-                    // Works on all API levels (unlike RuntimeShader which needs 33+)
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                if (isSeen) Modifier.graphicsLayer {
+                    this.alpha = 0.5f
+                    this.colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
                         androidx.compose.ui.graphics.ColorMatrix(
                             floatArrayOf(
                                 0.299f, 0.587f, 0.114f, 0f, 0f,
@@ -1419,8 +1417,8 @@ private fun EpisodeRow(
                                 0f, 0f, 0f, 1f, 0f,
                             )
                         )
-                    ),
-                ) else Modifier
+                    )
+                } else Modifier
             )
         ) {
         if (isRich) {
