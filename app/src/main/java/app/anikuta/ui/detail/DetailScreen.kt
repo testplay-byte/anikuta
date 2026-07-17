@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,11 +31,15 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -45,6 +50,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import app.anikuta.data.anilist.model.AniListAnime
@@ -74,6 +82,14 @@ fun DetailScreen(
     val downloadedOnDisk by viewModel.downloadedOnDisk.collectAsState()
     val context = LocalContext.current
     var expandedDescription by remember { mutableStateOf(false) }
+
+    // Episode seen (watched) status — collected reactively from EpisodeSeenStore
+    val episodeSeenStore = remember {
+        try { uy.kohesive.injekt.Injekt.get<app.anikuta.data.cache.EpisodeSeenStore>() }
+        catch (e: Exception) { null }
+    }
+    val seenEpisodes by (episodeSeenStore?.changes ?: kotlinx.coroutines.flow.flowOf(emptySet()))
+        .collectAsState(initial = episodeSeenStore?.getAll() ?: emptySet())
 
     // Long-press download menu state (Q4)
     var longPressEpisode by remember { mutableStateOf<app.anikuta.source.api.model.SEpisode?>(null) }
@@ -400,6 +416,16 @@ fun DetailScreen(
                     // Each episode gets 16dp horizontal padding (to align with the
                     // header) and 4dp vertical padding (so 8dp total between episodes).
                     itemsIndexed(loadedEpisodes.episodeList, key = { _, it -> it.url }) { index, episode ->
+                        val isEpisodeSeen = seenEpisodes.contains("$anilistId:${episode.url}")
+                        SwipeableEpisodeRow(
+                            isSeen = isEpisodeSeen,
+                            onSwipeRight = {
+                                episodeSeenStore?.toggleSeen(anilistId, episode.url)
+                            },
+                            onSwipeLeft = {
+                                viewModel.onDownloadButtonClick(episode)
+                            },
+                        ) {
                         Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
@@ -434,6 +460,7 @@ fun DetailScreen(
                                         downloadStatus = downloadStatus,
                                         downloadProgress = downloadProgress,
                                         downloadedOnDisk = downloadedOnDisk,
+                                        isSeen = isEpisodeSeen,
                                         onDownloadClick = { viewModel.onDownloadButtonClick(episode) },
                                         onDownloadLongClick = { longPressEpisode = episode },
                                     )
@@ -454,6 +481,7 @@ fun DetailScreen(
                                 }
                             }
                         }
+                        } // end SwipeableEpisodeRow
                     }
                 } else {
                     // Below mode OR not-yet-loaded: episodes in a section with an
@@ -903,6 +931,11 @@ private fun DetailHeader(
                             Text("· ${anime.episodes} eps", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                    // Next episode airing pill — click to toggle between text and countdown
+                    anime.nextAiringEpisode?.let { airing ->
+                        Spacer(modifier = Modifier.height(6.dp))
+                        AiringPill(airing)
+                    }
                 }
             }
         }
@@ -1105,6 +1138,7 @@ private fun EpisodeRow(
     downloadStatus: Map<String, app.anikuta.download.Download.State> = emptyMap(),
     downloadProgress: Map<String, Int> = emptyMap(),
     downloadedOnDisk: Set<String> = emptySet(),
+    isSeen: Boolean = false,
     onDownloadClick: () -> Unit = {},
     onDownloadLongClick: () -> Unit = {},
 ) {
@@ -1126,11 +1160,26 @@ private fun EpisodeRow(
     }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isSeen && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    Modifier.blur(1.5.dp)
+                } else {
+                    Modifier
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
         color = cardColor,
         onClick = onClick,
     ) {
+        // Wrap content in a Box that applies the greyed-out (desaturated) effect
+        // when the episode is seen. Uses alpha for a faded look.
+        Box(
+            modifier = Modifier.then(
+                if (isSeen) Modifier.graphicsLayer(alpha = 0.4f) else Modifier
+            )
+        ) {
         if (isRich) {
             EpisodeRowRich(
                 episode, hasThumbnail, hasSummary, showTitles, showDates,
@@ -1147,6 +1196,7 @@ private fun EpisodeRow(
                 showAudioPills, showDates,
             )
         }
+        } // end Box (greyed-out wrapper)
     }
 }
 
@@ -1667,6 +1717,151 @@ private fun EpisodeRowRich(
 /**
  * Format a date_upload (epoch millis) as a readable date string.
  */
+/**
+ * Swipeable wrapper for episode rows.
+ * - Swipe right → toggle seen (mark as watched/unwatched)
+ * - Swipe left → queue for download
+ * Shows background icons during swipe. Snaps back after action.
+ */
+@Composable
+private fun SwipeableEpisodeRow(
+    isSeen: Boolean,
+    onSwipeRight: () -> Unit,
+    onSwipeLeft: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    var offsetX by remember { mutableStateOf(0f) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val threshold = with(density) { 100.dp.toPx() }  // 100dp swipe threshold
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        when {
+                            offsetX > threshold -> onSwipeRight()
+                            offsetX < -threshold -> onSwipeLeft()
+                        }
+                        offsetX = 0f  // snap back
+                    },
+                    onDragCancel = { offsetX = 0f },
+                ) { _, dragAmount ->
+                    offsetX += dragAmount
+                }
+            },
+    ) {
+        // Background — shows action icons during swipe
+        if (offsetX != 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (offsetX > 0) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                contentAlignment = if (offsetX > 0) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
+                if (offsetX > 0) {
+                    // Right swipe = toggle seen
+                    Icon(
+                        if (isSeen) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (isSeen) "Mark unwatched" else "Mark watched",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(start = 24.dp),
+                    )
+                } else {
+                    // Left swipe = download
+                    Icon(
+                        Icons.Default.CloudDownload,
+                        contentDescription = "Download",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(end = 24.dp),
+                    )
+                }
+            }
+        }
+        // Foreground — the episode row, offset by drag
+        Box(modifier = Modifier.offset { androidx.compose.ui.unit.IntOffset(offsetX.roundToInt(), 0) }) {
+            content()
+        }
+    }
+}
+
+/**
+ * Airing pill — shows the next episode's airing time.
+ * Click to toggle between:
+ *   - Text mode: "Ep 1016 in 2d 5h"
+ *   - Countdown mode: "2d 05:23:45" (live updating every second)
+ */
+@Composable
+private fun AiringPill(airing: app.anikuta.data.anilist.model.AniListNextAiring) {
+    var showCountdown by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        onClick = { showCountdown = !showCountdown },
+        modifier = Modifier.padding(vertical = 2.dp),
+    ) {
+        if (showCountdown) {
+            // Live countdown mode — updates every second
+            var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    currentTime = System.currentTimeMillis()
+                    kotlinx.coroutines.delay(1000)
+                }
+            }
+            val remainingSecs = (airing.airingAt?.toLong() ?: 0L) * 1000 - currentTime
+            val text = if (remainingSecs > 0) {
+                val days = remainingSecs / 86400000
+                val hours = (remainingSecs % 86400000) / 3600000
+                val mins = (remainingSecs % 3600000) / 60000
+                val secs = (remainingSecs % 60000) / 1000
+                if (days > 0) "Ep ${airing.episode} in ${days}d ${String.format("%02d", hours)}:${String.format("%02d", mins)}:${String.format("%02d", secs)}"
+                else "Ep ${airing.episode} in ${String.format("%02d", hours)}:${String.format("%02d", mins)}:${String.format("%02d", secs)}"
+            } else {
+                "Ep ${airing.episode} airing now!"
+            }
+            Text(
+                text,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        } else {
+            // Text mode — static "Ep N in Xd Yh"
+            val text = "Ep ${airing.episode} in ${formatTimeRemaining(airing.timeUntilAiring ?: 0)}"
+            Text(
+                text,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Formats a time-until-airing value (in seconds) into a human-readable string.
+ */
+private fun formatTimeRemaining(secondsUntilAiring: Int): String {
+    if (secondsUntilAiring <= 0) return "soon"
+    val days = secondsUntilAiring / 86400
+    val hours = (secondsUntilAiring % 86400) / 3600
+    val minutes = (secondsUntilAiring % 3600) / 60
+    return when {
+        days > 0 -> "${days}d ${hours}h"
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "soon"
+    }
+}
+
 private fun formatDate(epochMillis: Long): String {
     if (epochMillis <= 0) return ""
     return try {
