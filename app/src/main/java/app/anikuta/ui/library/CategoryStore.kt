@@ -116,6 +116,31 @@ class CategoryStore(
     /** Get all categories (ordered). */
     fun getCategories(): List<Category> = categoriesPref.get()
 
+    /** Get all assignments (anilistId → categoryIds). */
+    fun getAssignments(): Map<String, Set<Long>> = assignmentsPref.get()
+
+    /** Snapshot of the full category state (for backup). */
+    fun getStateSnapshot(): CategoryState = CategoryState(
+        categories = categoriesPref.get(),
+        assignments = assignmentsPref.get(),
+    )
+
+    /** Restore a category from backup (used by BackupManager). */
+    fun restoreCategory(category: app.anikuta.backup.BackupCategory) {
+        val cats = categoriesPref.get().toMutableList()
+        // Replace if exists, else add
+        val existing = cats.indexOfFirst { it.id == category.id }
+        val restored = Category(category.id, category.name, category.order)
+        if (existing >= 0) cats[existing] = restored else cats.add(restored)
+        categoriesPref.set(cats)
+    }
+
+    /** Restore assignments from backup (used by BackupManager). */
+    fun restoreAssignments(assignments: Map<String, List<Long>>) {
+        val restored = assignments.mapValues { (_, ids) -> ids.toSet() }
+        assignmentsPref.set(restored)
+    }
+
     /** Create a new category with the given name. Returns the new category's id. */
     fun createCategory(name: String): Long {
         val cats = categoriesPref.get().toMutableList()

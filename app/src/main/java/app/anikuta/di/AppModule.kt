@@ -23,6 +23,7 @@ import app.anikuta.notification.ReleaseCheckPlanner
 import app.anikuta.notification.SubDubResolver
 import app.anikuta.notification.ReleaseTracker
 import app.anikuta.notification.NotificationDispatcher
+import app.anikuta.backup.BackupManager
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
@@ -257,6 +258,20 @@ class AppModule(val app: Application) : InjektModule {
                 anilistRepository = get(),
                 notificationDispatcher = get(),
                 downloadManager = get(),
+            )
+        }
+
+        // ---- Backup system ----
+        addSingletonFactory {
+            BackupManager(
+                context = get(),
+                libraryStore = get(),
+                watchProgressStore = get(),
+                categoryStore = get(),
+                releaseTrackingStore = get(),
+                subDubStore = get(),
+                extensionLinkStore = get(),
+                playbackStateStore = get(),
             )
         }
     }

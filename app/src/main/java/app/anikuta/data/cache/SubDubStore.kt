@@ -65,6 +65,9 @@ class SubDubStore(
     /** Get sub/dub info for an anime. */
     fun get(anilistId: Int): SubDubInfo? = store.get()[anilistId.toString()]
 
+    /** Get all sub/dub info (for backup). */
+    fun getAll(): Map<String, SubDubInfo> = store.get()
+
     /**
      * Update the sub/dub info for an anime.
      * Called by DetailViewModel after resolving episode videos.

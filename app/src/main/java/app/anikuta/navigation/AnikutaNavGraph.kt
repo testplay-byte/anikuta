@@ -445,6 +445,9 @@ fun AnikutaNavGraph() {
             composable("settings/tracking") {
                 app.anikuta.ui.settings.TrackingSettingsScreen(onBack = { navController.popBackStack() })
             }
+            composable("settings/backup") {
+                app.anikuta.ui.settings.BackupSettingsScreen(onBack = { navController.popBackStack() })
+            }
             composable("settings/about") {
                 app.anikuta.ui.settings.AboutSettingsScreen(
                     onBack = { navController.popBackStack() },

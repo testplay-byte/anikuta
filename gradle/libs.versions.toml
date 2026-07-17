@@ -59,6 +59,7 @@ coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 serialization-json-okio = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json-okio", version.ref = "serialization" }
+serialization-protobuf = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-protobuf", version.ref = "serialization" }
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 injekt = { group = "com.github.mihonapp", name = "injekt", version.ref = "injekt" }
 mpv-lib = { group = "com.github.aniyomiorg", name = "aniyomi-mpv-lib", version.ref = "mpv-lib" }

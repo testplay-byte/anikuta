@@ -105,6 +105,10 @@ dependencies {
     implementation(project(":domain"))
     implementation(project(":source-api"))
 
+    // Serialization (JSON for our backup format + Protobuf for aniyomi compat)
+    implementation(libs.serialization.json)
+    implementation(libs.serialization.protobuf)
+
     // AndroidX
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.ktx)
