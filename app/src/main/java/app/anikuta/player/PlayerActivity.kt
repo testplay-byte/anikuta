@@ -589,12 +589,14 @@ class PlayerActivity : ComponentActivity() {
                 // FILE_LOADED for the new one. Clearing here would cause
                 // the loading overlay to disappear prematurely and the
                 // switching state to be lost. Let FILE_LOADED handle it.
-                // Only clear if this is NOT a replace (i.e. genuine end/error
-                // with no new file coming).
                 val vm = viewModel
                 if (vm != null && vm.isSwitchingEpisode.value) {
                     // Keep the switching state — the new file is loading
                     Log.d(TAG, "END_FILE: keeping switching state (replace in progress)")
+                } else {
+                    // Genuine end — episode finished playing. Save progress + mark as seen.
+                    Log.d(TAG, "END_FILE: episode finished — saving progress + marking seen")
+                    saveProgress()
                 }
             }
         }
@@ -614,6 +616,8 @@ class PlayerActivity : ComponentActivity() {
      * stuttering or white screens.
      */
     private var bufferWaitJob: kotlinx.coroutines.Job? = null
+    /** Periodic progress save — runs every 10 seconds during playback */
+    private var periodicSaveJob: kotlinx.coroutines.Job? = null
     private fun startBufferWait() {
         bufferWaitJob?.cancel()
         bufferWaitJob = lifecycleScope.launch {
@@ -648,6 +652,17 @@ class PlayerActivity : ComponentActivity() {
                 MPVLib.setPropertyBoolean("pause", false)
                 viewModel?.onPauseChanged(false)
                 Log.d(TAG, "Buffer wait complete — starting playback (waited ${elapsed}ms)")
+
+                // Start periodic progress save (every 10 seconds during playback)
+                periodicSaveJob?.cancel()
+                periodicSaveJob = lifecycleScope.launch {
+                    while (true) {
+                        kotlinx.coroutines.delay(10000)  // 10 seconds
+                        Log.d(TAG, "Periodic save triggered")
+                        saveProgress()
+                    }
+                }
+                Log.d(TAG, "Started periodic progress save (every 10s)")
             } catch (e: Exception) {
                 Log.w(TAG, "Buffer wait: could not start playback", e)
             }
@@ -824,18 +839,22 @@ class PlayerActivity : ComponentActivity() {
      * Also saves the playback state (video URL + tracks) to PlaybackStateStore (Phase C).
      */
     private fun saveProgress() {
-        val store = watchProgress ?: return
-        if (anilistId < 0 || episodeUrl.isBlank()) return  // no identity to save under
-        val vm = viewModel ?: return
+        val store = watchProgress ?: run { Log.d(TAG, "saveProgress: watchProgress is null — skipping"); return }
+        if (anilistId < 0 || episodeUrl.isBlank()) { Log.d(TAG, "saveProgress: no anilistId/episodeUrl — skipping"); return }
+        val vm = viewModel ?: run { Log.d(TAG, "saveProgress: viewModel is null — skipping"); return }
         val pos = vm.position.value
         val dur = vm.duration.value
 
-        // Read the watch threshold (default 85%) — an episode is "seen" when
-        // the user has watched past this percentage of the duration.
+        Log.d(TAG, "═══ saveProgress ═══")
+        Log.d(TAG, "  anilistId=$anilistId, episodeUrl=${episodeUrl.take(50)}...")
+        Log.d(TAG, "  position=${pos}s, duration=${dur}s")
+
+        // Read the watch threshold (default 85%)
         val threshold = try {
             uy.kohesive.injekt.Injekt.get<app.anikuta.core.preference.PreferenceStore>()
                 .getFloat("watch_threshold", 0.85f).get()
         } catch (e: Exception) { 0.85f }
+        Log.d(TAG, "  watchThreshold=${threshold * 100}%")
 
         if (dur > 0 && pos < dur - 2) {  // don't save if basically finished
             store.save(
@@ -849,10 +868,9 @@ class PlayerActivity : ComponentActivity() {
                 episodeNumber = vmEpisodeNumber ?: -1f,
                 thumbnailUrl = vm.episodeList.value.getOrNull(vm.currentEpisodeIndex.value)?.preview_url,
             )
-            Log.d(TAG, "Saved progress: ${pos}s / ${dur}s")
+            Log.d(TAG, "  ✓ Saved progress: ${pos}s / ${dur}s (${(pos.toFloat() / dur * 100).toInt()}%)")
 
-            // Phase C — save the playback state (video URL + tracks) so resume
-            // can try the exact same video first, falling back if dead.
+            // Phase C — save the playback state
             playbackStateStore?.save(
                 anilistId = anilistId,
                 episodeUrl = episodeUrl,
@@ -868,19 +886,47 @@ class PlayerActivity : ComponentActivity() {
 
             // Mark episode as seen if position >= threshold (default 85%)
             if (dur > 0 && pos >= dur * threshold) {
+                val wasAlreadySeen = episodeSeenStore?.isSeen(anilistId, episodeUrl) ?: false
                 episodeSeenStore?.markSeen(anilistId, episodeUrl)
-                Log.d(TAG, "Episode marked as seen (pos=${pos}s >= ${dur * threshold}s = ${threshold * 100}% threshold)")
+                if (!wasAlreadySeen) {
+                    Log.d(TAG, "  ✓✓ Episode MARKED AS SEEN (pos=${pos}s >= ${(dur * threshold).toInt()}s = ${threshold * 100}% threshold)")
+                    // Show toast notification
+                    runOnUiThread {
+                        android.widget.Toast.makeText(
+                            this@PlayerActivity,
+                            "Episode marked as watched",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                } else {
+                    Log.d(TAG, "  Episode already seen — no change")
+                }
+            } else {
+                Log.d(TAG, "  Not yet at threshold (${pos}s < ${(dur * threshold).toInt()}s) — not marking seen")
             }
         } else if (dur > 0 && pos >= dur - 2) {
             // Finished — clear the progress so next time we start from 0.
             store.clear(anilistId, episodeUrl)
             playbackStateStore?.clear(anilistId, episodeUrl)
             // Mark as seen (finished = 100% > 85% threshold)
+            val wasAlreadySeen = episodeSeenStore?.isSeen(anilistId, episodeUrl) ?: false
             episodeSeenStore?.markSeen(anilistId, episodeUrl)
-            Log.d(TAG, "Episode finished — cleared progress + playback state, marked as seen")
-            // Sync to AniList: mark episode as watched (task 6.9)
+            Log.d(TAG, "  ✓✓ Episode FINISHED — cleared progress, marked as seen")
+            if (!wasAlreadySeen) {
+                runOnUiThread {
+                    android.widget.Toast.makeText(
+                        this@PlayerActivity,
+                        "Episode marked as watched",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+            // Sync to AniList
             syncToAniList()
+        } else {
+            Log.d(TAG, "  Duration is 0 or invalid — skipping (dur=$dur)")
         }
+        Log.d(TAG, "═══ saveProgress END ═══")
     }
 
     /**
@@ -2388,6 +2434,10 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        // Cancel periodic save + save once before pausing
+        periodicSaveJob?.cancel()
+        Log.d(TAG, "onPause: cancelled periodic save, saving progress once more")
+        saveProgress()
         // FIX (H5): Don't pause if entering PiP mode — the video should keep
         // playing in the PiP window. Only pause when the activity is actually
         // going to background (not PiP).
@@ -2404,7 +2454,7 @@ class PlayerActivity : ComponentActivity() {
             // PiP or finishing — don't auto-resume in onResume.
             wasPlayingBeforeOnPause = false
         }
-        saveProgress()
+        // Note: saveProgress() already called at the start of onPause
     }
 
     override fun onResume() {

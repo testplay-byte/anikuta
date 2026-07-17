@@ -52,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import kotlin.math.roundToInt
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
@@ -1732,28 +1733,64 @@ private fun SwipeableEpisodeRow(
 ) {
     var offsetX by remember { mutableStateOf(0f) }
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val threshold = with(density) { 100.dp.toPx() }  // 100dp swipe threshold
+    val threshold = with(density) { 80.dp.toPx() }  // 80dp swipe threshold
+    val touchSlop = with(density) { 16.dp.toPx() }  // min movement before swipe activates
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        when {
-                            offsetX > threshold -> onSwipeRight()
-                            offsetX < -threshold -> onSwipeLeft()
+                // Manual gesture detection — coexists with child's clickable.
+                // detectHorizontalDragGestures conflicts with Surface(onClick),
+                // so we use awaitPointerEventScope to manually detect swipes
+                // while letting taps pass through to the child.
+                awaitPointerEventScope {
+                    while (true) {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var totalX = 0f
+                        var totalY = 0f
+                        var isSwiping = false
+                        var pointer = down.id
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.find { it.id == pointer } ?: break
+
+                            if (!change.pressed) {
+                                // Finger lifted — check if swipe threshold was met
+                                if (isSwiping) {
+                                    when {
+                                        offsetX > threshold -> { android.util.Log.d("SwipeGesture", "→ RIGHT swipe detected (offset=${offsetX})"); onSwipeRight() }
+                                        offsetX < -threshold -> { android.util.Log.d("SwipeGesture", "← LEFT swipe detected (offset=${offsetX})"); onSwipeLeft() }
+                                    }
+                                }
+                                offsetX = 0f
+                                break
+                            }
+
+                            val dx = change.positionChange().x
+                            val dy = change.positionChange().y
+                            totalX += dx
+                            totalY += dy
+
+                            // Determine if this is a horizontal swipe (not a tap or vertical scroll)
+                            if (!isSwiping && kotlin.math.abs(totalX) > touchSlop && kotlin.math.abs(totalX) > kotlin.math.abs(totalY) * 1.5f) {
+                                isSwiping = true
+                                android.util.Log.d("SwipeGesture", "Swipe started (totalX=$totalX, totalY=$totalY)")
+                            }
+
+                            if (isSwiping) {
+                                // Consume the event so the child doesn't also handle it
+                                change.consume()
+                                offsetX += dx
+                            }
                         }
-                        offsetX = 0f  // snap back
-                    },
-                    onDragCancel = { offsetX = 0f },
-                ) { _, dragAmount ->
-                    offsetX += dragAmount
+                    }
                 }
             },
     ) {
         // Background — shows action icons during swipe
-        if (offsetX != 0f) {
+        if (kotlin.math.abs(offsetX) > 10f) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1766,7 +1803,6 @@ private fun SwipeableEpisodeRow(
                 contentAlignment = if (offsetX > 0) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
                 if (offsetX > 0) {
-                    // Right swipe = toggle seen
                     Icon(
                         if (isSeen) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = if (isSeen) "Mark unwatched" else "Mark watched",
@@ -1774,7 +1810,6 @@ private fun SwipeableEpisodeRow(
                         modifier = Modifier.padding(start = 24.dp),
                     )
                 } else {
-                    // Left swipe = download
                     Icon(
                         Icons.Default.CloudDownload,
                         contentDescription = "Download",
@@ -1785,7 +1820,7 @@ private fun SwipeableEpisodeRow(
             }
         }
         // Foreground — the episode row, offset by drag
-        Box(modifier = Modifier.offset { androidx.compose.ui.unit.IntOffset(offsetX.roundToInt(), 0) }) {
+        Box(modifier = Modifier.offset { IntOffset(offsetX.roundToInt(), 0) }) {
             content()
         }
     }
