@@ -31,9 +31,9 @@ class AutoBackupPreferences(
         /** SharedPreferences key for max number of backup files to keep. */
         private const val KEY_MAX_BACKUPS = "auto_backup_max_backups"
         /** SharedPreferences key for the SAF directory URI (app-state — not backed up). */
-        private const val KEY_DIRECTORY_URI = Preference.appStateKey("auto_backup_directory_uri")
+        private val KEY_DIRECTORY_URI = Preference.appStateKey("auto_backup_directory_uri")
         /** SharedPreferences key for the last auto-backup timestamp (app-state — not backed up). */
-        private const val KEY_LAST_BACKUP_TIMESTAMP = Preference.appStateKey("auto_backup_last_timestamp")
+        private val KEY_LAST_BACKUP_TIMESTAMP = Preference.appStateKey("auto_backup_last_timestamp")
         /** SharedPreferences key for the backup format ("anikuta" or "tachibk"). */
         private const val KEY_FORMAT = "auto_backup_format"
 
