@@ -217,7 +217,25 @@ class BackupManager(
                             "Restore: Aniyomi backup parsed (isLegacy=${backup.isLegacy}) — " +
                                 "${backup.backupAnime.size} anime, ${backup.backupManga.size} manga (skipped)"
                         }
-                        restoreAniyomiBackup(backup)
+                        val result = aniyomiImporter.restore(backup, RestoreOptions.ALL) { event ->
+                            logcat(LogPriority.DEBUG) { "Aniyomi restore: $event" }
+                        }
+                        RestoreResult.Success(
+                            libraryCount = result.libraryCount,
+                            historyCount = result.historyCount,
+                            searchCount = result.searchCount,
+                            categoryCount = result.categoryCount,
+                            unlinkedCount = result.unlinkedAnime.size,
+                            note = buildString {
+                                if (result.unlinkedAnime.isNotEmpty()) {
+                                    append("${result.unlinkedAnime.size} anime could not be auto-linked to AniList. ")
+                                }
+                                if (result.errors.isNotEmpty()) {
+                                    append("${result.errors.size} errors (see logcat). ")
+                                }
+                                result.note?.let { append(it) }
+                            }.ifBlank { null },
+                        )
                     } else {
                         RestoreResult.Error("Could not parse Aniyomi backup (protobuf decode failed)")
                     }
@@ -266,12 +284,10 @@ class BackupManager(
                 BackupFormatDetector.Format.ANIKUTA -> {
                     val backup = AnikutaCodec.read(bytes)
                     if (backup != null) {
-                        onProgress(RestoreProgress.Restoring(
-                            total = backup.library.size + backup.history.size,
-                            current = 0,
-                            message = "Restoring AniKuta backup (v${backup.version})...",
-                        ))
+                        val total = backup.library.size + backup.history.size
+                        onProgress(RestoreProgress.Restoring(total = total, current = 0, message = "Restoring AniKuta backup (v${backup.version})..."))
                         val result = restorer.restore(backup, options)
+                        onProgress(RestoreProgress.Restoring(total = total, current = total, message = "Finalizing..."))
                         onProgress(RestoreProgress.Complete(
                             summary = "Restored ${result.libraryCount} anime, ${result.historyCount} history, ${result.preferenceCount} prefs",
                         ))
@@ -280,8 +296,8 @@ class BackupManager(
                             historyCount = result.historyCount,
                             searchCount = result.searchCount,
                             categoryCount = result.categoryCount,
-                            note = if (result.errors.isEmpty()) null
-                                   else "${result.errors.size} errors (see logcat)",
+                            unlinkedCount = 0, // anikuta format always has AniList IDs
+                            note = if (result.errors.isEmpty()) null else "${result.errors.size} errors (see logcat)",
                         )
                     } else {
                         RestoreResult.Error("Could not parse AniKuta backup")
@@ -290,12 +306,47 @@ class BackupManager(
                 BackupFormatDetector.Format.ANIYOMI -> {
                     val backup = AniyomiCodec.read(bytes)
                     if (backup != null) {
-                        onProgress(RestoreProgress.Restoring(
-                            total = backup.backupAnime.size,
-                            current = 0,
-                            message = "Aniyomi restore (Phase 5 will implement full linking)...",
-                        ))
-                        restoreAniyomiBackup(backup)
+                        // Bridge AniyomiRestoreProgress → RestoreProgress for the UI
+                        val aniyomiResult = aniyomiImporter.restore(backup, options) { event ->
+                            val uiEvent = when (event) {
+                                is app.anikuta.backup.format.aniyomi.AniyomiRestoreProgress.SectionStart ->
+                                    RestoreProgress.Restoring(total = event.total, current = 0, message = "Restoring ${event.section}...")
+                                is app.anikuta.backup.format.aniyomi.AniyomiRestoreProgress.AnimeProgress ->
+                                    RestoreProgress.Restoring(
+                                        total = event.total, current = event.current,
+                                        message = buildString {
+                                            append("[${event.current}/${event.total}] ")
+                                            append(event.title)
+                                            append(" — ")
+                                            append(event.status.name)
+                                            event.detail?.let { append(": $it") }
+                                        },
+                                    )
+                                is app.anikuta.backup.format.aniyomi.AniyomiRestoreProgress.SectionComplete ->
+                                    RestoreProgress.Restoring(total = 0, current = 0, message = "✓ ${event.section}: ${event.count}")
+                                is app.anikuta.backup.format.aniyomi.AniyomiRestoreProgress.RestoreComplete ->
+                                    RestoreProgress.Complete(summary = event.summary)
+                                is app.anikuta.backup.format.aniyomi.AniyomiRestoreProgress.Error ->
+                                    RestoreProgress.Restoring(total = 0, current = 0, message = "⚠ ${event.message}")
+                            }
+                            onProgress(uiEvent)
+                        }
+                        RestoreResult.Success(
+                            libraryCount = aniyomiResult.libraryCount,
+                            historyCount = aniyomiResult.historyCount,
+                            searchCount = aniyomiResult.searchCount,
+                            categoryCount = aniyomiResult.categoryCount,
+                            unlinkedCount = aniyomiResult.unlinkedAnime.size,
+                            note = buildString {
+                                if (aniyomiResult.unlinkedAnime.isNotEmpty()) {
+                                    append("${aniyomiResult.unlinkedAnime.size} anime could not be auto-linked to AniList — review them next. ")
+                                }
+                                if (aniyomiResult.errors.isNotEmpty()) {
+                                    append("${aniyomiResult.errors.size} errors (see logcat: tag AniyomiImporter). ")
+                                }
+                                aniyomiResult.note?.let { append(it) }
+                            }.ifBlank { null },
+                        )
                     } else {
                         RestoreResult.Error("Could not parse Aniyomi backup")
                     }
@@ -311,7 +362,7 @@ class BackupManager(
     }
 
     // =========================================================================
-    // Aniyomi format restore (Phase 5: real restore with AniList linking)
+    // Aniyomi format restore (real restore with AniList linking)
     // =========================================================================
 
     /** Lazily-initialized aniyomi importer. Uses Injekt for its deps. */
@@ -328,33 +379,8 @@ class BackupManager(
         )
     }
 
-    private suspend fun restoreAniyomiBackup(
-        backup: app.anikuta.backup.format.aniyomi.AniyomiBackup,
-    ): RestoreResult {
-        val result = aniyomiImporter.restore(backup, RestoreOptions.ALL) { msg ->
-            logcat(LogPriority.DEBUG) { "Aniyomi restore: $msg" }
-        }
-        return RestoreResult.Success(
-            libraryCount = result.libraryCount,
-            historyCount = result.historyCount,
-            searchCount = result.searchCount,
-            categoryCount = result.categoryCount,
-            note = buildString {
-                if (result.unlinkedAnime.isNotEmpty()) {
-                    append("${result.unlinkedAnime.size} anime could not be auto-linked to AniList. ")
-                    append("They will be available for manual linking in the review screen. ")
-                }
-                if (result.errors.isNotEmpty()) {
-                    append("${result.errors.size} errors (see logcat: tag AniyomiImporter). ")
-                }
-                result.note?.let { append(it) }
-            }.ifBlank { null },
-        )
-    }
-
     // =========================================================================
-    // Result type (legacy sealed class — kept for UI compat until Phase 3
-    // introduces the new RestoreResult + preview flow)
+    // Result type
     // =========================================================================
 
     sealed class RestoreResult {
@@ -363,6 +389,7 @@ class BackupManager(
             val historyCount: Int,
             val searchCount: Int,
             val categoryCount: Int,
+            val unlinkedCount: Int = 0,
             val note: String? = null,
         ) : RestoreResult()
 

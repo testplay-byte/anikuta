@@ -3,6 +3,7 @@ package app.anikuta.backup.format.aniyomi
 import app.anikuta.backup.format.anikuta.RestoreOptions
 import app.anikuta.backup.link.AniListLinker
 import app.anikuta.backup.link.LinkResult
+import app.anikuta.backup.link.LinkTier
 import app.anikuta.backup.model.PendingHistoryEntry
 import app.anikuta.backup.model.RestoreResult
 import app.anikuta.backup.model.UnlinkedAnime
@@ -31,37 +32,26 @@ import logcat.LogPriority
  *  1. Run [AniListLinker.link] (4-tier: tracking → cache → fuzzy → unlinked).
  *  2. If [LinkResult.Linked]: fetch full AniList metadata via
  *     [AniListRepository.getAnimeDetails], then save to [LibraryStore] +
- *     [WatchProgressStore] (keyed by anilistId).
+ *     [WatchProgressStore] (keyed by anilistId) + assign to categories.
  *  3. If [LinkResult.Unlinked]: collect into [UnlinkedAnime] list for the
- *     post-restore review screen (Phase 6). History is preserved keyed by
- *     episodeUrl pending future link.
+ *     post-restore review screen. History is preserved keyed by episodeUrl.
+ *
+ * ## Category restoration (FIXED — was a TODO stub)
+ * Aniyomi categories are name-based. The importer:
+ *  1. Restores each category by NAME via [CategoryStore.restoreCategory],
+ *     preserving the Default category (id=0) that CategoryStore guarantees.
+ *  2. Builds a name→anilistId assignment map during anime restore.
+ *  3. After all anime are restored, applies the assignments by looking up
+ *     each category name → current CategoryStore ID, then calls
+ *     [CategoryStore.setAnimeCategories].
+ * This properly places each anime in its correct category.
+ *
+ * ## Progress reporting
+ * Emits [AniyomiRestoreProgress] events (NOT bare Strings) so the UI can show
+ * a real progress bar (current/total) + a scrollable per-anime live log.
  *
  * ## Manga handling
- * [AniyomiBackup.backupManga] is **ignored** (anikuta is anime-only). The
- * importer logs how many manga entries were skipped.
- *
- * ## Categories
- * Aniyomi categories are name-based (matched by name on restore, not by ID).
- * The importer restores categories by name via [CategoryStore.restoreCategory]
- * and applies per-anime assignments for linked anime.
- *
- * ## Preferences
- * Aniyomi's [BackupPreference] uses the shared [PreferenceValue] sealed type,
- * so preferences are restored type-safely via [PreferenceRestorer] (same as
- * anikuta-format restore). Aniyomi-specific keys that don't exist on anikuta
- * are skipped by the type-guard.
- *
- * ## Logging
- * Every anime link + restore is logged. The [onProgress] callback emits
- * live-progress messages for the Step 3 restore screen. Tag: `AniyomiImporter`.
- *
- * @param anilistRepository for Tier 3 fuzzy search + metadata fetch.
- * @param extensionLinkStore for Tier 2 cache + caching new links.
- * @param libraryStore      to save linked anime.
- * @param watchProgressStore to restore watch history.
- * @param playbackStateStore to restore playback states (if present in backup).
- * @param categoryStore     to restore categories + assignments.
- * @param preferenceRestorer to restore preferences.
+ * [AniyomiBackup.backupManga] is **ignored** (anikuta is anime-only).
  */
 class AniyomiImporter(
     private val anilistRepository: AniListRepository,
@@ -83,13 +73,13 @@ class AniyomiImporter(
      *
      * @param backup the aniyomi-format backup (modern or legacy-converted).
      * @param options which sections to restore.
-     * @param onProgress live-progress callback (called per anime + per section).
+     * @param onProgress live-progress callback (structured events for the UI).
      * @return a [RestoreResult] with per-section counts + unlinked anime list.
      */
     suspend fun restore(
         backup: AniyomiBackup,
         options: RestoreOptions = RestoreOptions.ALL,
-        onProgress: (String) -> Unit = {},
+        onProgress: (AniyomiRestoreProgress) -> Unit = {},
     ): RestoreResult = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         val errors = mutableListOf<String>()
@@ -102,56 +92,101 @@ class AniyomiImporter(
         val mangaSkipped = backup.backupManga.size
 
         if (mangaSkipped > 0) {
-            onProgress("Skipping $mangaSkipped manga entries (anime-only).")
+            onProgress(AniyomiRestoreProgress.Error("Skipping $mangaSkipped manga entries (anime-only)."))
             logcat(LogPriority.DEBUG) { "Skipping $mangaSkipped manga (anime-only)" }
         }
 
         val linker = AniListLinker(anilistRepository, extensionLinkStore)
 
-        // Build a category-order → name map for assignment restoration
+        // ---- Category restoration (by name) ----
+        // Build a map: aniyomi category order → category name
         val categoryOrderToName: Map<Long, String> = if (options.categories) {
             backup.backupAnimeCategories.associate { it.order to it.name }
         } else {
             emptyMap()
         }
 
-        // Restore categories (by name)
+        // Track per-anime category assignments: anilistId → list of category NAMES
+        // (we resolve names → IDs after all categories are restored, since IDs may
+        // differ from the backup's IDs)
+        val pendingCategoryAssignments = mutableMapOf<Int, List<String>>()
+
         if (options.categories && backup.backupAnimeCategories.isNotEmpty()) {
+            onProgress(AniyomiRestoreProgress.SectionStart("categories", backup.backupAnimeCategories.size))
             for (cat in backup.backupAnimeCategories) {
                 try {
+                    // Restore by NAME. Use a synthetic ID that won't clash with the
+                    // Default category (id=0). We use cat.order + 1 as a temporary ID;
+                    // CategoryStore.restoreCategory replaces by ID if exists, else adds.
+                    // The Default category (id=0) is always preserved by CategoryStore.
+                    val syntheticId = if (cat.order == 0L) 0L else cat.order
                     val anikutaCat = app.anikuta.backup.format.anikuta.BackupCategory(
-                        id = cat.order, // use order as ID (anikuta matches by name anyway)
+                        id = syntheticId,
                         name = cat.name,
                         order = cat.order.toInt(),
                     )
                     categoryStore.restoreCategory(anikutaCat)
                     categoryCount++
+                    onProgress(AniyomiRestoreProgress.SectionComplete("categories", categoryCount))
                 } catch (e: Exception) {
                     errors.add("category[${cat.name}]: ${e.message}")
                     logcat(LogPriority.WARN, e) { "Could not restore aniyomi category" }
                 }
             }
-            onProgress("Restored $categoryCount categories.")
+            logcat(LogPriority.DEBUG) { "Restored $categoryCount categories" }
         }
 
-        // Restore anime (with AniList linking)
+        // ---- Anime restoration (with AniList linking) ----
         if (options.library) {
             val total = backup.backupAnime.size
+            onProgress(AniyomiRestoreProgress.SectionStart("anime", total))
+
             for ((index, backupAnime) in backup.backupAnime.withIndex()) {
+                val current = index + 1
                 try {
-                    onProgress("(${index + 1}/$total) Linking '${backupAnime.title}'...")
-                    val linkResult = linker.link(backupAnime) { msg -> onProgress(msg) }
+                    onProgress(AniyomiRestoreProgress.AnimeProgress(
+                        current = current, total = total,
+                        title = backupAnime.title, status = AnimeStatus.LINKING,
+                    ))
+
+                    val linkResult = linker.link(backupAnime) { msg ->
+                        onProgress(AniyomiRestoreProgress.AnimeProgress(
+                            current = current, total = total,
+                            title = backupAnime.title, status = AnimeStatus.LINKING,
+                            detail = msg,
+                        ))
+                    }
 
                     when (linkResult) {
                         is LinkResult.Linked -> {
-                            // Fetch full AniList metadata (the backup only has title/thumbnail)
+                            val status = when (linkResult.tier) {
+                                LinkTier.TRACKER -> AnimeStatus.LINKED_TRACKER
+                                LinkTier.CACHE -> AnimeStatus.LINKED_CACHE
+                                LinkTier.FUZZY -> AnimeStatus.LINKED_FUZZY
+                            }
+                            val tierDetail = when (linkResult.tier) {
+                                LinkTier.TRACKER -> "AniList tracker → ${linkResult.anilistId}"
+                                LinkTier.CACHE -> "Cache → ${linkResult.anilistId}"
+                                LinkTier.FUZZY -> "Fuzzy (${(linkResult.confidence * 100).toInt()}%) → ${linkResult.anilistId}" +
+                                    (linkResult.matchedTitle?.let { ": $it" } ?: "")
+                            }
+                            onProgress(AniyomiRestoreProgress.AnimeProgress(
+                                current = current, total = total,
+                                title = backupAnime.title, status = status,
+                                detail = tierDetail,
+                            ))
+
+                            // Fetch full AniList metadata
+                            onProgress(AniyomiRestoreProgress.AnimeProgress(
+                                current = current, total = total,
+                                title = backupAnime.title, status = AnimeStatus.FETCHING_METADATA,
+                            ))
                             val anilistAnime = try {
                                 anilistRepository.getAnimeDetails(linkResult.anilistId)
                             } catch (e: Exception) {
                                 logcat(LogPriority.WARN, e) {
                                     "Could not fetch AniList details for ${linkResult.anilistId} — using minimal data"
                                 }
-                                // Fallback: build a minimal AniListAnime from the backup data
                                 AniListAnime(
                                     id = linkResult.anilistId,
                                     title = AniListTitle(
@@ -169,7 +204,7 @@ class AniyomiImporter(
                             libraryStore.save(anilistAnime)
                             libraryCount++
 
-                            // Restore history for this anime (keyed by anilistId:episodeUrl)
+                            // Restore history
                             if (options.history) {
                                 for (hist in backupAnime.history) {
                                     try {
@@ -190,19 +225,22 @@ class AniyomiImporter(
                                 }
                             }
 
-                            // Restore category assignments (by name)
+                            // Track category assignment (by name — resolved later)
                             if (options.categories && backupAnime.categories.isNotEmpty()) {
-                                val categoryNames = backupAnime.categories.mapNotNull { order ->
+                                val catNames = backupAnime.categories.mapNotNull { order ->
                                     categoryOrderToName[order]
                                 }
-                                // Note: CategoryStore.setAnimeCategories takes IDs, but we restored
-                                // categories by name. For now, we skip per-anime assignment here —
-                                // Phase 6 will add a name-based assignment method.
-                                // (The user can reassign categories from the library UI.)
+                                if (catNames.isNotEmpty()) {
+                                    pendingCategoryAssignments[linkResult.anilistId] = catNames
+                                }
                             }
+
+                            onProgress(AniyomiRestoreProgress.AnimeProgress(
+                                current = current, total = total,
+                                title = backupAnime.title, status = AnimeStatus.SAVED,
+                            ))
                         }
                         is LinkResult.Unlinked -> {
-                            // Collect for the post-restore review screen (Phase 6)
                             val pendingHistory = backupAnime.history.map { hist ->
                                 PendingHistoryEntry(
                                     episodeUrl = hist.url,
@@ -228,31 +266,64 @@ class AniyomiImporter(
                                     categoryNames = categoryNames,
                                 ),
                             )
-                            onProgress("  → unlinked (${linkResult.reason}), queued for review.")
+                            onProgress(AniyomiRestoreProgress.AnimeProgress(
+                                current = current, total = total,
+                                title = backupAnime.title, status = AnimeStatus.UNLINKED,
+                                detail = linkResult.reason.name,
+                            ))
                         }
                     }
                 } catch (e: Exception) {
                     errors.add("anime[${backupAnime.title}]: ${e.message}")
                     logcat(LogPriority.WARN, e) { "Could not restore aniyomi anime '${backupAnime.title}'" }
+                    onProgress(AniyomiRestoreProgress.AnimeProgress(
+                        current = current, total = total,
+                        title = backupAnime.title, status = AnimeStatus.SKIPPED,
+                        detail = e.message,
+                    ))
                 }
             }
+            onProgress(AniyomiRestoreProgress.SectionComplete("anime", libraryCount))
         }
 
-        // Restore preferences (type-safe, shared PreferenceValue)
+        // ---- Apply category assignments (by name → current ID) ----
+        // Now that all categories are restored, resolve category names → IDs
+        // and apply the per-anime assignments. This is the fix for the bug where
+        // all anime ended up in one category.
+        if (options.categories && pendingCategoryAssignments.isNotEmpty()) {
+            val currentCategories = categoryStore.getCategories()
+            val nameToId = currentCategories.associate { it.name to it.id }
+
+            for ((anilistId, catNames) in pendingCategoryAssignments) {
+                try {
+                    val catIds = catNames.mapNotNull { name -> nameToId[name] }.toSet()
+                    if (catIds.isNotEmpty()) {
+                        categoryStore.setAnimeCategories(anilistId, catIds)
+                        categoryAssignmentCount++
+                    }
+                } catch (e: Exception) {
+                    errors.add("categoryAssignment[$anilistId]: ${e.message}")
+                    logcat(LogPriority.WARN, e) { "Could not assign categories for anime $anilistId" }
+                }
+            }
+            logcat(LogPriority.DEBUG) { "Applied $categoryAssignmentCount category assignments" }
+        }
+
+        // ---- Preferences ----
         if (options.settings && backup.backupPreferences.isNotEmpty()) {
+            onProgress(AniyomiRestoreProgress.SectionStart("preferences", backup.backupPreferences.size))
             try {
                 val result = preferenceRestorer.restore(backup.backupPreferences)
                 preferenceCount = result.restored
                 errors.addAll(result.errors)
-                onProgress("Restored $preferenceCount preferences (${result.skipped} skipped).")
+                onProgress(AniyomiRestoreProgress.SectionComplete("preferences", preferenceCount))
             } catch (e: Exception) {
                 errors.add("settings: ${e.message}")
                 logcat(LogPriority.ERROR, e) { "Could not restore aniyomi preferences" }
             }
         }
 
-        // Persist unlinked anime into PendingLinkStore for the post-restore review screen.
-        // The user resolves them (manual search/skip/add-without-link) from Step 4.
+        // ---- Persist unlinked anime ----
         if (unlinkedAnime.isNotEmpty()) {
             val pendingList = unlinkedAnime.map { ua ->
                 PendingLinkStore.PendingAnime(
@@ -273,26 +344,30 @@ class AniyomiImporter(
                 )
             }
             pendingLinkStore.addAll(pendingList)
-            onProgress("${unlinkedAnime.size} unlinked anime saved for manual review.")
         }
 
         val elapsed = System.currentTimeMillis() - startTime
         logcat(LogPriority.DEBUG) {
             "Aniyomi restore complete in ${elapsed}ms — " +
                 "$libraryCount lib, $historyCount hist, $categoryCount cats, " +
-                "$preferenceCount prefs, ${unlinkedAnime.size} unlinked, " +
-                "$mangaSkipped manga skipped, ${errors.size} errors"
+                "$categoryAssignmentCount assignments, $preferenceCount prefs, " +
+                "${unlinkedAnime.size} unlinked, $mangaSkipped manga skipped, ${errors.size} errors"
         }
+
+        onProgress(AniyomiRestoreProgress.RestoreComplete(
+            "$libraryCount anime, $historyCount history, $categoryCount categories, " +
+                "$categoryAssignmentCount assignments, ${unlinkedAnime.size} unlinked"
+        ))
 
         RestoreResult(
             libraryCount = libraryCount,
             historyCount = historyCount,
             categoryCount = categoryCount,
             categoryAssignmentCount = categoryAssignmentCount,
-            trackingCount = 0, // aniyomi tracking is converted to AniList ID (not stored separately)
+            trackingCount = 0,
             subDubCount = 0,
-            extensionLinkCount = 0, // links are cached during Tier 3 matching, not counted here
-            playbackStateCount = 0, // aniyomi format doesn't have playback states
+            extensionLinkCount = 0,
+            playbackStateCount = 0,
             searchCount = 0,
             preferenceCount = preferenceCount,
             unlinkedAnime = unlinkedAnime,

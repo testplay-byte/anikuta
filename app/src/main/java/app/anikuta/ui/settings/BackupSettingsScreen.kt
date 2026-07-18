@@ -308,7 +308,14 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
         when (result) {
             is BackupManager.RestoreResult.Success -> {
                 AlertDialog(
-                    onDismissRequest = { restoreResult = null },
+                    onDismissRequest = {
+                        restoreResult = null
+                        // Auto-navigate to review screen if there are unlinked anime
+                        if (result.unlinkedCount > 0) {
+                            pendingCountState = pendingLinkStore.pendingCount()
+                            showReviewScreen = true
+                        }
+                    },
                     title = { Text("Restore complete") },
                     text = {
                         buildString {
@@ -316,10 +323,25 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                             append("✓ History: ${result.historyCount} entries\n")
                             append("✓ Searches: ${result.searchCount} terms\n")
                             append("✓ Categories: ${result.categoryCount}")
-                            result.note?.let { append("\n\n⚠ $it") }
+                            if (result.unlinkedCount > 0) {
+                                append("\n\n⚠ ${result.unlinkedCount} anime could not be auto-linked to AniList.")
+                                append(" You'll be taken to the review screen to resolve them.")
+                            }
+                            result.note?.let { append("\n\n$it") }
                         }.let { Text(it) }
                     },
-                    confirmButton = { TextButton(onClick = { restoreResult = null }) { Text("OK") } },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            restoreResult = null
+                            // Auto-navigate to review screen if there are unlinked anime
+                            if (result.unlinkedCount > 0) {
+                                pendingCountState = pendingLinkStore.pendingCount()
+                                showReviewScreen = true
+                            }
+                        }) {
+                            Text(if (result.unlinkedCount > 0) "Review unlinked" else "OK")
+                        }
+                    },
                 )
             }
             is BackupManager.RestoreResult.Error -> {
