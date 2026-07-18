@@ -1,8 +1,5 @@
-@file:JvmName("PreferenceValue")
-
 package app.anikuta.backup.model
 
-import app.anikuta.core.preference.Preference
 import app.anikuta.core.preference.PreferenceStore
 import kotlinx.serialization.Serializable
 
