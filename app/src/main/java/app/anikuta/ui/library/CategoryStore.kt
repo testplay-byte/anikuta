@@ -126,7 +126,7 @@ class CategoryStore(
     )
 
     /** Restore a category from backup (used by BackupManager). */
-    fun restoreCategory(category: app.anikuta.backup.BackupCategory) {
+    fun restoreCategory(category: app.anikuta.backup.format.anikuta.BackupCategory) {
         val cats = categoriesPref.get().toMutableList()
         // Replace if exists, else add
         val existing = cats.indexOfFirst { it.id == category.id }

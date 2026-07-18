@@ -1,5 +1,6 @@
-package app.anikuta.backup
+package app.anikuta.backup.format.anikuta
 
+import app.anikuta.backup.model.BackupPreference
 import kotlinx.serialization.Serializable
 
 /**
@@ -9,18 +10,29 @@ import kotlinx.serialization.Serializable
  *  - Library (saved anime)
  *  - History (watch progress)
  *  - Recent searches
- *  - Categories
- *  - Settings (preference key→value map)
+ *  - Categories + assignments
+ *  - Settings (typed preferences — see [BackupPreference] / [PreferenceValue])
  *  - Release tracking state
  *  - Sub/dub cache
  *  - Extension links
  *  - Playback state (server/quality memory)
  *
  * Version history:
- *  - 1: Initial format (2026-07-16)
+ *  - 1: Initial format (2026-07-16). Settings stored as `Map<String,String>`
+ *    via `.toString()` — lossy (no type info, Set<String> not round-trippable).
+ *    Settings were collected but NEVER restored (Bug #1).
+ *  - 2: (2026-07-18) Settings migrated to `List<BackupPreference>` with typed
+ *    [PreferenceValue]. Type-safe, round-trippable, aniyomi-wire-compatible.
+ *    Restore now actually writes settings back (Bug #1 fixed).
+ *    Also: category assignments now restored (Bug #2), playback states now
+ *    restored (Bug #3), extension-link key split fixed (Bug #4),
+ *    sub/dub lastUpdated preserved (Bug #5).
  *
- * Future-proof: adding new fields with defaults is backward-compatible.
- * Removing or renaming fields requires a version bump + migration logic.
+ * Backward compat: v1 files still decode (the old `settings` field is ignored
+ * since `ignoreUnknownKeys=true` in the Json config; v1 settings are lost on
+ * restore, which is acceptable since v1 never restored them anyway).
+ *
+ * Forward compat: adding new fields with defaults is backward-compatible.
  */
 @Serializable
 data class AnikutaBackup(
@@ -31,14 +43,14 @@ data class AnikutaBackup(
     val history: List<BackupHistoryEntry> = emptyList(),
     val recentSearches: List<String> = emptyList(),
     val categories: BackupCategories = BackupCategories(),
-    val settings: Map<String, String> = emptyMap(),
+    val settings: List<BackupPreference> = emptyList(),
     val releaseTracking: List<BackupTrackedAnime> = emptyList(),
     val subDubCache: Map<String, BackupSubDubInfo> = emptyMap(),
     val extensionLinks: Map<String, Int> = emptyMap(),
     val playbackStates: Map<String, BackupPlaybackState> = emptyMap(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 1
+        const val CURRENT_VERSION = 2
         /** Magic header for format detection (first 8 bytes of the file). */
         const val MAGIC = "ANIKUTA1"
     }
