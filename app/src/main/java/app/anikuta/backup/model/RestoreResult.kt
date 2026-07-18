@@ -88,7 +88,7 @@ data class UnlinkedAnime(
     val animeUrl: String,
     val title: String,
     val thumbnailUrl: String? = null,
-    val reason: UnlinkReason = UnlinkReason.NO_MATCH,
+    val reason: UnlinkReason = UnlinkReason.NO_TRACKER,
     val pendingHistory: List<PendingHistoryEntry> = emptyList(),
     val categoryNames: List<String> = emptyList(),
 )
