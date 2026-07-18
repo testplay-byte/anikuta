@@ -24,6 +24,8 @@ import app.anikuta.notification.SubDubResolver
 import app.anikuta.notification.ReleaseTracker
 import app.anikuta.notification.NotificationDispatcher
 import app.anikuta.backup.BackupManager
+import app.anikuta.backup.prefs.PreferenceCollector
+import app.anikuta.backup.prefs.PreferenceRestorer
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
@@ -274,5 +276,9 @@ class AppModule(val app: Application) : InjektModule {
                 playbackStateStore = get(),
             )
         }
+
+        // Backup: preference collector + restorer (shared by both formats)
+        addSingletonFactory { PreferenceCollector(get<PreferenceStore>()) }
+        addSingletonFactory { PreferenceRestorer(get<PreferenceStore>()) }
     }
 }

@@ -1,7 +1,8 @@
 # ANI-KUTA — Backup & Restore Plan
 
-> **Status:** DRAFT — awaiting user confirmation before implementation.
+> **Status:** IN PROGRESS — user decisions confirmed (2026-07-18). Implementation underway.
 > **Branch:** `feature/backup-restore` (created from `main` @ `751df01`).
+> **PR:** #9 (draft) — https://github.com/testplay-byte/anikuta/pull/9
 > **Author:** Main agent (analysis from Tasks 2-a/2-b/2-c/2-d, see `/home/z/my-project/worklog.md`).
 > **Last updated:** 2026-07-18.
 >
@@ -223,28 +224,58 @@ UnlinkReason = NO_TRACKER | NO_CACHE_MATCH | FUZZY_NO_MATCH | FUZZY_AMBIGUOUS
 
 ---
 
-## 6. How unlinked anime are handled — **needs your decision**
+## 6. How unlinked anime are handled (DECIDED)
 
-When an aniyomi backup contains anime that can't be auto-linked to AniList (all 4 tiers fail), we have three options. I recommend **Option B**, but this is your call.
+**User decision (2026-07-18):** Unlinked anime are **never skipped**. The restore flow is a multi-step guided process:
 
-### Option A — Skip with report (simplest)
-Unlinked anime are **not imported**. The restore summary shows "N anime skipped — couldn't link to AniList. Install matching extensions or link manually, then restore again."
-- **Pro:** No new architecture. Anikuta stays purely AniList-first.
-- **Con:** User loses those anime from the backup. Must re-restore after fixing extensions.
+### 6.1 The restore flow (4 steps)
 
-### Option B — Import as source-based "pending link" entries (recommended)
-Unlinked anime are imported into a **new lightweight store** (`PendingLinkStore`) keyed by `(sourceId, animeUrl)`, holding title + thumbnail + source name. They appear in the library with a "🔗 Link to AniList" badge. Tapping the badge opens `SourceLinkingScreen` (existing flow). History/watch-progress is preserved keyed by `(sourceId, episodeUrl)` until linked, then migrated to the anilistId key.
-- **Pro:** No data loss. User can link at their own pace. Mirrors aniyomi's stub-source philosophy, adapted to anikuta's AniList-first model.
-- **Con:** Adds a new store + a new library section + migration logic when a link is confirmed. More code.
+```
+Step 1: DECODE
+  User selects a backup file (from Settings → Backup, or future onboarding hook)
+    → BackupValidator.peekBackup(uri) runs (decode only, no writes)
+    → loading/processing screen shown immediately
 
-### Option C — Import as AniList-stub with synthetic ID
-Unlinked anime get a synthetic negative anilistId (e.g. `-sourceId * 1000000 - hash(url)`), imported into `LibraryStore` as a minimal AniListAnime (title + thumbnail only, no real AniList metadata). They show in the library but metadata/notifications/tracking don't work until manually re-linked (which replaces the synthetic ID with the real one).
-- **Pro:** No new store — reuses LibraryStore. UI unchanged.
-- **Con:** Synthetic IDs are hacky. AniList-dependent code (notifications, tracking) must handle "fake" IDs. Risk of ID collisions. Ugly.
+Step 2: SUMMARY (user reviews + confirms)
+  RestorePreviewDialog shows:
+    - Format (anikuta / aniyomi), created date, app version
+    - Content counts (anime, history, categories, tracking, prefs, etc.)
+    - Warnings (missing sources, anime that will need manual linking)
+    - Restore options (checkboxes: library / history / categories / tracking / settings)
+    - [Cancel]  [Restore]
+  User reviews, toggles options, taps Restore to proceed.
 
-**My recommendation: Option B.** It's the most correct architecturally and gives the best UX, even though it's more code. But if you want to ship faster, Option A is a reasonable v1 (we can always add Option B later).
+Step 3: RESTORE (live progress, read-only)
+  Restore runs with a live progress screen showing:
+    - Overall progress bar (X / N anime processed)
+    - Live log of what's happening ("Linking 'Frieren' → AniList: 154587 ✓")
+    - Live errors/issues shown as they occur (read-only — user can't fix during restore)
+    - Fuzzy matches logged as they happen ("Matched 'One Piece' → AniList: 21 (95% confidence)")
+  User can cancel (aborts gracefully).
 
-➡️ **Please tell me A, B, or C before I start Phase 4 (aniyomi restore).**
+Step 4: REVIEW (post-restore, interactive)
+  After restore completes, a review screen shows:
+    - Summary of what was restored (per-section counts)
+    - List of errors encountered
+    - List of UNLINKED anime (couldn't auto-link to AniList)
+  For each unlinked anime, the user can:
+    (a) Manually search AniList → pick the right match → link it
+    (b) Skip it (anime not added to library; its history is preserved keyed by source-url pending future link)
+    (c) Add it to the library WITHOUT linking (appears as a source-based entry; AniList features disabled until linked later from the detail page)
+  User resolves each unlinked anime (or defers — they can come back later via a "Pending Links" section).
+```
+
+### 6.2 Implementation
+- **`PendingLinkStore`** (new, SharedPreferences-backed) — holds unlinked anime metadata (source, url, title, thumbnail) + their orphaned history (keyed by `"$sourceId:$episodeUrl"` until linked).
+- **`UnlinkedAnimeResolver`** — coordinates the post-restore review: for each pending anime, offers manual AniList search (via `AniListRepository.searchAnime`) + link, or skip, or add-without-link.
+- When a pending anime is later linked (either during review or from the detail page), `PendingLinkStore.migrateToLibrary(anilistId)` moves its data to the normal stores (`LibraryStore`, `WatchProgressStore` keyed by anilistId).
+- Categories are handled during Step 3 (restored by name; assignments applied to linked anime; pending anime get assignment metadata preserved for when they're linked).
+
+### 6.3 Why this approach
+- **No data loss** — every anime in the backup ends up either linked, pending, or explicitly skipped by the user.
+- **Transparency** — the user sees exactly what matched, what didn't, and why.
+- **User control** — the user decides the fate of each unlinked anime, not an algorithm.
+- **Deferrable** — unlinked anime can be resolved later, not just during the restore session.
 
 ---
 
@@ -373,14 +404,14 @@ Per `WORKING-RULES.md §D-bis`: create PR immediately after Phase 1, push each p
 
 | Phase | What | Files | CI? |
 |-------|------|-------|-----|
-| **0** | Plan doc (this file) + create branch + open draft PR | `DOCS/PLAN/BACKUP-RESTORE-PLAN.md` | No (doc only) |
-| **1** | Shared `PreferenceValue` + `PreferenceCollector` + `PreferenceRestorer` + modular package skeleton (empty facades that delegate to existing `BackupManager`) | `backup/model/`, `backup/prefs/` | **Yes — must compile** |
+| **0** | Plan doc (this file) + create branch + open draft PR | `DOCS/PLAN/BACKUP-RESTORE-PLAN.md` | No (doc only) — ✅ done |
+| **1** | Shared `PreferenceValue` + `PreferenceCollector` + `PreferenceRestorer` + modular package skeleton (BackupManager still works, delegates added incrementally) | `backup/model/`, `backup/prefs/` | **Yes** |
 | **2** | Fix anikuta-restore bugs #1/#2/#3 + minor bugs. Migrate `AnikutaBackup.settings` to typed `List<BackupPreference>` (v2). Refactor `BackupManager` to delegate to `AnikutaCollector`/`AnikutaRestorer` | `backup/format/anikuta/` | **Yes** |
-| **3** | Add `BackupValidator` + `BackupSummary` + `RestorePreviewDialog` + `RestoreOptionsSheet`. Wire into `BackupSettingsScreen` | `backup/validator/`, `ui/settings/` | **Yes** |
-| **4** | Rewrite `AniyomiBackupModels.kt` (modern proto schema) + `AniyomiCodec.kt` (gzip+protobuf + legacy decode). Rewrite `AniyomiExporter.kt` (emit tracking, populate sources) | `backup/format/aniyomi/` | **Yes** |
-| **5** | Implement `AniListLinker.kt` (4-tier) + `AniyomiImporter.kt` (real restore with linking + unlinked handling per your §6 decision) | `backup/link/`, `backup/format/aniyomi/AniyomiImporter.kt` | **Yes** |
-| **6** | Unlinked-anime handling per your decision (Option A = nothing extra; B = `PendingLinkStore` + library badge; C = synthetic IDs) | varies | **Yes** |
-| **7** | Polish: error log (`anikuta_restore_error.txt`), progress notification, docs update (`TECHNICAL-OVERVIEW.md`, `CURRENT-STATE.md`), dead-code cleanup (`domain/backup/service/`) | various | **Yes** |
+| **3** | Add `BackupValidator` + `BackupSummary` + `RestorePreviewDialog` + `RestoreOptionsSheet`. Wire into `BackupSettingsScreen` (Steps 1-2 of the restore flow) | `backup/validator/`, `ui/settings/` | **Yes** |
+| **4** | Rewrite `AniyomiBackupModels.kt` (modern proto schema 500-506) + `LegacyBackup` + `AniyomiCodec.kt` (gzip+protobuf + legacy decode). Rewrite `AniyomiExporter.kt` (emit tracking, populate sources, `.tachibk` extension) | `backup/format/aniyomi/` | **Yes** |
+| **5** | Implement `AniListLinker.kt` (4-tier) + `AniyomiImporter.kt` (real restore with linking + fuzzy-match summary logging) | `backup/link/`, `backup/format/aniyomi/AniyomiImporter.kt` | **Yes** |
+| **6** | `PendingLinkStore` + multi-step restore UI (Step 3 live-progress screen + Step 4 review screen) + `UnlinkedAnimeResolver` (manual search/link/skip/add-without-link) | `data/cache/PendingLinkStore.kt`, `ui/settings/restore/` | **Yes** |
+| **7** | Auto-backup: `BackupAutoJob` (WorkManager periodic) + `AutoBackupPreferences` (frequency + retention count) + auto-backup settings UI + old-backup pruning. Plus: error log (`anikuta_restore_error.txt`), progress notification, docs update (`TECHNICAL-OVERVIEW.md`, `CURRENT-STATE.md`), dead-code cleanup (`domain/backup/service/`) | various | **Yes** |
 
 **Each phase = one commit (or a few) pushed to `feature/backup-restore`, PR stays open, CI runs on each push.** I report back after each phase with CI status. You test the APK on-device before I merge anything.
 
@@ -445,23 +476,19 @@ Per `WORKING-RULES.md §D-bis`: create PR immediately after Phase 1, push each p
 
 ---
 
-## 13. Open questions for you (please answer before I implement)
+## 13. Decisions (confirmed by user, 2026-07-18)
 
-These are the decisions I need from you. I'll wait for your answers before starting Phase 1.
+All open questions have been answered. Implementation proceeds with these decisions:
 
-1. **Unlinked-anime handling (§6):** Option A (skip), B (pending-link store — recommended), or C (synthetic IDs)?
-
-2. **Aniyomi-format restore scope:** Do you want full aniyomi-format restore (Phases 4-6, ~3-4 days), or is aniyomi-format CREATE-only (export for aniyomi users) + anikuta-format restore enough for v1? (You said "restore in both formats" — so I'm assuming full — but confirming.)
-
-3. **Fuzzy title match during restore (Tier 3):** Should it run automatically (best-effort, may link wrong), or prompt the user for each ambiguous match? Auto is faster but can mis-link; prompt is safer but tedious for large backups. (My recommendation: auto-link with confidence threshold ≥ 0.9, else queue for manual.)
-
-4. **Auto-backup:** The existing `BackupPreferences.backupInterval()` (dead code) suggests aniyomi-style auto-backup was planned. Do you want me to wire it up in this feature (Phase 7+), or defer to a separate task?
-
-5. **Backup file extension for aniyomi format:** Keep `.json.gz` (current UI label) or switch to `.tachibk` (aniyomi convention, better for file-association)? (My recommendation: `.tachibk` for aniyomi format, `.anikuta` for anikuta format — clear distinction.)
-
-6. **Should the backup include the list of "downloaded episodes" (metadata, not files)?** Currently there's no persistent index of completed downloads (they're auto-removed from the queue after 20s; truth is on filesystem). To back up "which episodes were downloaded", I'd either (a) scan the filesystem at backup time, or (b) add a new persistent index. Do you want this in v1, or defer? (My recommendation: defer to a follow-up — get the core backup/restore solid first.)
-
-7. **Anything else?** Are there specific behaviors or UI details you want that I haven't covered?
+| # | Question | Decision |
+|---|----------|----------|
+| 1 | Unlinked-anime handling | **Never skip.** 4-step guided restore flow (decode → summary → restore-progress → review). Unlinked anime get a post-restore review screen with manual search/link/skip/add-without-link options. See §6. |
+| 2 | Aniyomi-format restore scope | **Full restore.** Real implementation with 4-tier AniList linking. Things that can't be restored due to format differences are managed gracefully or skipped (documented). Manga data is skipped (anikuta is anime-only). |
+| 3 | Fuzzy title match | **Auto-match**, then show a summary of what matched and how (confidence + matched title) so the user can understand and verify. No per-match prompting during restore (would be tedious for large backups); user reviews in Step 4. |
+| 4 | Auto-backup | **Yes — wire up.** User selects frequency (interval) + configures max number of backups to keep (older ones auto-deleted). Added as Phase 7. |
+| 5 | File extension (aniyomi format) | **`.tachibk`** (aniyomi convention). Anikuta format stays `.anikuta`. |
+| 6 | Downloaded-episodes index | **Not added.** The app handles downloaded-episode state via filesystem scan (`DownloadProvider.listDownloadedEpisodesWithUrls`) — no need to persist an index in the backup. |
+| 7 | Other | Modular architecture, separate folders/modules, proper logging (logcat) throughout, thorough documentation. |
 
 ---
 
