@@ -2516,3 +2516,85 @@ This branch (`feature/dev`) is now ready for merge to `main`:
 - Debug logging removed
 - External dependency removed (swipe library)
 - Each file has comprehensive KDoc documenting purpose, design decisions, and usage
+
+---
+
+## Session 18 — Four UX refinements (based on user testing of build #473)
+
+**Date:** July 18, 2026 (PT)
+
+### User Feedback (from build #473 testing)
+
+1. **Long-press sheet has a white pull bar** — the ModalBottomSheet's default drag handle (the white horizontal bar at the top) should be removed.
+2. **Watched episodes don't blur** — grayscale works, but there's no blur effect.
+3. **No configurability** — user wants to choose between: grayscale only, blur only, both, or none.
+4. **Swipe fires too early** — the action triggers the moment the swipe crosses the threshold, even before the user releases. It should only fire on finger release.
+
+### Fixes Implemented
+
+#### 1. Remove drag handle (EpisodeOptionsSheet.kt)
+Added `dragHandle = null` to the `ModalBottomSheet` call. This removes the default white pull bar at the top of the sheet.
+
+#### 2+3. Configurable watched episode appearance (Grayscale.kt + PlayerPreferences + DisplaySettingsScreen)
+
+**New enum** `WatchedEpisodeAppearance` with 4 modes: `NONE`, `GRAYSCALE`, `BLUR`, `BOTH`.
+
+**New modifier** `Modifier.watchedEpisodeEffect()`:
+- Grayscale: `RenderEffect.createColorFilterEffect` (GPU level, Android 12+)
+- Blur: `Modifier.blur()` (uses RenderEffect internally on Android 12+)
+- Both can be combined; neither fires on `NONE`
+
+**New preferences** in `PlayerPreferences`:
+- `watchedEpisodeAppearance()` — String: "none"/"grayscale"/"blur"/"both" (default: "grayscale")
+- `watchedEpisodeBlurRadius()` — Float: 0.5–8 (default: 2)
+- `watchedEpisodeAlpha()` — Float: 0.2–1.0 (default: 0.55)
+
+**New settings UI** in `DisplaySettingsScreen` → "Watched episode appearance" section:
+- `SelectableOptionCard` with 4 options (None/Grayscale/Blur/Both)
+- Conditional blur slider (shown only when blur is enabled)
+- Conditional dim slider (shown only when grayscale is enabled)
+
+**New component** `SliderSettingsRow` in `SettingsComponents.kt` — a reusable slider row with icon, title, subtitle, formatted value display, and a Material3 `Slider`.
+
+**DetailScreen.kt** updated to collect the 3 new preferences and pass them to both `EpisodeRow` call sites (full_page mode + below mode).
+
+#### 4. Swipe fires on RELEASE, not mid-drag (EpisodeRow.kt)
+
+**Before:** The action fired inside the `onDrag` lambda the moment `swipeOffset` crossed the threshold — even if the user was still dragging.
+
+**After:** The action fires in `onDragEnd` (finger release) only if the final offset is past the threshold:
+- `finalOffset > watchedThresholdPx` → `onSwipeRight()`
+- `finalOffset < -downloadThresholdPx` → `onSwipeLeft()`
+
+**Mid-drag haptic feedback** (no action trigger): A single haptic pulse fires when the user crosses the threshold for the first time in the gesture. This gives feedback that "you've swiped far enough" without firing the action prematurely. Two flags (`crossedWatchedThreshold`, `crossedDownloadThreshold`) ensure the haptic fires only once per gesture per direction.
+
+### CI Verification
+
+- Pushed commit `40b8553` to `feature/dev`
+- Run #475 (push event): ✅ SUCCESS — APK 40.0 MB uploaded
+- Run #476 (PR event): ✅ SUCCESS
+- Artifact: `anikuta-debug-arm64-v8a` (40.0 MB)
+
+### Files Changed (8)
+
+| File | Change |
+|------|--------|
+| `EpisodeOptionsSheet.kt` | `dragHandle = null` |
+| `Grayscale.kt` | New `WatchedEpisodeAppearance` enum + `watchedEpisodeEffect()` modifier |
+| `EpisodeRow.kt` | Swipe fires on release; accepts appearance/alpha/blur params |
+| `PlayerPreferences.kt` | 3 new preferences (appearance, blurRadius, alpha) |
+| `DetailScreen.kt` | Collect new prefs, pass to EpisodeRow |
+| `DisplaySettingsScreen.kt` | New "Watched episode appearance" settings section |
+| `SettingsComponents.kt` | New `SliderSettingsRow` component |
+| `.gitignore` | Added `.kotlin/` |
+
+### Environment Cleanup
+
+Removed all local build tools that were wrongly installed during a previous compilation attempt:
+- `~/android-sdk` — deleted
+- `~/jdk-21.0.11` — deleted
+- `~/.gradle` — deleted
+- `~/.local/share/kotlin` — deleted
+- `local.properties` — deleted
+
+**Rule reinforced:** Never install Android SDK or build APKs locally. All builds go through GitHub Actions.
