@@ -311,43 +311,43 @@ class BackupManager(
     }
 
     // =========================================================================
-    // Aniyomi format restore (Phase 5 will implement real restore with
-    // AniList linking via AniListLinker + AniyomiImporter)
+    // Aniyomi format restore (Phase 5: real restore with AniList linking)
     // =========================================================================
+
+    /** Lazily-initialized aniyomi importer. Uses Injekt for its deps. */
+    private val aniyomiImporter: app.anikuta.backup.format.aniyomi.AniyomiImporter by lazy {
+        app.anikuta.backup.format.aniyomi.AniyomiImporter(
+            anilistRepository = Injekt.get(),
+            extensionLinkStore = extensionLinkStore,
+            libraryStore = libraryStore,
+            watchProgressStore = watchProgressStore,
+            playbackStateStore = playbackStateStore,
+            categoryStore = categoryStore,
+            preferenceRestorer = Injekt.get(),
+        )
+    }
 
     private suspend fun restoreAniyomiBackup(
         backup: app.anikuta.backup.format.aniyomi.AniyomiBackup,
     ): RestoreResult {
-        // Phase 5 will replace this with AniyomiImporter (real restore + 4-tier
-        // AniList linking + unlinked-anime handling).
-        //
-        // For now: parse + count what we found, but write nothing. This is
-        // honest (the note says "not yet implemented") rather than the old
-        // stub which claimed "anime restored" but did nothing.
-        var libraryCount = 0
-        var historyCount = 0
-        var mangaSkipped = 0
-
-        for (anime in backup.backupAnime) {
-            libraryCount++
-            historyCount += anime.history.size
+        val result = aniyomiImporter.restore(backup, RestoreOptions.ALL) { msg ->
+            logcat(LogPriority.DEBUG) { "Aniyomi restore: $msg" }
         }
-        mangaSkipped = backup.backupManga.size
-
-        val note = buildString {
-            append("Aniyomi-format restore is not yet fully implemented (Phase 5). ")
-            append("Found $libraryCount anime, $historyCount history entries, $mangaSkipped manga (skipped). ")
-            append("No data was written — Phase 5 will add AniList linking + real restore.")
-        }
-
-        logcat(LogPriority.WARN) { "Aniyomi restore (stub): $note" }
-
         return RestoreResult.Success(
-            libraryCount = 0, // honestly 0 until Phase 5 implements real restore
-            historyCount = 0,
-            searchCount = 0,
-            categoryCount = 0,
-            note = note,
+            libraryCount = result.libraryCount,
+            historyCount = result.historyCount,
+            searchCount = result.searchCount,
+            categoryCount = result.categoryCount,
+            note = buildString {
+                if (result.unlinkedAnime.isNotEmpty()) {
+                    append("${result.unlinkedAnime.size} anime could not be auto-linked to AniList. ")
+                    append("They will be available for manual linking in the review screen. ")
+                }
+                if (result.errors.isNotEmpty()) {
+                    append("${result.errors.size} errors (see logcat: tag AniyomiImporter). ")
+                }
+                result.note?.let { append(it) }
+            }.ifBlank { null },
         )
     }
 
