@@ -8,6 +8,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -17,9 +18,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import app.anikuta.navigation.AnikutaNavGraph
 import app.anikuta.onboarding.OnboardingScreen
 import app.anikuta.ui.theme.AnikutaTheme
+import app.anikuta.ui.theme.DarkBackground
+import app.anikuta.ui.theme.Background
 import kotlinx.coroutines.launch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -27,7 +31,19 @@ import uy.kohesive.injekt.api.get
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        // Enable edge-to-edge with system bar colors matching our theme.
+        // The default (before this fix) used the system's dark #1D1B20 which
+        // clashed with our lime theme. Now the status/nav bar scrims use our
+        // own background color.
+        val isDark = (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val bgArgb = (if (isDark) DarkBackground else Background).value.toInt()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(bgArgb, bgArgb),
+            navigationBarStyle = SystemBarStyle.auto(bgArgb, bgArgb),
+        )
 
         // Handle AniList OAuth callback (Phase 6 task 6.7)
         handleOAuthCallback(intent)

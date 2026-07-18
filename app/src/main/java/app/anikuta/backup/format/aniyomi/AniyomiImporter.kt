@@ -176,33 +176,44 @@ class AniyomiImporter(
                                 detail = tierDetail,
                             ))
 
-                            // Fetch full AniList metadata
-                            onProgress(AniyomiRestoreProgress.AnimeProgress(
-                                current = current, total = total,
-                                title = backupAnime.title, status = AnimeStatus.FETCHING_METADATA,
-                            ))
-                            val anilistAnime = try {
-                                anilistRepository.getAnimeDetails(linkResult.anilistId)
-                            } catch (e: Exception) {
-                                logcat(LogPriority.WARN, e) {
-                                    "Could not fetch AniList details for ${linkResult.anilistId} — using minimal data"
+                            // Only save to library if the anime is a FAVORITE in the backup.
+                            // Aniyomi backups include non-favorite anime (watched but not in
+                            // library) as history carriers — we restore their history but
+                            // don't add them to the library (fixes the "77 restored from 28" bug).
+                            val isFavorite = backupAnime.favorite
+                            if (isFavorite) {
+                                // Fetch full AniList metadata
+                                onProgress(AniyomiRestoreProgress.AnimeProgress(
+                                    current = current, total = total,
+                                    title = backupAnime.title, status = AnimeStatus.FETCHING_METADATA,
+                                ))
+                                val anilistAnime = try {
+                                    anilistRepository.getAnimeDetails(linkResult.anilistId)
+                                } catch (e: Exception) {
+                                    logcat(LogPriority.WARN, e) {
+                                        "Could not fetch AniList details for ${linkResult.anilistId} — using minimal data"
+                                    }
+                                    AniListAnime(
+                                        id = linkResult.anilistId,
+                                        title = AniListTitle(
+                                            english = backupAnime.title.ifBlank { null },
+                                            romaji = backupAnime.title.ifBlank { null },
+                                        ),
+                                        coverImage = AniListCoverImage(
+                                            extraLarge = backupAnime.thumbnailUrl,
+                                            large = backupAnime.thumbnailUrl,
+                                        ),
+                                        description = backupAnime.description,
+                                        genres = backupAnime.genre.ifEmpty { null },
+                                    )
                                 }
-                                AniListAnime(
-                                    id = linkResult.anilistId,
-                                    title = AniListTitle(
-                                        english = backupAnime.title.ifBlank { null },
-                                        romaji = backupAnime.title.ifBlank { null },
-                                    ),
-                                    coverImage = AniListCoverImage(
-                                        extraLarge = backupAnime.thumbnailUrl,
-                                        large = backupAnime.thumbnailUrl,
-                                    ),
-                                    description = backupAnime.description,
-                                    genres = backupAnime.genre.ifEmpty { null },
-                                )
+                                libraryStore.save(anilistAnime)
+                                libraryCount++
+                            } else {
+                                logcat(LogPriority.DEBUG) {
+                                    "Skipping non-favorite anime '${backupAnime.title}' (history-only) — not adding to library"
+                                }
                             }
-                            libraryStore.save(anilistAnime)
-                            libraryCount++
 
                             // Restore history
                             if (options.history) {
@@ -226,7 +237,8 @@ class AniyomiImporter(
                             }
 
                             // Track category assignment (by name — resolved later)
-                            if (options.categories && backupAnime.categories.isNotEmpty()) {
+                            // Only for favorite anime (library members)
+                            if (isFavorite && options.categories && backupAnime.categories.isNotEmpty()) {
                                 val catNames = backupAnime.categories.mapNotNull { order ->
                                     categoryOrderToName[order]
                                 }

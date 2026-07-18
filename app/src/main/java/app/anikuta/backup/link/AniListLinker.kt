@@ -65,8 +65,8 @@ class AniListLinker(
         private const val SYNC_ID_ANILIST = 2
         /** Minimum fuzzy-match confidence to auto-link (0..1). */
         private const val FUZZY_THRESHOLD = 0.85
-        /** Timeout for AniList search (per anime) — don't let one slow query block restore. */
-        private const val SEARCH_TIMEOUT_MS = 15_000L
+        /** Timeout for AniList search (per anime) — 30s to allow multiple search strategies. */
+        private const val SEARCH_TIMEOUT_MS = 30_000L
     }
 
     /**
@@ -140,6 +140,11 @@ class AniListLinker(
     /**
      * Tier 3: search AniList by title and find the best fuzzy match.
      *
+     * Tries multiple search strategies:
+     *  1. Regular search with the full title.
+     *  2. Adult search (if regular returns no results).
+     *  3. Title with leading articles stripped ("A ", "The ").
+     *
      * @return Triple(anilistId, confidence, matchedTitle) or null if no results.
      */
     private suspend fun fuzzyMatch(
@@ -149,12 +154,43 @@ class AniListLinker(
         val query = backupAnime.title.ifBlank { return null }
         return try {
             withTimeoutOrNull(SEARCH_TIMEOUT_MS) {
-                val results = try {
+                // Strategy 1: regular search
+                var results = try {
                     anilistRepository.searchAnime(query, page = 1, perPage = 10)
                 } catch (e: Exception) {
-                    logcat(LogPriority.WARN, e) { "Tier 3 search failed for '$query'" }
+                    logcat(LogPriority.WARN, e) { "Tier 3 regular search failed for '$query'" }
                     emptyList()
                 }
+
+                // Strategy 2: adult search if no results
+                if (results.isEmpty()) {
+                    results = try {
+                        anilistRepository.searchAnimeWithAdult(query, page = 1, perPage = 10)
+                    } catch (e: Exception) {
+                        logcat(LogPriority.WARN, e) { "Tier 3 adult search failed for '$query'" }
+                        emptyList()
+                    }
+                }
+
+                // Strategy 3: strip leading articles ("A ", "The ") and retry
+                if (results.isEmpty()) {
+                    val stripped = query.replace(Regex("^(A|The)\\s+", RegexOption.IGNORE_CASE), "")
+                    if (stripped != query && stripped.isNotBlank()) {
+                        results = try {
+                            anilistRepository.searchAnime(stripped, page = 1, perPage = 10)
+                        } catch (e: Exception) {
+                            emptyList()
+                        }
+                        if (results.isEmpty()) {
+                            results = try {
+                                anilistRepository.searchAnimeWithAdult(stripped, page = 1, perPage = 10)
+                            } catch (e: Exception) {
+                                emptyList()
+                            }
+                        }
+                    }
+                }
+
                 if (results.isEmpty()) return@withTimeoutOrNull null
 
                 // Find the best match by title similarity

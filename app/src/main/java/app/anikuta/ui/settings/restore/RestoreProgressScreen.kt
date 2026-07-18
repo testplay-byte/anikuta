@@ -141,10 +141,8 @@ fun RestoreProgressScreen(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(events) { event ->
-                AnimatedVisibility(visible = true, enter = fadeIn() + slideInVertically()) {
-                    LogEntryCard(event)
-                }
+            items(events, key = { events.indexOf(it) }) { event ->
+                LogEntryCard(event)
             }
         }
 
@@ -207,12 +205,20 @@ private fun HeaderCard(
                 Spacer(Modifier.width(12.dp))
                 Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             }
-            if (!isComplete && !isError && currentMessage != null) {
-                Text(currentMessage, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (isComplete && completeSummary != null) {
-                Text(completeSummary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            // Fixed-height message area to prevent the header from jumping when
+            // the message text changes length. 2 lines max, ellipsized.
+            Text(
+                text = when {
+                    isComplete && completeSummary != null -> completeSummary
+                    !isComplete && !isError && currentMessage != null -> currentMessage
+                    else -> ""
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.height(40.dp), // fixed height prevents jumping
+            )
         }
     }
 }

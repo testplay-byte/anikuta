@@ -151,24 +151,39 @@ class CategoryStore(
         assignmentsPref.set(restored)
     }
 
-    /** Create a new category with the given name. Returns the new category's id. */
+    /** Create a new category with the given name. Returns the new category's id, or -1 if a category with that name already exists. */
     fun createCategory(name: String): Long {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return -1L
         val cats = categoriesPref.get().toMutableList()
+        // Prevent duplicate names (case-insensitive)
+        if (cats.any { it.name.equals(trimmed, ignoreCase = true) }) {
+            Log.w(TAG, "Category '$trimmed' already exists — not creating duplicate")
+            return -1L
+        }
         val nextId = (cats.maxOfOrNull { it.id } ?: 0L) + 1L
         val nextOrder = (cats.maxOfOrNull { it.order } ?: 0) + 1
-        cats.add(Category(nextId, name.trim(), nextOrder))
+        cats.add(Category(nextId, trimmed, nextOrder))
         categoriesPref.set(cats)
-        Log.d(TAG, "Created category: ${name.trim()} (id=$nextId)")
+        Log.d(TAG, "Created category: $trimmed (id=$nextId)")
         return nextId
     }
 
     /** Rename a category. No-op if not found. Can't rename the Default category. */
     fun renameCategory(id: Long, newName: String) {
         if (id == DEFAULT_CATEGORY_ID) return
-        val cats = categoriesPref.get().map { cat ->
-            if (cat.id == id) cat.copy(name = newName.trim()) else cat
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return
+        val cats = categoriesPref.get()
+        // Prevent renaming to a name that already exists (case-insensitive)
+        if (cats.any { it.id != id && it.name.equals(trimmed, ignoreCase = true) }) {
+            Log.w(TAG, "Can't rename to '$trimmed' — another category with that name exists")
+            return
         }
-        categoriesPref.set(cats)
+        val updated = cats.map { cat ->
+            if (cat.id == id) cat.copy(name = trimmed) else cat
+        }
+        categoriesPref.set(updated)
     }
 
     /** Delete a category. Removes it + clears its assignments. Can't delete Default. */
