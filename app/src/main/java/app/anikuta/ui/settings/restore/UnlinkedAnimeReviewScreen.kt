@@ -257,9 +257,67 @@ fun UnlinkedAnimeReviewScreen(
                                 }
                             }
                         },
-                        onLink = {
+                        onLink = { anilistId ->
                             scope.launch {
                                 withContext(Dispatchers.IO) {
+                                    // 1. Fetch full AniList metadata for the linked anime
+                                    val linkedAnime = try {
+                                        anilistRepository.getAnimeDetails(anilistId)
+                                    } catch (e: Exception) {
+                                        // Fallback: build minimal anime from search result
+                                        val searchResult = searchResults.find { it.id == anilistId }
+                                        searchResult ?: return@withContext
+                                    }
+
+                                    // 2. Save to library
+                                    val libraryStore = uy.kohesive.injekt.Injekt.get<app.anikuta.ui.library.LibraryStore>()
+                                    libraryStore.save(linkedAnime)
+
+                                    // 3. Assign to categories (from the backup's category names)
+                                    if (anime.categoryNames.isNotEmpty()) {
+                                        val catStore = uy.kohesive.injekt.Injekt.get<app.anikuta.ui.library.CategoryStore>()
+                                        val allCats = catStore.getCategories()
+                                        val nameToId = allCats.associate { it.name.lowercase().trim() to it.id }
+                                        val catIds = anime.categoryNames.mapNotNull { name ->
+                                            nameToId[name.lowercase().trim()]
+                                        }.toSet()
+                                        if (catIds.isNotEmpty()) {
+                                            catStore.setAnimeCategories(anilistId, catIds)
+                                        }
+                                    }
+
+                                    // 4. Restore pending history
+                                    val watchProgressStore = uy.kohesive.injekt.Injekt.get<app.anikuta.player.WatchProgressStore>()
+                                    for (hist in anime.pendingHistory) {
+                                        try {
+                                            watchProgressStore.save(
+                                                anilistId = anilistId,
+                                                episodeUrl = hist.episodeUrl,
+                                                positionSeconds = hist.positionSeconds,
+                                                durationSeconds = hist.durationSeconds,
+                                                title = anime.title,
+                                                coverUrl = anime.thumbnailUrl,
+                                                animeTitle = anime.title,
+                                                episodeNumber = -1f,
+                                            )
+                                        } catch (e: Exception) {
+                                            // best-effort
+                                        }
+                                    }
+
+                                    // 5. Start release tracking
+                                    try {
+                                        val tracker = uy.kohesive.injekt.Injekt.get<app.anikuta.notification.ReleaseTracker>()
+                                        tracker.startTracking(
+                                            anilistId = anilistId,
+                                            title = anime.title,
+                                            coverUrl = anime.thumbnailUrl,
+                                        )
+                                    } catch (e: Exception) {
+                                        // best-effort
+                                    }
+
+                                    // 6. Remove from pending
                                     pendingLinkStore.remove(anime.sourceId, anime.animeUrl)
                                 }
                             }
@@ -313,7 +371,7 @@ private fun PendingAnimeCard(
     onManualQueryChange: (String) -> Unit,
     onToggle: () -> Unit,
     onManualSearch: (String) -> Unit,
-    onLink: () -> Unit,
+    onLink: (Int) -> Unit,
     onSkip: () -> Unit,
     onAddWithoutLink: () -> Unit,
 ) {
@@ -447,7 +505,7 @@ private fun PendingAnimeCard(
                     if (searchResults.isNotEmpty()) {
                         Text("Tap a result to link:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
                         searchResults.forEach { result ->
-                            SearchResultCard(result, onLink)
+                            SearchResultCard(result) { onLink(result.id) }
                         }
                     }
                 }

@@ -144,6 +144,11 @@ class AniyomiImporter(
             val total = favoriteAnime.size
             onProgress(AniyomiRestoreProgress.SectionStart("anime", total))
 
+            // Get the current library anime IDs for duplicate checking.
+            // If an anime is already in the library, we skip it (but still update
+            // its category assignments + history).
+            val existingLibraryIds = libraryStore.getAll().map { it.id }.toSet()
+
             for ((index, backupAnime) in favoriteAnime.withIndex()) {
                 val current = index + 1
                 try {
@@ -215,8 +220,17 @@ class AniyomiImporter(
                                     )
                                 }
                             }
-                            libraryStore.save(anilistAnime)
-                            libraryCount++
+                            // Duplicate check: skip saving if already in library.
+                            // Still update category assignments + history for existing anime.
+                            val isDuplicate = linkResult.anilistId in existingLibraryIds
+                            if (isDuplicate) {
+                                logcat(LogPriority.DEBUG) {
+                                    "Anime '${backupAnime.title}' (AniList:${linkResult.anilistId}) already in library — skipping save, updating categories + history"
+                                }
+                            } else {
+                                libraryStore.save(anilistAnime)
+                                libraryCount++
+                            }
 
                             // Log category data for debugging
                             logcat(LogPriority.DEBUG) {
