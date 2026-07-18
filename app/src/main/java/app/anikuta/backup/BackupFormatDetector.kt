@@ -1,35 +1,27 @@
 package app.anikuta.backup
 
 import app.anikuta.backup.format.anikuta.AnikutaCodec
+import app.anikuta.backup.format.aniyomi.AniyomiCodec
 import app.anikuta.core.util.system.logcat
 import kotlinx.serialization.protobuf.ProtoBuf
 import logcat.LogPriority
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
 
 /**
- * Detects, serializes, and deserializes backup files in two formats:
+ * Detects the format of a backup file: AniKuta (`.anikuta`) or Aniyomi (`.tachibk`).
  *
- * 1. **AniKuta format** (`.anikuta`): JSON with a magic header `"ANIKUTA1"`.
- *    Delegates to [AnikutaCodec] for read/write.
- *
- * 2. **Aniyomi format** (`.tachibk` / `.json.gz`): Protocol Buffers, gzipped.
- *    Uses [AniyomiBackup] (legacy schema — Phase 4 will modernize to 500-506).
+ * ## Phase 4 refactor
+ * The AniKuta read/write logic lives in [AnikutaCodec].
+ * The Aniyomi read/write logic lives in [AniyomiCodec] (with legacy-decode dispatch).
+ * This class is now just a **format detector** — it identifies the format from
+ * bytes but delegates actual read/write to the codecs.
  *
  * ## Auto-detection on restore
- *  - Read all bytes from the stream ONCE (ContentResolver streams don't support
- *    mark/reset, so we can't peek and rewind).
- *  - Check first 8 bytes for the AniKuta magic header → AniKuta format.
- *  - Otherwise try protobuf decode (gzip first, then raw) → Aniyomi format.
+ *  - Check first 8 bytes for the AniKuta magic header `"ANIKUTA1"` → AniKuta format.
+ *  - Otherwise try aniyomi (gzip magic `0x1f 0x8b`, then raw protobuf) → Aniyomi format.
  *  - If both fail → UNKNOWN.
- *
- * ## Phase 2 refactor
- * The AniKuta read/write logic was extracted to [AnikutaCodec]. This class
- * still owns aniyomi-format read/write until Phase 4 introduces [AniyomiCodec].
- * The [detect] / [readAnikuta] / [readAniyomi] methods now delegate where
- * appropriate.
  */
 object BackupFormatDetector {
 
@@ -54,21 +46,11 @@ object BackupFormatDetector {
             }
 
             // Not AniKuta — try Aniyomi (protobuf, possibly gzipped)
-            try {
-                val decompressed = GZIPInputStream(bytes.inputStream()).use { it.readBytes() }
-                ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), decompressed)
+            if (AniyomiCodec.isAniyomiFormat(bytes)) {
                 Format.ANIYOMI
-            } catch (e: Exception) {
-                // Maybe not gzipped — try raw protobuf
-                try {
-                    ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), bytes)
-                    Format.ANIYOMI
-                } catch (e2: Exception) {
-                    logcat(LogPriority.WARN) {
-                        "detect: not AniKuta, not Aniyomi (gzip: ${e.message}, raw: ${e2.message})"
-                    }
-                    Format.UNKNOWN
-                }
+            } else {
+                logcat(LogPriority.WARN) { "detect: not AniKuta, not Aniyomi" }
+                Format.UNKNOWN
             }
         } catch (e: Exception) {
             logcat(LogPriority.WARN) { "detect failed: ${e.message}" }
@@ -89,77 +71,37 @@ object BackupFormatDetector {
         }
     }
 
-    // ---- AniKuta format (.anikuta) ----
-    // Delegates to AnikutaCodec (Phase 2 refactor).
+    // ---- Convenience read/write methods (delegate to codecs) ----
+    // These are kept for backward compat with any code that called
+    // BackupFormatDetector directly. New code should use the codecs directly.
 
-    /**
-     * Serialize an AniKuta backup to an output stream (JSON with magic header).
-     * Delegates to [AnikutaCodec.write].
-     */
+    /** Delegate to [AnikutaCodec.write]. */
     fun writeAnikuta(backup: app.anikuta.backup.format.anikuta.AnikutaBackup, output: OutputStream) {
         AnikutaCodec.write(backup, output)
     }
 
-    /**
-     * Deserialize an AniKuta backup from a byte array.
-     * Delegates to [AnikutaCodec.read].
-     */
+    /** Delegate to [AnikutaCodec.read]. */
     fun readAnikuta(bytes: ByteArray): app.anikuta.backup.format.anikuta.AnikutaBackup? {
         return AnikutaCodec.read(bytes)
     }
 
-    /**
-     * Convenience method: deserialize from an InputStream.
-     */
+    /** Delegate to [AnikutaCodec.read]. */
     fun readAnikuta(input: InputStream): app.anikuta.backup.format.anikuta.AnikutaBackup? {
-        return try {
-            AnikutaCodec.read(input.readBytes())
-        } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "readAnikuta(InputStream) failed" }
-            null
-        }
+        return try { AnikutaCodec.read(input.readBytes()) } catch (e: Exception) { null }
     }
 
-    // ---- Aniyomi format (.tachibk — protobuf+gzip) ----
-    // Phase 4 will extract this into AniyomiCodec.
-
-    /**
-     * Serialize an aniyomi-compatible backup (protobuf + gzip).
-     * Phase 4 will replace with [AniyomiCodec] using the modern 500-506 schema.
-     */
-    fun writeAniyomi(backup: AniyomiBackup, output: OutputStream) {
-        val protoBytes = ProtoBuf.encodeToByteArray(AniyomiBackup.serializer(), backup)
-        GZIPOutputStream(output).use { it.write(protoBytes) }
+    /** Delegate to [AniyomiCodec.write]. */
+    fun writeAniyomi(backup: app.anikuta.backup.format.aniyomi.AniyomiBackup, output: OutputStream) {
+        AniyomiCodec.write(backup, output)
     }
 
-    /**
-     * Deserialize an aniyomi-format backup from a byte array.
-     * Tries gzip first, then raw protobuf.
-     * Phase 4 will replace with [AniyomiCodec] using the modern 500-506 schema.
-     */
-    fun readAniyomi(bytes: ByteArray): AniyomiBackup? {
-        return try {
-            try {
-                val decompressed = GZIPInputStream(bytes.inputStream()).use { it.readBytes() }
-                ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), decompressed)
-            } catch (e: Exception) {
-                ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), bytes)
-            }
-        } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "readAniyomi failed" }
-            null
-        }
+    /** Delegate to [AniyomiCodec.read]. */
+    fun readAniyomi(bytes: ByteArray): app.anikuta.backup.format.aniyomi.AniyomiBackup? {
+        return AniyomiCodec.read(bytes)
     }
 
-    /**
-     * Convenience method: deserialize from an InputStream.
-     */
-    fun readAniyomi(input: InputStream): AniyomiBackup? {
-        return try {
-            readAniyomi(input.readBytes())
-        } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "readAniyomi(InputStream) failed" }
-            null
-        }
+    /** Delegate to [AniyomiCodec.read]. */
+    fun readAniyomi(input: InputStream): app.anikuta.backup.format.aniyomi.AniyomiBackup? {
+        return try { AniyomiCodec.read(input.readBytes()) } catch (e: Exception) { null }
     }
 }

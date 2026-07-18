@@ -5,6 +5,7 @@ import android.net.Uri
 import app.anikuta.backup.BackupFormatDetector
 import app.anikuta.backup.format.anikuta.AnikutaCodec
 import app.anikuta.backup.format.anikuta.AnikutaBackup
+import app.anikuta.backup.format.aniyomi.AniyomiCodec
 import app.anikuta.backup.model.BackupFormat
 import app.anikuta.backup.model.BackupSummary
 import app.anikuta.core.util.system.logcat
@@ -144,12 +145,13 @@ class BackupValidator(
     /**
      * Peek an Aniyomi-format backup.
      *
-     * Phase 5 will enhance this with real missing-source detection (checking
-     * installed extensions) and AniList-tracking-based unlinked estimation.
-     * For now, it reports basic counts + manga-skipped warning.
+     * Uses [AniyomiCodec] (which handles legacy + modern decode). Reports
+     * basic counts + manga-skipped warning. Phase 5 will enhance this with
+     * real missing-source detection (checking installed extensions) and
+     * AniList-tracking-based unlinked estimation.
      */
     private fun peekAniyomi(bytes: ByteArray): BackupSummary {
-        val backup = BackupFormatDetector.readAniyomi(bytes)
+        val backup = AniyomiCodec.read(bytes)
             ?: return BackupSummary(
                 format = BackupFormat.ANIYOMI,
                 parseError = "Could not parse Aniyomi backup (protobuf decode failed)",
@@ -164,20 +166,18 @@ class BackupValidator(
         }
 
         // Estimate unlinked anime: anime without AniList tracking (syncId=2)
-        // Phase 5 will do real Tier-1/2/3 linking; this is a rough preview estimate.
         val animeWithoutTracking = backup.backupAnime.count { anime ->
             anime.tracking.none { it.syncId == 2 } // syncId 2 = AniList
         }
 
-        // Missing sources — Phase 5 will check against installed extensions.
-        // For now, just list the source names from the backup.
+        // Source names from the backup
         val sourceNames = backup.backupAnimeSources.map { it.name }.filter { it.isNotEmpty() }
 
         return BackupSummary(
             format = BackupFormat.ANIYOMI,
-            createdAt = 0L, // aniyomi format has no top-level timestamp
+            createdAt = 0L,
             appVersion = "",
-            schemaVersion = 0,
+            schemaVersion = if (backup.isLegacy) 1 else 2,
             libraryCount = backup.backupAnime.size,
             historyCount = backup.backupAnime.sumOf { it.history.size },
             categoryCount = backup.backupAnimeCategories.size,

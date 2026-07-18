@@ -7,6 +7,8 @@ import app.anikuta.backup.format.anikuta.AnikutaCollector
 import app.anikuta.backup.format.anikuta.AnikutaRestorer
 import app.anikuta.backup.format.anikuta.AnikutaBackup
 import app.anikuta.backup.format.anikuta.RestoreOptions
+import app.anikuta.backup.format.aniyomi.AniyomiCodec
+import app.anikuta.backup.format.aniyomi.AniyomiExporter
 import app.anikuta.core.util.system.logcat
 import app.anikuta.data.cache.ExtensionLinkStore
 import app.anikuta.data.cache.ReleaseTrackingStore
@@ -123,25 +125,28 @@ class BackupManager(
     }
 
     /**
-     * Create a backup in Aniyomi format (`.tachibk` — gzip+protobuf).
+     * Create a backup in Aniyomi format (`.tachibk` — gzip+protobuf, modern schema).
      *
-     * **Phase 2 status:** Still uses the legacy `AniyomiBackup` / `convertToAniyomiFormat`
-     * code with the WRONG proto field numbers (legacy 3/4/103 instead of modern
-     * 500/501/502/503). This will be rewritten in Phase 4 to use the modern schema
-     * so aniyomi can actually read our backups.
+     * Uses [AniyomiExporter] to convert the AniKuta backup to aniyomi's modern
+     * protobuf format (fields 500-506, `isLegacy = false`), then [AniyomiCodec]
+     * to gzip+protobuf-encode it. The result is readable by aniyomi.
+     *
+     * Emits a [BackupAnimeTracking] with `syncId=2` (AniList) + `mediaId=<anilistId>`
+     * for every anime, so aniyomi can auto-link to AniList and anikuta can use
+     * Tier 1 linking when re-importing.
      *
      * @return `true` on success, `false` on failure (error logged).
      */
     suspend fun createAniyomiBackup(outputUri: Uri): Boolean = withContext(Dispatchers.IO) {
-        // Phase 4 will replace this with AniyomiExporter.export(collector.collect(), outputUri)
         try {
             val anikutaBackup = collector.collect()
-            val aniyomiBackup = convertToAniyomiFormat(anikutaBackup)
+            val aniyomiBackup = AniyomiExporter().export(anikutaBackup)
             context.contentResolver.openOutputStream(outputUri)?.use { output ->
-                BackupFormatDetector.writeAniyomi(aniyomiBackup, output)
+                AniyomiCodec.write(aniyomiBackup, output)
             }
             logcat(LogPriority.DEBUG) {
-                "✓ Aniyomi backup created (LEGACY schema — Phase 4 will modernize): ${aniyomiBackup.backupAnime.size} anime"
+                "✓ Aniyomi backup created (modern schema): ${aniyomiBackup.backupAnime.size} anime, " +
+                    "${aniyomiBackup.backupAnimeSources.size} sources, isLegacy=${aniyomiBackup.isLegacy}"
             }
             true
         } catch (e: Exception) {
@@ -149,6 +154,9 @@ class BackupManager(
             false
         }
     }
+
+    /** Lazily-initialized aniyomi exporter. */
+    private val aniyomiExporter: AniyomiExporter by lazy { AniyomiExporter() }
 
     // =========================================================================
     // RESTORE (import)
@@ -203,10 +211,11 @@ class BackupManager(
                     }
                 }
                 BackupFormatDetector.Format.ANIYOMI -> {
-                    val backup = BackupFormatDetector.readAniyomi(bytes)
+                    val backup = AniyomiCodec.read(bytes)
                     if (backup != null) {
                         logcat(LogPriority.DEBUG) {
-                            "Restore: Aniyomi backup parsed — ${backup.backupAnime.size} anime (LEGACY stub restore — Phase 5 will implement real restore)"
+                            "Restore: Aniyomi backup parsed (isLegacy=${backup.isLegacy}) — " +
+                                "${backup.backupAnime.size} anime, ${backup.backupManga.size} manga (skipped)"
                         }
                         restoreAniyomiBackup(backup)
                     } else {
@@ -279,7 +288,7 @@ class BackupManager(
                     }
                 }
                 BackupFormatDetector.Format.ANIYOMI -> {
-                    val backup = BackupFormatDetector.readAniyomi(bytes)
+                    val backup = AniyomiCodec.read(bytes)
                     if (backup != null) {
                         onProgress(RestoreProgress.Restoring(
                             total = backup.backupAnime.size,
@@ -302,74 +311,43 @@ class BackupManager(
     }
 
     // =========================================================================
-    // LEGACY: Aniyomi format (Phase 4 will rewrite the schema,
-    //         Phase 5 will implement real restore)
+    // Aniyomi format restore (Phase 5 will implement real restore with
+    // AniList linking via AniListLinker + AniyomiImporter)
     // =========================================================================
 
-    private fun convertToAniyomiFormat(backup: AnikutaBackup): AniyomiBackup {
-        // Phase 4 will replace this with AniyomiExporter
-        val animeList = backup.library.map { libAnime ->
-            AniyomiBackupAnime(
-                source = 0,
-                url = "anilist:${libAnime.id}",
-                title = libAnime.titleEnglish ?: libAnime.titleRomaji ?: "Unknown",
-                description = libAnime.description,
-                genre = libAnime.genres ?: emptyList(),
-                status = 0,
-                thumbnailUrl = libAnime.coverLarge ?: libAnime.coverMedium,
-                dateAdded = System.currentTimeMillis(),
-                favorite = true,
-                episodes = emptyList(),
-                history = backup.history
-                    .filter { it.key.startsWith("${libAnime.id}:") }
-                    .map { hist ->
-                        AniyomiBackupHistory(
-                            url = hist.key.substringAfter(":"),
-                            lastRead = hist.updatedAt,
-                            readDuration = hist.positionSeconds.toLong(),
-                        )
-                    },
-                categories = backup.categories.assignments[libAnime.id.toString()] ?: emptyList(),
-            )
-        }
-
-        val categories = backup.categories.categories.map { cat ->
-            AniyomiBackupCategory(name = cat.name, order = cat.order.toLong())
-        }
-
-        // Note: settings are now List<BackupPreference> (typed), but the legacy
-        // AniyomiBackupPreference uses bare String. Phase 4 will use the shared
-        // PreferenceValue sealed type for real interop. For now, we skip prefs
-        // in aniyomi export (better to emit nothing than wrong-type data).
-        return AniyomiBackup(
-            backupAnime = animeList,
-            backupAnimeCategories = categories,
-            backupPreferences = emptyList(),
-        )
-    }
-
-    private suspend fun restoreAniyomiBackup(backup: AniyomiBackup): RestoreResult {
-        // Phase 5 will replace this with AniyomiImporter (real restore + AniList linking)
+    private suspend fun restoreAniyomiBackup(
+        backup: app.anikuta.backup.format.aniyomi.AniyomiBackup,
+    ): RestoreResult {
+        // Phase 5 will replace this with AniyomiImporter (real restore + 4-tier
+        // AniList linking + unlinked-anime handling).
+        //
+        // For now: parse + count what we found, but write nothing. This is
+        // honest (the note says "not yet implemented") rather than the old
+        // stub which claimed "anime restored" but did nothing.
         var libraryCount = 0
         var historyCount = 0
+        var mangaSkipped = 0
 
         for (anime in backup.backupAnime) {
-            try {
-                libraryCount++
-                historyCount += anime.history.size
-            } catch (e: Exception) {
-                logcat(LogPriority.WARN, e) { "Could not restore aniyomi anime" }
-            }
+            libraryCount++
+            historyCount += anime.history.size
+        }
+        mangaSkipped = backup.backupManga.size
+
+        val note = buildString {
+            append("Aniyomi-format restore is not yet fully implemented (Phase 5). ")
+            append("Found $libraryCount anime, $historyCount history entries, $mangaSkipped manga (skipped). ")
+            append("No data was written — Phase 5 will add AniList linking + real restore.")
         }
 
+        logcat(LogPriority.WARN) { "Aniyomi restore (stub): $note" }
+
         return RestoreResult.Success(
-            libraryCount = libraryCount,
-            historyCount = historyCount,
+            libraryCount = 0, // honestly 0 until Phase 5 implements real restore
+            historyCount = 0,
             searchCount = 0,
-            categoryCount = backup.backupAnimeCategories.size,
-            note = "Aniyomi format restore is not yet fully implemented (Phase 5). " +
-                   "Found $libraryCount anime, $historyCount history entries. " +
-                   "No data was written.",
+            categoryCount = 0,
+            note = note,
         )
     }
 
