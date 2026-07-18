@@ -223,6 +223,84 @@ class BackupManager(
         }
     }
 
+    /**
+     * Restore a backup with [RestoreOptions] and live progress callbacks.
+     *
+     * This is the enhanced restore entry point used by the Step 3 live-progress
+     * UI (RestoreProgressScreen). It accepts per-section options (from the
+     * RestorePreviewDialog) and emits progress events as the restore proceeds.
+     *
+     * @param inputUri the backup file URI.
+     * @param options which sections to restore (from the preview dialog).
+     * @param onProgress called with [RestoreProgress] events as restore proceeds.
+     *   Called on Dispatchers.IO — the UI should marshal to the main thread.
+     * @return a [RestoreResult] (legacy sealed class for UI compat).
+     */
+    suspend fun restoreBackupWithOptions(
+        inputUri: Uri,
+        options: RestoreOptions,
+        onProgress: (RestoreProgress) -> Unit,
+    ): RestoreResult = withContext(Dispatchers.IO) {
+        try {
+            onProgress(RestoreProgress.Decoding("Reading backup file..."))
+            val bytes = context.contentResolver.openInputStream(inputUri)?.use { it.readBytes() }
+                ?: return@withContext RestoreResult.Error("Could not open file")
+
+            if (bytes.isEmpty()) {
+                return@withContext RestoreResult.Error("Backup file is empty")
+            }
+
+            val format = BackupFormatDetector.detect(bytes)
+            onProgress(RestoreProgress.Decoding("Detected format: $format"))
+
+            when (format) {
+                BackupFormatDetector.Format.ANIKUTA -> {
+                    val backup = AnikutaCodec.read(bytes)
+                    if (backup != null) {
+                        onProgress(RestoreProgress.Restoring(
+                            total = backup.library.size + backup.history.size,
+                            current = 0,
+                            message = "Restoring AniKuta backup (v${backup.version})...",
+                        ))
+                        val result = restorer.restore(backup, options)
+                        onProgress(RestoreProgress.Complete(
+                            summary = "Restored ${result.libraryCount} anime, ${result.historyCount} history, ${result.preferenceCount} prefs",
+                        ))
+                        RestoreResult.Success(
+                            libraryCount = result.libraryCount,
+                            historyCount = result.historyCount,
+                            searchCount = result.searchCount,
+                            categoryCount = result.categoryCount,
+                            note = if (result.errors.isEmpty()) null
+                                   else "${result.errors.size} errors (see logcat)",
+                        )
+                    } else {
+                        RestoreResult.Error("Could not parse AniKuta backup")
+                    }
+                }
+                BackupFormatDetector.Format.ANIYOMI -> {
+                    val backup = BackupFormatDetector.readAniyomi(bytes)
+                    if (backup != null) {
+                        onProgress(RestoreProgress.Restoring(
+                            total = backup.backupAnime.size,
+                            current = 0,
+                            message = "Aniyomi restore (Phase 5 will implement full linking)...",
+                        ))
+                        restoreAniyomiBackup(backup)
+                    } else {
+                        RestoreResult.Error("Could not parse Aniyomi backup")
+                    }
+                }
+                BackupFormatDetector.Format.UNKNOWN -> {
+                    RestoreResult.Error("Unknown backup format")
+                }
+            }
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "❌ Restore (with options) failed" }
+            RestoreResult.Error(e.message ?: "Restore failed")
+        }
+    }
+
     // =========================================================================
     // LEGACY: Aniyomi format (Phase 4 will rewrite the schema,
     //         Phase 5 will implement real restore)

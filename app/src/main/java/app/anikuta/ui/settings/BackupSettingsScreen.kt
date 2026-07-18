@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CloudDownload
@@ -18,9 +19,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.anikuta.backup.BackupManager
+import app.anikuta.backup.RestoreProgress
+import app.anikuta.backup.format.anikuta.RestoreOptions
+import app.anikuta.backup.model.BackupSummary
+import app.anikuta.backup.validator.BackupValidator
+import app.anikuta.ui.settings.restore.RestorePreviewDialog
+import app.anikuta.ui.settings.restore.RestoreProgressScreen
+import android.net.Uri
+import app.anikuta.core.util.system.logcat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -29,19 +39,32 @@ import uy.kohesive.injekt.api.get
  *
  * Two export formats:
  *  - AniKuta format (.anikuta) — our own JSON format, complete data
- *  - Aniyomi format (.json.gz) — protobuf, aniyomi-compatible
+ *  - Aniyomi format (.tachibk) — protobuf+gzip, aniyomi-compatible
  *
- * Restore auto-detects the format.
+ * Restore uses the 4-step flow (Phase 3):
+ *  1. User picks a file → BackupValidator.peekBackup (decode only)
+ *  2. RestorePreviewDialog shows summary + options → user confirms
+ *  3. RestoreProgressScreen shows live progress
+ *  4. (Phase 6) Review screen for unlinked anime
  */
 @Composable
 fun BackupSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val backupManager: BackupManager = remember { Injekt.get() }
+    val validator: BackupValidator = remember { BackupValidator(context) }
 
     var isBackingUp by remember { mutableStateOf(false) }
-    var isRestoring by remember { mutableStateOf(false) }
     var showFormatDialog by remember { mutableStateOf(false) }
+
+    // Restore flow state
+    var pendingUri by remember { mutableStateOf<Uri?>(null) }
+    var isPeeking by remember { mutableStateOf(false) }
+    var previewSummary by remember { mutableStateOf<BackupSummary?>(null) }
+    var peekError by remember { mutableStateOf<String?>(null) }
+
+    var isRestoring by remember { mutableStateOf(false) }
+    var progressEvents by remember { mutableStateOf<List<RestoreProgress>>(emptyList()) }
     var restoreResult by remember { mutableStateOf<BackupManager.RestoreResult?>(null) }
 
     // File launchers
@@ -85,13 +108,20 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
+            // Step 1: peek the backup (decode without restoring)
+            pendingUri = uri
+            isPeeking = true
+            peekError = null
             scope.launch {
-                isRestoring = true
-                val result = withContext(Dispatchers.IO) {
-                    backupManager.restoreBackup(uri)
+                val summary = withContext(Dispatchers.IO) {
+                    validator.peekBackup(uri)
                 }
-                isRestoring = false
-                restoreResult = result
+                isPeeking = false
+                if (summary.isParseable) {
+                    previewSummary = summary
+                } else {
+                    peekError = summary.parseError ?: "Could not parse backup"
+                }
             }
         }
     }
@@ -133,17 +163,17 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                         Text("Two backup formats are supported:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("• AniKuta format (.anikuta) — our own format with all data", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("• Aniyomi format (.json.gz) — compatible with aniyomi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("• Aniyomi format (.tachibk) — compatible with aniyomi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Restore auto-detects the format — just select any backup file.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Restore shows a preview before proceeding, so you can see what's in the backup.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
     }
 
-    // Loading overlay
-    if (isBackingUp || isRestoring) {
+    // Loading overlay (for backup creation + peek)
+    if (isBackingUp || isPeeking) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
@@ -155,9 +185,32 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                 ) {
                     CircularProgressIndicator()
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(if (isBackingUp) "Creating backup..." else "Restoring...")
+                    Text(if (isBackingUp) "Creating backup..." else "Reading backup...")
                 }
             }
+        }
+    }
+
+    // Step 3: Restore progress screen (full-screen overlay)
+    if (isRestoring) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            RestoreProgressScreen(
+                events = progressEvents,
+                isComplete = progressEvents.lastOrNull() is RestoreProgress.Complete ||
+                             progressEvents.lastOrNull() is RestoreProgress.Error,
+                onDone = {
+                    isRestoring = false
+                    // The restoreResult is already set; the result dialog below will show
+                    pendingUri = null
+                    progressEvents = emptyList()
+                },
+                onCancel = {
+                    // Phase 6 will wire graceful cancellation
+                    isRestoring = false
+                    pendingUri = null
+                    progressEvents = emptyList()
+                },
+            )
         }
     }
 
@@ -176,13 +229,59 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
             dismissButton = {
                 TextButton(onClick = {
                     showFormatDialog = false
-                    createAniyomiLauncher.launch("anikuta_backup_${System.currentTimeMillis()}.json.gz")
-                }) { Text("Aniyomi (.json.gz)") }
+                    createAniyomiLauncher.launch("anikuta_backup_${System.currentTimeMillis()}.tachibk")
+                }) { Text("Aniyomi (.tachibk)") }
             },
         )
     }
 
-    // Restore result dialog
+    // Step 2: Restore preview dialog
+    previewSummary?.let { summary ->
+        val uri = pendingUri
+        if (uri != null) {
+            RestorePreviewDialog(
+                summary = summary,
+                onRestore = { options ->
+                    previewSummary = null
+                    // Step 3: start the restore with live progress
+                    isRestoring = true
+                    progressEvents = emptyList()
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            backupManager.restoreBackupWithOptions(uri, options) { event ->
+                                progressEvents = progressEvents + event
+                            }
+                        }
+                        restoreResult = result
+                    }
+                },
+                onCancel = {
+                    previewSummary = null
+                    pendingUri = null
+                },
+            )
+        }
+    }
+
+    // Peek error dialog
+    peekError?.let { error ->
+        AlertDialog(
+            onDismissRequest = {
+                peekError = null
+                pendingUri = null
+            },
+            title = { Text("Could not read backup") },
+            text = { Text(error) },
+            confirmButton = {
+                TextButton(onClick = {
+                    peekError = null
+                    pendingUri = null
+                }) { Text("OK") }
+            },
+        )
+    }
+
+    // Restore result dialog (shown after Step 3 "Done")
     restoreResult?.let { result ->
         when (result) {
             is BackupManager.RestoreResult.Success -> {
