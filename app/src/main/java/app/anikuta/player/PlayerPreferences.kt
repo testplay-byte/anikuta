@@ -154,6 +154,38 @@ class PlayerPreferences(
     fun dynamicDetailTheming(): Preference<Boolean> =
         preferenceStore.getBoolean("pref_dynamic_detail_theming", true)
 
+    // ---- Watched episode appearance (grayscale + blur) ----
+
+    /**
+     * Visual treatment applied to episodes marked as watched.
+     *
+     * Values:
+     * - `"none"`      — no visual treatment (watched episodes look the same as unwatched)
+     * - `"grayscale"` — desaturate the entire episode card (text, icons, thumbnail) to black & white
+     * - `"blur"`      — apply a slight blur to the entire episode card
+     * - `"both"`      — apply both grayscale AND blur (maximum visual distinction)
+     *
+     * Default: `"grayscale"`.
+     */
+    fun watchedEpisodeAppearance(): Preference<String> =
+        preferenceStore.getString("pref_watched_episode_appearance", "grayscale")
+
+    /**
+     * Blur radius (in dp) applied to watched episode cards when the appearance
+     * mode includes blur. Higher values = more blurry.
+     * Default: 2.dp (subtle blur that's still readable but clearly "watched").
+     */
+    fun watchedEpisodeBlurRadius(): Preference<Float> =
+        preferenceStore.getFloat("pref_watched_episode_blur_radius", 2f)
+
+    /**
+     * Alpha (opacity) multiplier applied to watched episode cards when the
+     * appearance mode includes grayscale. Lower values = more transparent/dimmed.
+     * Default: 0.55 (45% transparent).
+     */
+    fun watchedEpisodeAlpha(): Preference<Float> =
+        preferenceStore.getFloat("pref_watched_episode_alpha", 0.55f)
+
     // ---- Phase 1: Player mode + combined screen preferences ----
 
     /**

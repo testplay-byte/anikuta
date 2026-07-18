@@ -121,6 +121,14 @@ fun DetailScreen(
     val dynamicThemingEnabled by (playerPrefs?.dynamicDetailTheming()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsState()
     val downloadButtonPlacement by (playerPrefs?.downloadButtonPlacement()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("episode_row")).collectAsState()
 
+    // Watched episode appearance (grayscale / blur / both / none) — configurable in Settings
+    val watchedAppearancePref by (playerPrefs?.watchedEpisodeAppearance()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow("grayscale")).collectAsState()
+    val watchedBlurRadius by (playerPrefs?.watchedEpisodeBlurRadius()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(2f)).collectAsState()
+    val watchedAlpha by (playerPrefs?.watchedEpisodeAlpha()?.stateIn(detailScope) ?: kotlinx.coroutines.flow.MutableStateFlow(0.55f)).collectAsState()
+    val watchedAppearance = remember(watchedAppearancePref) {
+        app.anikuta.ui.detail.components.WatchedEpisodeAppearance.fromPref(watchedAppearancePref)
+    }
+
     // Aggregate display settings into a single object for EpisodeRowContent.
     // This avoids passing 12+ individual parameters through the composable tree.
     val displaySettings = EpisodeDisplaySettings(
@@ -463,6 +471,9 @@ fun DetailScreen(
                                         },
                                         index = index,
                                         dynamicColors = null,
+                                        appearance = watchedAppearance,
+                                        grayscaleAlpha = watchedAlpha,
+                                        blurRadiusDp = watchedBlurRadius,
                                     ) {
                                         EpisodeRowContent(
                                             episode = episode,
@@ -614,6 +625,9 @@ fun DetailScreen(
                                                         },
                                                         index = index,
                                                         dynamicColors = null,
+                                                        appearance = watchedAppearance,
+                                                        grayscaleAlpha = watchedAlpha,
+                                                        blurRadiusDp = watchedBlurRadius,
                                                     ) {
                                                         EpisodeRowContent(
                                                             episode = episode,

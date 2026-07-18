@@ -69,9 +69,15 @@ private const val MAX_OVERSHOOT = 1.3f
  *    swipe left to download. Each action has an INDEPENDENT threshold
  *    (watched = 80dp, download = 160dp) so download is less sensitive.
  *
- * 2. **GPU-level grayscale** — watched episodes are desaturated using
- *    [RenderEffect] via [Modifier.grayscaleIfSeen], which affects ALL
- *    content (text, icons, thumbnails) at the render level.
+ *    **Action triggers on RELEASE, not mid-drag.** The action fires only
+ *    when the user lifts their finger AND the swipe offset has crossed
+ *    the threshold. This prevents accidental triggers if the user swipes
+ *    past the threshold and then drags back. A haptic pulse fires at the
+ *    moment of crossing (mid-drag) to give feedback that "you've gone far
+ *    enough", but the actual action waits for the release.
+ *
+ * 2. **Configurable watched appearance** — watched episodes can be
+ *    grayscale, blurred, both, or none, per the user's Settings preference.
  *
  * 3. **Long-press menu** — long-pressing the row triggers [onLongClick],
  *    which typically shows the [EpisodeOptionsSheet].
@@ -82,31 +88,22 @@ private const val MAX_OVERSHOOT = 1.3f
  *
  * ## Gesture handling
  *
- * The swipe is implemented with a custom [pointerInput] + [detectHorizontalDragGestures]
- * rather than the `me.saket.swipe:swipe` library. This gives us:
- *
- * - Per-action thresholds (the library only supports a single threshold)
- * - Full control over background rendering and animation
- * - No external dependency
- *
- * The click and long-press are handled by [combinedClickable] on the same
- * element. [detectHorizontalDragGestures] only activates for horizontal
- * drags, so taps and long-presses propagate to [combinedClickable] normally.
- *
- * ## Animation
- *
- * The swipe offset is stored in an [Animatable] so it can be smoothly
- * animated back to zero when the drag ends. The spring animation provides
- * a natural "snap-back" feel.
+ * The swipe is implemented with a custom [pointerInput] + [detectHorizontalDragGestures].
+ * Click and long-press are handled by [combinedClickable] on the same element.
+ * [detectHorizontalDragGestures] only activates for horizontal drags, so taps
+ * and long-presses propagate to [combinedClickable] normally.
  *
  * @param episode         The episode data.
  * @param isSeen          Whether this episode is marked as watched.
  * @param onClick         Called on tap (starts playback).
  * @param onLongClick     Called on long-press (shows options sheet).
- * @param onSwipeRight    Called when swiped right past the watched threshold.
- * @param onSwipeLeft     Called when swiped left past the download threshold.
+ * @param onSwipeRight    Called when swiped right past the watched threshold AND released.
+ * @param onSwipeLeft     Called when swiped left past the download threshold AND released.
  * @param index           Row index (for alternating background colors).
  * @param dynamicColors   Optional dynamic color scheme for theming.
+ * @param appearance      Visual treatment for watched episodes (grayscale/blur/both/none).
+ * @param grayscaleAlpha  Alpha multiplier when grayscale is applied (default 0.55).
+ * @param blurRadiusDp    Blur radius in dp when blur is applied (default 2dp).
  * @param content         The episode content composable (rich or simple layout).
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -120,6 +117,9 @@ fun EpisodeRow(
     onSwipeLeft: () -> Unit,
     index: Int = 0,
     dynamicColors: DynamicColorScheme? = null,
+    appearance: WatchedEpisodeAppearance = WatchedEpisodeAppearance.GRAYSCALE,
+    grayscaleAlpha: Float = 0.55f,
+    blurRadiusDp: Float = 2f,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -132,7 +132,13 @@ fun EpisodeRow(
 
     // --- Swipe state ---
     val swipeOffset = remember { Animatable(0f) }
-    var actionTriggered by remember { mutableStateOf(false) }
+
+    // --- Threshold-crossing feedback (mid-drag haptic) ---
+    // Tracks whether we've already fired the "crossing" haptic for the
+    // current drag gesture. This lets us buzz once when the user crosses
+    // the threshold, but NOT fire the action until release.
+    var crossedWatchedThreshold by remember { mutableStateOf(false) }
+    var crossedDownloadThreshold by remember { mutableStateOf(false) }
 
     // --- Card background color (alternating) ---
     val cardColor = if (dynamicColors != null) {
@@ -163,7 +169,11 @@ fun EpisodeRow(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .grayscaleIfSeen(enabled = isSeen, alpha = 0.55f)
+                .watchedEpisodeEffect(
+                    appearance = if (isSeen) appearance else WatchedEpisodeAppearance.NONE,
+                    alpha = grayscaleAlpha,
+                    blurRadiusDp = blurRadiusDp,
+                )
                 .offset {
                     IntOffset(swipeOffset.value.roundToInt(), 0)
                 }
@@ -172,10 +182,26 @@ fun EpisodeRow(
                 .pointerInput(episode.url) {
                     detectHorizontalDragGestures(
                         onDragStart = {
-                            actionTriggered = false
+                            // Reset crossing flags at the start of each gesture
+                            crossedWatchedThreshold = false
+                            crossedDownloadThreshold = false
                         },
                         onDragEnd = {
+                            // === ISSUE 4 FIX ===
+                            // The action fires HERE — on finger release (drag end),
+                            // NOT mid-drag. We check the final offset to decide which
+                            // action (if any) to trigger.
+                            val finalOffset = swipeOffset.value
                             scope.launch {
+                                when {
+                                    finalOffset > watchedThresholdPx -> {
+                                        onSwipeRight()
+                                    }
+                                    finalOffset < -downloadThresholdPx -> {
+                                        onSwipeLeft()
+                                    }
+                                }
+                                // Animate back to rest position
                                 swipeOffset.animateTo(
                                     targetValue = 0f,
                                     animationSpec = spring(
@@ -206,21 +232,17 @@ fun EpisodeRow(
                             swipeOffset.snapTo(newOffset)
                         }
 
-                        // Trigger action once when crossing the threshold
-                        if (!actionTriggered) {
-                            when {
-                                swipeOffset.value > watchedThresholdPx -> {
-                                    actionTriggered = true
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onSwipeRight()
-                                }
-
-                                swipeOffset.value < -downloadThresholdPx -> {
-                                    actionTriggered = true
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onSwipeLeft()
-                                }
-                            }
+                        // === Mid-drag haptic feedback (does NOT trigger the action) ===
+                        // Fire a single haptic pulse when the user crosses the threshold
+                        // for the first time in this gesture. This gives feedback that
+                        // "you've swiped far enough" without firing the action prematurely.
+                        if (!crossedWatchedThreshold && swipeOffset.value > watchedThresholdPx) {
+                            crossedWatchedThreshold = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                        if (!crossedDownloadThreshold && swipeOffset.value < -downloadThresholdPx) {
+                            crossedDownloadThreshold = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
                     }
                 }
@@ -306,5 +328,3 @@ private fun SwipeBackground(
         )
     }
 }
-
-
