@@ -755,7 +755,6 @@ fun DetailScreen(
                 ep?.let { episodeSeenStore?.markUnseen(anilistId, it.url) }
             },
         )
-    }
 
     // Category picker dialog (long-press save → pick categories)
     if (showCategoryPicker) {
