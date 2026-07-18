@@ -2,6 +2,7 @@ package app.anikuta.backup.link
 
 import app.anikuta.backup.format.aniyomi.BackupAnime
 import app.anikuta.backup.format.aniyomi.BackupAnimeTracking
+import app.anikuta.backup.model.UnlinkReason
 import app.anikuta.core.util.system.logcat
 import app.anikuta.data.anilist.model.AniListAnime
 import app.anikuta.data.anilist.repository.AniListRepository
@@ -259,15 +260,6 @@ class AniListLinker(
 
 /** Which tier matched. */
 enum class LinkTier { TRACKER, CACHE, FUZZY }
-
-/** Why an anime couldn't be linked. */
-enum class UnlinkReason {
-    NO_TRACKER,
-    NO_CACHE_MATCH,
-    FUZZY_NO_MATCH,
-    FUZZY_AMBIGUOUS,
-    SOURCE_NOT_INSTALLED,
-}
 
 /**
  * Result of a linking attempt.
