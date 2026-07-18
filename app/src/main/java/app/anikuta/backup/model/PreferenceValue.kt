@@ -2,6 +2,7 @@ package app.anikuta.backup.model
 
 import app.anikuta.core.preference.PreferenceStore
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 /**
  * A type-safe representation of a SharedPreferences value, for backup/restore.
@@ -13,19 +14,33 @@ import kotlinx.serialization.Serializable
  * (not round-trippable) and there was no way to know if `"true"` was a Boolean
  * or a String. This sealed type preserves the original type so restore is exact.
  *
- * ## Aniyomi wire-format compatibility
+ * ## Aniyomi wire-format compatibility (CRITICAL)
  * This sealed class is **wire-compatible with aniyomi's `PreferenceValue`**.
- * kotlinx-serialization-protobuf encodes sealed-class discriminators by
- * declaration order (0-based) when no `@ProtoNumber` is present on the
- * subclasses. The declaration order here — `Int, Long, Float, String, Boolean,
- * StringSet` — **must exactly match** aniyomi's
- * `eu.kanade.tachiyomi.data.backup.models.PreferenceValue` so that backups
- * produced by anikuta can be read by aniyomi and vice-versa.
  *
- * **Do NOT reorder the subclasses below.** If you add a new type, append it
- * at the end (discriminator 6+) and document the aniyomi-compat impact.
+ * kotlinx-serialization-protobuf encodes sealed-class subclasses using
+ * **fully-qualified class-name discriminators** (NOT declaration-order indices).
+ * The discriminator is stored as field 1 (a String) of the polymorphic wrapper,
+ * and the actual value as field 2.
+ *
+ * Aniyomi's subclasses live in package `eu.kanade.tachiyomi.data.backup.models`,
+ * so the discriminator written by aniyomi is, e.g.,
+ * `"eu.kanade.tachiyomi.data.backup.models.IntPreferenceValue"`.
+ *
+ * Our subclasses live in `app.anikuta.backup.model` — a different FQCN. To make
+ * kotlinx-serialization match during decode, each subclass has `@SerialName`
+ * set to aniyomi's FQCN. This makes our backups readable by aniyomi AND lets us
+ * read aniyomi backups.
+ *
+ * **Do NOT change the @SerialName values** without also updating aniyomi compat.
  *
  * Reference: `REFERENCE/app/src/main/java/eu/kanade/tachiyomi/data/backup/models/BackupPreference.kt`
+ *
+ * ## Discovery
+ * This was discovered during on-device testing (2026-07-18): a real aniyomi
+ * backup failed to decode with "protobuf decode failed". Root cause was that
+ * our classes used the default FQCN (`app.anikuta.backup.model.*`) while
+ * aniyomi writes `eu.kanade.tachiyomi.data.backup.models.*`. The @SerialName
+ * annotation bridges this.
  */
 @Serializable
 sealed class PreferenceValue {
@@ -45,6 +60,7 @@ sealed class PreferenceValue {
 }
 
 @Serializable
+@SerialName("eu.kanade.tachiyomi.data.backup.models.IntPreferenceValue")
 data class IntPreferenceValue(val value: Int) : PreferenceValue() {
     override fun restoreInto(store: PreferenceStore, key: String): Boolean {
         val current = store.getAll()[key] ?: return false
@@ -55,6 +71,7 @@ data class IntPreferenceValue(val value: Int) : PreferenceValue() {
 }
 
 @Serializable
+@SerialName("eu.kanade.tachiyomi.data.backup.models.LongPreferenceValue")
 data class LongPreferenceValue(val value: Long) : PreferenceValue() {
     override fun restoreInto(store: PreferenceStore, key: String): Boolean {
         val current = store.getAll()[key] ?: return false
@@ -65,6 +82,7 @@ data class LongPreferenceValue(val value: Long) : PreferenceValue() {
 }
 
 @Serializable
+@SerialName("eu.kanade.tachiyomi.data.backup.models.FloatPreferenceValue")
 data class FloatPreferenceValue(val value: Float) : PreferenceValue() {
     override fun restoreInto(store: PreferenceStore, key: String): Boolean {
         val current = store.getAll()[key] ?: return false
@@ -75,6 +93,7 @@ data class FloatPreferenceValue(val value: Float) : PreferenceValue() {
 }
 
 @Serializable
+@SerialName("eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue")
 data class StringPreferenceValue(val value: String) : PreferenceValue() {
     override fun restoreInto(store: PreferenceStore, key: String): Boolean {
         val current = store.getAll()[key] ?: return false
@@ -85,6 +104,7 @@ data class StringPreferenceValue(val value: String) : PreferenceValue() {
 }
 
 @Serializable
+@SerialName("eu.kanade.tachiyomi.data.backup.models.BooleanPreferenceValue")
 data class BooleanPreferenceValue(val value: Boolean) : PreferenceValue() {
     override fun restoreInto(store: PreferenceStore, key: String): Boolean {
         val current = store.getAll()[key] ?: return false
@@ -95,6 +115,7 @@ data class BooleanPreferenceValue(val value: Boolean) : PreferenceValue() {
 }
 
 @Serializable
+@SerialName("eu.kanade.tachiyomi.data.backup.models.StringSetPreferenceValue")
 data class StringSetPreferenceValue(val value: Set<String>) : PreferenceValue() {
     override fun restoreInto(store: PreferenceStore, key: String): Boolean {
         val current = store.getAll()[key] ?: return false
