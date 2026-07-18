@@ -193,6 +193,12 @@ fun UnlinkedAnimeReviewScreen(
                     Spacer(Modifier.height(16.dp))
                     Text("All Done!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text("Every anime has been linked to AniList.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(24.dp))
+                    Button(onClick = onDone) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Done")
+                    }
                 }
             }
         } else {
@@ -368,21 +374,34 @@ private fun PendingAnimeCard(
             }
 
             // ---- Action buttons (always visible) ----
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onToggle, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Search AniList")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Button(
+                    onClick = onToggle,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Search AniList", style = MaterialTheme.typography.labelMedium)
                 }
-                OutlinedButton(onClick = onSkip) {
-                    Icon(Icons.Default.SkipNext, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Skip")
+                OutlinedButton(
+                    onClick = onSkip,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                ) {
+                    Icon(Icons.Default.SkipNext, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Skip", style = MaterialTheme.typography.labelMedium)
                 }
-                OutlinedButton(onClick = onAddWithoutLink) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add")
+                OutlinedButton(
+                    onClick = onAddWithoutLink,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Add", style = MaterialTheme.typography.labelMedium)
                 }
             }
 

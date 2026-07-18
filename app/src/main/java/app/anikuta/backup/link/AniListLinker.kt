@@ -145,6 +145,10 @@ class AniListLinker(
      *  2. Adult search (if regular returns no results).
      *  3. Title with leading articles stripped ("A ", "The ").
      *
+     * **Exact match shortcut**: if any search result has an exact title match
+     * (case-insensitive), it's returned immediately with confidence 1.0 —
+     * no need to check other candidates.
+     *
      * @return Triple(anilistId, confidence, matchedTitle) or null if no results.
      */
     private suspend fun fuzzyMatch(
@@ -191,15 +195,40 @@ class AniListLinker(
                     }
                 }
 
-                if (results.isEmpty()) return@withTimeoutOrNull null
+                if (results.isEmpty()) {
+                    logcat(LogPriority.WARN) { "Tier 3: no results for '$query' after all strategies" }
+                    return@withTimeoutOrNull null
+                }
 
-                // Find the best match by title similarity
+                // Exact match shortcut: check for exact title match first.
+                // This handles the case where the search returns the exact anime
+                // but the Jaro-Winkler heuristic might not give it 1.0 due to
+                // encoding/normalization differences.
+                val queryLower = query.lowercase().trim()
+                for (anime in results) {
+                    val candidates = listOf(anime.title.english, anime.title.romaji, anime.title.native)
+                        .filterNotNull().filter { it.isNotEmpty() }
+                    for (candidate in candidates) {
+                        if (candidate.lowercase().trim() == queryLower) {
+                            val matchedTitle = candidate
+                            logcat(LogPriority.DEBUG) {
+                                "Tier 3: EXACT match found! '$query' == '$matchedTitle' → AniList:${anime.id}"
+                            }
+                            return@withTimeoutOrNull Triple(anime.id, 1.0f, matchedTitle)
+                        }
+                    }
+                }
+
+                // No exact match — find the best fuzzy match
                 var best: Triple<Int, Float, String>? = null
                 for (anime in results) {
                     val confidence = titleSimilarity(query, anime)
                     if (best == null || confidence > best!!.second) {
                         best = Triple(anime.id, confidence, anime.title.english ?: anime.title.romaji ?: anime.title.native ?: "")
                     }
+                }
+                logcat(LogPriority.DEBUG) {
+                    "Tier 3: best fuzzy match for '$query' → '${best?.third}' at ${(best?.second?.times(100)?.toInt() ?: 0)}%"
                 }
                 best
             }

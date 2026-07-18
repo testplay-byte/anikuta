@@ -292,18 +292,32 @@ class AniyomiImporter(
 
         // ---- Apply category assignments (by name → current ID) ----
         // Now that all categories are restored, resolve category names → IDs
-        // and apply the per-anime assignments. This is the fix for the bug where
-        // all anime ended up in one category.
+        // and apply the per-anime assignments. Uses case-insensitive name matching.
         if (options.categories && pendingCategoryAssignments.isNotEmpty()) {
             val currentCategories = categoryStore.getCategories()
-            val nameToId = currentCategories.associate { it.name to it.id }
+            // Case-insensitive name → ID map
+            val nameToId = currentCategories.associate { it.name.lowercase().trim() to it.id }
+            logcat(LogPriority.DEBUG) {
+                "Category assignment: ${pendingCategoryAssignments.size} anime to assign, " +
+                    "available categories: ${currentCategories.map { "${it.name}(id=${it.id})" }}"
+            }
 
             for ((anilistId, catNames) in pendingCategoryAssignments) {
                 try {
-                    val catIds = catNames.mapNotNull { name -> nameToId[name] }.toSet()
+                    // Match names case-insensitively
+                    val catIds = catNames.mapNotNull { name ->
+                        val id = nameToId[name.lowercase().trim()]
+                        if (id == null) {
+                            logcat(LogPriority.WARN) { "Category '$name' not found for anime $anilistId (available: ${nameToId.keys})" }
+                        }
+                        id
+                    }.toSet()
                     if (catIds.isNotEmpty()) {
                         categoryStore.setAnimeCategories(anilistId, catIds)
                         categoryAssignmentCount++
+                        logcat(LogPriority.DEBUG) { "Assigned anime $anilistId to categories: $catIds" }
+                    } else {
+                        logcat(LogPriority.WARN) { "No matching category IDs found for anime $anilistId (names: $catNames)" }
                     }
                 } catch (e: Exception) {
                     errors.add("categoryAssignment[$anilistId]: ${e.message}")
