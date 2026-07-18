@@ -115,13 +115,11 @@ class AniyomiImporter(
             onProgress(AniyomiRestoreProgress.SectionStart("categories", backup.backupAnimeCategories.size))
             for (cat in backup.backupAnimeCategories) {
                 try {
-                    // Restore by NAME. Use a synthetic ID that won't clash with the
-                    // Default category (id=0). We use cat.order + 1 as a temporary ID;
-                    // CategoryStore.restoreCategory replaces by ID if exists, else adds.
-                    // The Default category (id=0) is always preserved by CategoryStore.
-                    val syntheticId = if (cat.order == 0L) 0L else cat.order
+                    // restoreCategory now matches by NAME (not ID) and returns the
+                    // actual ID (existing or newly created). It MERGES — existing
+                    // categories are never overwritten.
                     val anikutaCat = app.anikuta.backup.format.anikuta.BackupCategory(
-                        id = syntheticId,
+                        id = cat.order, // ignored by restoreCategory (matches by name)
                         name = cat.name,
                         order = cat.order.toInt(),
                     )

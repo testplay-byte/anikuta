@@ -125,30 +125,63 @@ class CategoryStore(
         assignments = assignmentsPref.get(),
     )
 
-    /** Restore a category from backup (used by BackupManager/AniyomiImporter).
+    /** Restore a category from backup (MERGE, not replace).
      *
-     * If a category with the same ID exists, it's replaced. If the backup
-     * category has id=0 (same as Default), the Default category's NAME is
-     * preserved (not overwritten by the backup's name) — the Default is a
-     * system category that the user can't rename or delete.
+     * Matches by NAME (case-insensitive). If a category with the same name
+     * already exists, it's kept as-is (the existing ID is preserved). If no
+     * matching category exists, a new one is created with a fresh ID.
+     *
+     * This ensures existing categories are NEVER overwritten or deleted by a
+     * restore — backup categories are merged in. The Default category (id=0)
+     * is always preserved and never renamed.
+     *
+     * @return the ID of the category (existing or newly created).
      */
-    fun restoreCategory(category: app.anikuta.backup.format.anikuta.BackupCategory) {
+    fun restoreCategory(category: app.anikuta.backup.format.anikuta.BackupCategory): Long {
         val cats = categoriesPref.get().toMutableList()
-        val existing = cats.indexOfFirst { it.id == category.id }
-        // If this would overwrite the Default category (id=0), preserve the
-        // Default name instead of using the backup's name.
-        val restoredName = if (category.id == DEFAULT_CATEGORY_ID) DEFAULT_CATEGORY_NAME else category.name
-        val restored = Category(category.id, restoredName, category.order)
-        if (existing >= 0) cats[existing] = restored else cats.add(restored)
-        // Ensure Default is always first
+        val trimmedName = category.name.trim()
+
+        // Special case: if the backup category is the "Default" (id=0 or name="Default"),
+        // map it to our existing Default category (id=0). Don't create a duplicate.
+        if (category.id == DEFAULT_CATEGORY_ID || trimmedName.equals(DEFAULT_CATEGORY_NAME, ignoreCase = true)) {
+            // Ensure Default exists
+            if (cats.none { it.id == DEFAULT_CATEGORY_ID }) {
+                cats.add(0, Category(DEFAULT_CATEGORY_ID, DEFAULT_CATEGORY_NAME, 0))
+                categoriesPref.set(cats)
+            }
+            return DEFAULT_CATEGORY_ID
+        }
+
+        // Match by name (case-insensitive)
+        val existing = cats.find { it.name.equals(trimmedName, ignoreCase = true) }
+        if (existing != null) {
+            Log.d(TAG, "Category '$trimmedName' already exists (id=${existing.id}) — keeping existing")
+            return existing.id
+        }
+
+        // Create new category with a fresh ID
+        val nextId = (cats.maxOfOrNull { it.id } ?: 0L) + 1L
+        val nextOrder = (cats.maxOfOrNull { it.order } ?: 0) + 1
+        cats.add(Category(nextId, trimmedName, nextOrder))
         cats.sortWith(compareBy({ it.id != DEFAULT_CATEGORY_ID }, { it.order }))
         categoriesPref.set(cats)
+        Log.d(TAG, "Created category from backup: $trimmedName (id=$nextId)")
+        return nextId
     }
 
-    /** Restore assignments from backup (used by BackupManager). */
+    /** Restore assignments from backup (MERGE, not replace).
+     *
+     * Existing assignments are preserved. Backup assignments are added on top.
+     * If an anime has assignments in both existing and backup, the backup
+     * assignments are ADDED to the existing ones (union, not replace).
+     */
     fun restoreAssignments(assignments: Map<String, List<Long>>) {
-        val restored = assignments.mapValues { (_, ids) -> ids.toSet() }
-        assignmentsPref.set(restored)
+        val current = assignmentsPref.get().toMutableMap()
+        for ((anilistId, backupIds) in assignments) {
+            val existing = current[anilistId] ?: emptySet()
+            current[anilistId] = existing + backupIds.toSet()
+        }
+        assignmentsPref.set(current)
     }
 
     /** Create a new category with the given name. Returns the new category's id, or -1 if a category with that name already exists. */

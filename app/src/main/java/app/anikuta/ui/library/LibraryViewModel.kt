@@ -228,19 +228,10 @@ class LibraryViewModel : ViewModel() {
             val catStore = categoryStore ?: return@launch
             catStore.changes.collect { state ->
                 categoryAssignments = state.assignments
-                // Hide the Default category (id=0) when it has no anime assigned.
-                // Other empty categories are still shown (the user created them intentionally).
-                val defaultHasAnime = state.assignments.values.any { it.contains(0L) } ||
-                    state.assignments.values.any { it.isEmpty() }
-                _categories.value = if (defaultHasAnime) {
-                    state.categories
-                } else {
-                    state.categories.filter { it.id != 0L }
-                }
-                // If the selected category was hidden (Default with no anime), reset to first.
-                if (_selectedCategoryId.value == 0L && !defaultHasAnime && _categories.value.isNotEmpty()) {
-                    _selectedCategoryId.value = _categories.value.first().id
-                }
+                // Default category (id=0) is ALWAYS visible — it's the system
+                // category that anime default to when no category is assigned.
+                // It can't be deleted. The user wants to always see it.
+                _categories.value = state.categories
                 applyFilterAndSort()
             }
         }
