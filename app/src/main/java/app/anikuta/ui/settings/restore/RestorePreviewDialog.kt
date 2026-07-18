@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.anikuta.backup.format.anikuta.RestoreOptions
+import app.anikuta.backup.model.BackupFormat
 import app.anikuta.backup.model.BackupSummary
 import app.anikuta.ui.theme.AnikutaSprings
 import java.text.SimpleDateFormat
@@ -296,7 +297,7 @@ private fun RestoreOptionRow(
 /** Human-readable name for [BackupFormat]. */
 private val BackupFormat.displayName: String
     get() = when (this) {
-        app.anikuta.backup.model.BackupFormat.ANIKUTA -> "AniKuta (.anikuta)"
-        app.anikuta.backup.model.BackupFormat.ANIYOMI -> "Aniyomi (.tachibk)"
-        app.anikuta.backup.model.BackupFormat.UNKNOWN -> "Unknown"
+        BackupFormat.ANIKUTA -> "AniKuta (.anikuta)"
+        BackupFormat.ANIYOMI -> "Aniyomi (.tachibk)"
+        BackupFormat.UNKNOWN -> "Unknown"
     }

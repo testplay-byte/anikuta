@@ -247,6 +247,7 @@ private fun LogEntryCard(event: RestoreProgress) {
 }
 
 /** Parse a Restoring message to determine the status icon + color. */
+@Composable
 private fun parseRestoringMessage(message: String): Triple<ImageVector, Color, String> {
     return when {
         message.contains("LINKED_TRACKER") || message.contains("Tier 1") ->
