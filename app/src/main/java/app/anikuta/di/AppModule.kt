@@ -18,6 +18,7 @@ import app.anikuta.data.cache.SubDubStore
 import app.anikuta.data.cache.ExtensionLinkStore
 import app.anikuta.data.cache.EpisodeSeenStore
 import app.anikuta.data.cache.ReleaseTrackingStore
+import app.anikuta.data.cache.PendingLinkStore
 import app.anikuta.notification.NotificationPreferences
 import app.anikuta.notification.ReleaseCheckPlanner
 import app.anikuta.notification.SubDubResolver
@@ -234,6 +235,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { ExtensionLinkStore(get<PreferenceStore>()) }
         // Episode seen (watched) tracking
         addSingletonFactory { EpisodeSeenStore(get<PreferenceStore>()) }
+        // Pending-link store (unlinked anime from aniyomi-format restore)
+        addSingletonFactory { PendingLinkStore(get<PreferenceStore>()) }
 
         // ---- Phase N (Notifications) — release tracking system ----
         // Release-tracking state store (per-anime tracking + offset learning)

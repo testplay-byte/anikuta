@@ -324,6 +324,7 @@ class BackupManager(
             playbackStateStore = playbackStateStore,
             categoryStore = categoryStore,
             preferenceRestorer = Injekt.get(),
+            pendingLinkStore = Injekt.get(),
         )
     }
 

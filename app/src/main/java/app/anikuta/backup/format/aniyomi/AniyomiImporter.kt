@@ -13,6 +13,7 @@ import app.anikuta.data.anilist.model.AniListCoverImage
 import app.anikuta.data.anilist.model.AniListTitle
 import app.anikuta.data.anilist.repository.AniListRepository
 import app.anikuta.data.cache.ExtensionLinkStore
+import app.anikuta.data.cache.PendingLinkStore
 import app.anikuta.player.PlaybackStateStore
 import app.anikuta.player.WatchProgressStore
 import app.anikuta.ui.library.CategoryStore
@@ -70,6 +71,7 @@ class AniyomiImporter(
     private val playbackStateStore: PlaybackStateStore,
     private val categoryStore: CategoryStore,
     private val preferenceRestorer: PreferenceRestorer,
+    private val pendingLinkStore: PendingLinkStore,
 ) {
 
     companion object {
@@ -247,6 +249,31 @@ class AniyomiImporter(
                 errors.add("settings: ${e.message}")
                 logcat(LogPriority.ERROR, e) { "Could not restore aniyomi preferences" }
             }
+        }
+
+        // Persist unlinked anime into PendingLinkStore for the post-restore review screen.
+        // The user resolves them (manual search/skip/add-without-link) from Step 4.
+        if (unlinkedAnime.isNotEmpty()) {
+            val pendingList = unlinkedAnime.map { ua ->
+                PendingLinkStore.PendingAnime(
+                    sourceId = ua.sourceId,
+                    sourceName = ua.sourceName,
+                    animeUrl = ua.animeUrl,
+                    title = ua.title,
+                    thumbnailUrl = ua.thumbnailUrl,
+                    pendingHistory = ua.pendingHistory.map { hist ->
+                        PendingLinkStore.PendingHistoryEntry(
+                            episodeUrl = hist.episodeUrl,
+                            positionSeconds = hist.positionSeconds,
+                            durationSeconds = hist.durationSeconds,
+                            updatedAt = hist.updatedAt,
+                        )
+                    },
+                    categoryNames = ua.categoryNames,
+                )
+            }
+            pendingLinkStore.addAll(pendingList)
+            onProgress("${unlinkedAnime.size} unlinked anime saved for manual review.")
         }
 
         val elapsed = System.currentTimeMillis() - startTime

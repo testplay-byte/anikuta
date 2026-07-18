@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -66,6 +67,14 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
     var isRestoring by remember { mutableStateOf(false) }
     var progressEvents by remember { mutableStateOf<List<RestoreProgress>>(emptyList()) }
     var restoreResult by remember { mutableStateOf<BackupManager.RestoreResult?>(null) }
+    var showReviewScreen by remember { mutableStateOf(false) }
+    var pendingCountState by remember { mutableStateOf(0) }
+
+    val pendingLinkStore: app.anikuta.data.cache.PendingLinkStore = remember { Injekt.get() }
+    // Refresh pending count when the screen is shown or after restore completes
+    LaunchedEffect(isRestoring) {
+        pendingCountState = pendingLinkStore.pendingCount()
+    }
 
     // File launchers
     val createAnikutaLauncher = rememberLauncherForActivityResult(
@@ -153,6 +162,14 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                         subtitle = "Import a backup file (auto-detects format)",
                         onClick = { restoreLauncher.launch(arrayOf("*/*")) },
                     )
+                    if (pendingCountState > 0) {
+                        ClickableSettingsRow(
+                            icon = Icons.Default.Link,
+                            title = "Review unlinked anime ($pendingCountState)",
+                            subtitle = "Anime from an aniyomi backup that need manual AniList linking",
+                            onClick = { showReviewScreen = true },
+                        )
+                    }
                 }
             }
 
@@ -308,6 +325,18 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                     confirmButton = { TextButton(onClick = { restoreResult = null }) { Text("OK") } },
                 )
             }
+        }
+    }
+
+    // Step 4: Unlinked-anime review screen (full-screen overlay)
+    if (showReviewScreen) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            app.anikuta.ui.settings.restore.UnlinkedAnimeReviewScreen(
+                onDone = {
+                    showReviewScreen = false
+                    pendingCountState = pendingLinkStore.pendingCount()
+                },
+            )
         }
     }
 }
