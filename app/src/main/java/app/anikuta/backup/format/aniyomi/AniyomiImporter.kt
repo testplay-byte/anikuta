@@ -3,7 +3,6 @@ package app.anikuta.backup.format.aniyomi
 import app.anikuta.backup.format.anikuta.RestoreOptions
 import app.anikuta.backup.link.AniListLinker
 import app.anikuta.backup.link.LinkResult
-import app.anikuta.backup.link.UnlinkReason
 import app.anikuta.backup.model.PendingHistoryEntry
 import app.anikuta.backup.model.RestoreResult
 import app.anikuta.backup.model.UnlinkedAnime
