@@ -13,8 +13,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.anikuta.backup.AutoBackupPreferences
 import app.anikuta.backup.BackupAutoJob
-import app.anikuta.core.util.system.logcat
-import logcat.LogPriority
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
@@ -61,7 +59,7 @@ fun AutoBackupSettingsSection() {
                         android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                 )
             } catch (e: SecurityException) {
-                logcat(LogPriority.WARN, e) { "Could not persist URI permission" }
+                android.util.Log.w("AutoBackup", "Could not persist URI permission", e)
             }
             directoryUri = uri.toString()
             autoPrefs.directoryUri().set(uri.toString())
