@@ -63,15 +63,17 @@ private val DarkColors = darkColorScheme(
 )
 
 /**
- * ANI-KUTA Material 3 theme (Design 1 — the fallback design).
+ * ANI-KUTA Material 3 theme.
  *
- * Uses dynamic color (Monet) on Android 12+ (API 31+).
- * Falls back to our brand seed (emerald) on lower APIs.
+ * Uses our brand seed (lime #b3f55b) on all APIs. Dynamic color (Monet) is
+ * DISABLED by default so the brand identity is consistent across devices.
+ *
+ * To re-enable dynamic color on Android 12+, pass `dynamicColor = true`.
  */
 @Composable
 fun AnikutaTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = when {

@@ -217,8 +217,8 @@ private fun ContentCountGrid(summary: BackupSummary) {
 
 @Composable
 private fun CountChip(icon: ImageVector, label: String, count: Int, isWarning: Boolean = false) {
-    val containerColor = if (isWarning) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
-    val contentColor = if (isWarning) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+    val containerColor = if (isWarning) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
+    val contentColor = if (isWarning) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = containerColor,

@@ -68,6 +68,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
     var progressEvents by remember { mutableStateOf<List<RestoreProgress>>(emptyList()) }
     var restoreResult by remember { mutableStateOf<BackupManager.RestoreResult?>(null) }
     var showReviewScreen by remember { mutableStateOf(false) }
+    var showCompleteScreen by remember { mutableStateOf(false) }
     var pendingCountState by remember { mutableStateOf(0) }
 
     val pendingLinkStore: app.anikuta.data.cache.PendingLinkStore = remember { Injekt.get() }
@@ -222,12 +223,12 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                              progressEvents.lastOrNull() is RestoreProgress.Error,
                 onDone = {
                     isRestoring = false
-                    // The restoreResult is already set; the result dialog below will show
+                    // Show the full complete screen instead of the popup dialog
+                    showCompleteScreen = true
                     pendingUri = null
                     progressEvents = emptyList()
                 },
                 onCancel = {
-                    // Phase 6 will wire graceful cancellation
                     isRestoring = false
                     pendingUri = null
                     progressEvents = emptyList()
@@ -355,7 +356,47 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
         }
     }
 
-    // Step 4: Unlinked-anime review screen (full-screen overlay)
+    // Step 4: Restore complete screen (full-screen overlay — replaces the old popup)
+    if (showCompleteScreen) {
+        val result = restoreResult
+        Surface(modifier = Modifier.fillMaxSize()) {
+            if (result is BackupManager.RestoreResult.Success) {
+                app.anikuta.ui.settings.restore.RestoreCompleteScreen(
+                    libraryCount = result.libraryCount,
+                    historyCount = result.historyCount,
+                    categoryCount = result.categoryCount,
+                    preferenceCount = 0,
+                    unlinkedCount = result.unlinkedCount,
+                    errors = emptyList(),
+                    note = result.note,
+                    onReviewUnlinked = {
+                        showCompleteScreen = false
+                        showReviewScreen = true
+                        pendingCountState = pendingLinkStore.pendingCount()
+                    },
+                    onDone = {
+                        showCompleteScreen = false
+                        restoreResult = null
+                    },
+                )
+            } else {
+                // Error case — show simple error
+                app.anikuta.ui.settings.restore.RestoreCompleteScreen(
+                    libraryCount = 0, historyCount = 0, categoryCount = 0, preferenceCount = 0,
+                    unlinkedCount = 0,
+                    errors = listOf((result as? BackupManager.RestoreResult.Error)?.message ?: "Unknown error"),
+                    note = null,
+                    onReviewUnlinked = {},
+                    onDone = {
+                        showCompleteScreen = false
+                        restoreResult = null
+                    },
+                )
+            }
+        }
+    }
+
+    // Step 5: Unlinked-anime review screen (full-screen overlay)
     if (showReviewScreen) {
         Surface(modifier = Modifier.fillMaxSize()) {
             app.anikuta.ui.settings.restore.UnlinkedAnimeReviewScreen(

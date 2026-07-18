@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,8 +35,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -94,9 +98,11 @@ fun UnlinkedAnimeReviewScreen(
     var isSearching by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
     var lastLinkedTitle by remember { mutableStateOf<String?>(null) }
+    // Manual search query (user can type their own keywords)
+    var manualQuery by remember { mutableStateOf("") }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier.fillMaxSize().statusBarsPadding().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // ---- Header ----
@@ -106,11 +112,15 @@ fun UnlinkedAnimeReviewScreen(
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Review Unlinked Anime", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Link, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text("Review Unlinked Anime", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                }
                 if (pendingList.isEmpty()) {
                     Text("All anime from the backup were successfully linked to AniList.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    Text("${pendingList.size} anime couldn't be auto-linked. For each, you can search AniList manually, skip, or add without linking.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${pendingList.size} anime couldn't be auto-linked. Tap an anime to search, skip, or add without linking.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -151,9 +161,12 @@ fun UnlinkedAnimeReviewScreen(
                     searchResults = if (isExpanded) searchResults else emptyList(),
                     isSearching = isSearching && isExpanded,
                     searchError = if (isExpanded) searchError else null,
+                    manualQuery = if (isExpanded) manualQuery else "",
+                    onManualQueryChange = { manualQuery = it },
                     onSearch = {
                         expandedKey = if (isExpanded) null else key
                         if (expandedKey == key) {
+                            manualQuery = "" // reset to the anime title
                             searchResults = emptyList()
                             searchError = null
                             isSearching = true
@@ -161,6 +174,24 @@ fun UnlinkedAnimeReviewScreen(
                                 try {
                                     val results = withContext(Dispatchers.IO) {
                                         anilistRepository.searchAnime(anime.title, page = 1, perPage = 10)
+                                    }
+                                    searchResults = results
+                                } catch (e: Exception) {
+                                    searchError = e.message ?: "Search failed"
+                                } finally {
+                                    isSearching = false
+                                }
+                            }
+                        }
+                    },
+                    onManualSearch = { query ->
+                        if (query.isNotBlank()) {
+                            isSearching = true
+                            searchError = null
+                            scope.launch {
+                                try {
+                                    val results = withContext(Dispatchers.IO) {
+                                        anilistRepository.searchAnime(query, page = 1, perPage = 10)
                                     }
                                     searchResults = results
                                 } catch (e: Exception) {
@@ -215,7 +246,10 @@ private fun PendingAnimeCard(
     searchResults: List<AniListAnime>,
     isSearching: Boolean,
     searchError: String?,
+    manualQuery: String,
+    onManualQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
+    onManualSearch: (String) -> Unit,
     onLink: (Int) -> Unit,
     onSkip: () -> Unit,
     onAddWithoutLink: () -> Unit,
@@ -283,6 +317,23 @@ private fun PendingAnimeCard(
             // Search panel (expandable)
             AnimatedVisibility(visible = isExpanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Manual search input
+                    OutlinedTextField(
+                        value = manualQuery,
+                        onValueChange = onManualQueryChange,
+                        label = { Text("Search AniList (type your own keywords)") },
+                        placeholder = { Text(anime.title) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(onClick = { onManualSearch(manualQuery) }) {
+                                Icon(Icons.Default.Search, contentDescription = "Search")
+                            }
+                        },
+                        keyboardActions = KeyboardActions(
+                            onSearch = { onManualSearch(manualQuery) },
+                        ),
+                    )
                     if (isSearching) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)

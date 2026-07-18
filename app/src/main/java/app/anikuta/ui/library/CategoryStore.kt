@@ -125,13 +125,23 @@ class CategoryStore(
         assignments = assignmentsPref.get(),
     )
 
-    /** Restore a category from backup (used by BackupManager). */
+    /** Restore a category from backup (used by BackupManager/AniyomiImporter).
+     *
+     * If a category with the same ID exists, it's replaced. If the backup
+     * category has id=0 (same as Default), the Default category's NAME is
+     * preserved (not overwritten by the backup's name) — the Default is a
+     * system category that the user can't rename or delete.
+     */
     fun restoreCategory(category: app.anikuta.backup.format.anikuta.BackupCategory) {
         val cats = categoriesPref.get().toMutableList()
-        // Replace if exists, else add
         val existing = cats.indexOfFirst { it.id == category.id }
-        val restored = Category(category.id, category.name, category.order)
+        // If this would overwrite the Default category (id=0), preserve the
+        // Default name instead of using the backup's name.
+        val restoredName = if (category.id == DEFAULT_CATEGORY_ID) DEFAULT_CATEGORY_NAME else category.name
+        val restored = Category(category.id, restoredName, category.order)
         if (existing >= 0) cats[existing] = restored else cats.add(restored)
+        // Ensure Default is always first
+        cats.sortWith(compareBy({ it.id != DEFAULT_CATEGORY_ID }, { it.order }))
         categoriesPref.set(cats)
     }
 

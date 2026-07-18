@@ -188,9 +188,12 @@ class LibraryViewModel : ViewModel() {
     private fun applyFilterAndSort() {
         val selected = _selectedCategoryId.value
         val filtered = if (selected == 0L) {
-            // Default category = show all (anime not assigned to any custom category
-            // OR assigned to Default). For simplicity, "Default" shows everything.
-            allAnime
+            // Default category: show anime explicitly assigned to Default (id=0),
+            // OR anime not assigned to any category (they default to Default).
+            allAnime.filter { anime ->
+                val cats = categoryAssignments[anime.id.toString()] ?: emptySet()
+                cats.isEmpty() || cats.contains(0L)
+            }
         } else {
             allAnime.filter { anime ->
                 val cats = categoryAssignments[anime.id.toString()] ?: emptySet()
@@ -224,8 +227,20 @@ class LibraryViewModel : ViewModel() {
         viewModelScope.launch {
             val catStore = categoryStore ?: return@launch
             catStore.changes.collect { state ->
-                _categories.value = state.categories
                 categoryAssignments = state.assignments
+                // Hide the Default category (id=0) when it has no anime assigned.
+                // Other empty categories are still shown (the user created them intentionally).
+                val defaultHasAnime = state.assignments.values.any { it.contains(0L) } ||
+                    state.assignments.values.any { it.isEmpty() }
+                _categories.value = if (defaultHasAnime) {
+                    state.categories
+                } else {
+                    state.categories.filter { it.id != 0L }
+                }
+                // If the selected category was hidden (Default with no anime), reset to first.
+                if (_selectedCategoryId.value == 0L && !defaultHasAnime && _categories.value.isNotEmpty()) {
+                    _selectedCategoryId.value = _categories.value.first().id
+                }
                 applyFilterAndSort()
             }
         }
