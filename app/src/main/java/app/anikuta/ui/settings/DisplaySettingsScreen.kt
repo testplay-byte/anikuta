@@ -8,12 +8,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Title
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,6 +54,9 @@ fun DisplaySettingsScreen(onBack: () -> Unit) {
     val epNumPos by prefs.episodeNumberPosition().stateIn(scope).collectAsState()
     val thumbPos by prefs.thumbnailPosition().stateIn(scope).collectAsState()
     val dlPlacement by prefs.downloadButtonPlacement().stateIn(scope).collectAsState()
+    val watchedAppearance by prefs.watchedEpisodeAppearance().stateIn(scope).collectAsState()
+    val watchedBlurRadius by prefs.watchedEpisodeBlurRadius().stateIn(scope).collectAsState()
+    val watchedAlpha by prefs.watchedEpisodeAlpha().stateIn(scope).collectAsState()
 
     SettingsSubpageScaffold(title = "Episode display", onBack = onBack) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -143,6 +148,50 @@ fun DisplaySettingsScreen(onBack: () -> Unit) {
                                 subtitle = "Show SUB / DUB / HSUB tags",
                                 checked = showAudioPills,
                                 onCheckedChange = { prefs.showAudioPills().set(it) },
+                            )
+                        }
+                    }
+                }
+
+                // ---- Watched episode appearance ----
+                item {
+                    SettingsGroupCard(title = "Watched episode appearance") {
+                        SelectableOptionCard(
+                            title = "Visual treatment",
+                            subtitle = "How episodes you've already watched appear in the list",
+                            options = listOf(
+                                Triple("none", "None", "Watched episodes look the same as unwatched"),
+                                Triple("grayscale", "Grayscale", "Black & white — desaturate the entire card"),
+                                Triple("blur", "Blur", "Slightly blur the entire card"),
+                                Triple("both", "Grayscale + Blur", "Maximum visual distinction"),
+                            ),
+                            selectedValue = watchedAppearance,
+                            onSelect = { prefs.watchedEpisodeAppearance().set(it) },
+                        )
+                        // Blur radius slider — only shown when blur is enabled
+                        if (watchedAppearance == "blur" || watchedAppearance == "both") {
+                            HorizontalDivider()
+                            SliderSettingsRow(
+                                icon = Icons.Default.BlurOn,
+                                title = "Blur strength",
+                                subtitle = "Higher = more blurry (may be harder to read)",
+                                value = watchedBlurRadius,
+                                valueRange = 0.5f..8f,
+                                valueFormatter = { "${it}x" },
+                                onValueChange = { prefs.watchedEpisodeBlurRadius().set(it) },
+                            )
+                        }
+                        // Alpha slider — only shown when grayscale is enabled
+                        if (watchedAppearance == "grayscale" || watchedAppearance == "both") {
+                            HorizontalDivider()
+                            SliderSettingsRow(
+                                icon = Icons.Default.VisibilityOff,
+                                title = "Dim amount",
+                                subtitle = "Lower = more transparent/faded",
+                                value = watchedAlpha,
+                                valueRange = 0.2f..1f,
+                                valueFormatter = { "${(it * 100).toInt()}%" },
+                                onValueChange = { prefs.watchedEpisodeAlpha().set(it) },
                             )
                         }
                     }

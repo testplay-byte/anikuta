@@ -117,3 +117,51 @@ internal fun SwitchSettingsRow(
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
+
+/**
+ * A settings row with a slider for adjusting a float value.
+ *
+ * @param icon           Leading icon.
+ * @param title          Row title.
+ * @param subtitle       Row subtitle (description).
+ * @param value          Current float value.
+ * @param valueRange     Min/max range for the slider.
+ * @param valueFormatter Formatter for displaying the value (e.g. "2x" or "55%").
+ * @param onValueChange  Called as the user drags the slider.
+ */
+@Composable
+internal fun SliderSettingsRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    valueFormatter: (Float) -> String = { it.toString() },
+    onValueChange: (Float) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            LeadingIcon(icon)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                text = valueFormatter(value),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
