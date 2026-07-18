@@ -106,7 +106,9 @@ class AniListLinker(
         onProgress("Tier 3 (fuzzy): searching AniList for '$title'...")
         val fuzzyResult = fuzzyMatch(backupAnime, onProgress)
         if (fuzzyResult != null) {
-            val (anilistId, confidence, matchedTitle) = fuzzyResult
+            val (matchedAnime, confidence) = fuzzyResult
+            val anilistId = matchedAnime.id
+            val matchedTitle = matchedAnime.title.english ?: matchedAnime.title.romaji ?: matchedAnime.title.native
             if (confidence >= FUZZY_THRESHOLD) {
                 logcat(LogPriority.DEBUG) {
                     "Tier 3 (fuzzy): '$title' → AniList:$anilistId ($matchedTitle, ${(confidence * 100).toInt()}%)"
@@ -116,7 +118,7 @@ class AniListLinker(
                 if (backupAnime.source != 0L && backupAnime.url.isNotEmpty()) {
                     extensionLinkStore.link(backupAnime.source, backupAnime.url, anilistId)
                 }
-                return@withContext LinkResult.Linked(anilistId, LinkTier.FUZZY, confidence, matchedTitle)
+                return@withContext LinkResult.Linked(anilistId, LinkTier.FUZZY, confidence, matchedTitle, matchedAnime)
             } else {
                 logcat(LogPriority.DEBUG) {
                     "Tier 3 (fuzzy): '$title' → best match '$matchedTitle' too low (${(confidence * 100).toInt()}% < ${FUZZY_THRESHOLD * 100}%)"
@@ -149,12 +151,12 @@ class AniListLinker(
      * (case-insensitive), it's returned immediately with confidence 1.0 —
      * no need to check other candidates.
      *
-     * @return Triple(anilistId, confidence, matchedTitle) or null if no results.
+     * @return Pair(matched AniListAnime, confidence) or null if no results.
      */
     private suspend fun fuzzyMatch(
         backupAnime: BackupAnime,
         onProgress: (String) -> Unit,
-    ): Triple<Int, Float, String>? {
+    ): Pair<AniListAnime, Float>? {
         val query = backupAnime.title.ifBlank { return null }
         return try {
             withTimeoutOrNull(SEARCH_TIMEOUT_MS) {
@@ -201,34 +203,30 @@ class AniListLinker(
                 }
 
                 // Exact match shortcut: check for exact title match first.
-                // This handles the case where the search returns the exact anime
-                // but the Jaro-Winkler heuristic might not give it 1.0 due to
-                // encoding/normalization differences.
                 val queryLower = query.lowercase().trim()
                 for (anime in results) {
                     val candidates = listOf(anime.title.english, anime.title.romaji, anime.title.native)
                         .filterNotNull().filter { it.isNotEmpty() }
                     for (candidate in candidates) {
                         if (candidate.lowercase().trim() == queryLower) {
-                            val matchedTitle = candidate
                             logcat(LogPriority.DEBUG) {
-                                "Tier 3: EXACT match found! '$query' == '$matchedTitle' → AniList:${anime.id}"
+                                "Tier 3: EXACT match found! '$query' == '$candidate' → AniList:${anime.id}"
                             }
-                            return@withTimeoutOrNull Triple(anime.id, 1.0f, matchedTitle)
+                            return@withTimeoutOrNull Pair(anime, 1.0f)
                         }
                     }
                 }
 
                 // No exact match — find the best fuzzy match
-                var best: Triple<Int, Float, String>? = null
+                var best: Pair<AniListAnime, Float>? = null
                 for (anime in results) {
                     val confidence = titleSimilarity(query, anime)
                     if (best == null || confidence > best!!.second) {
-                        best = Triple(anime.id, confidence, anime.title.english ?: anime.title.romaji ?: anime.title.native ?: "")
+                        best = Pair(anime, confidence)
                     }
                 }
                 logcat(LogPriority.DEBUG) {
-                    "Tier 3: best fuzzy match for '$query' → '${best?.third}' at ${(best?.second?.times(100)?.toInt() ?: 0)}%"
+                    "Tier 3: best fuzzy match for '$query' → '${best?.first?.title?.preferred()}' at ${(best?.second?.times(100)?.toInt() ?: 0)}%"
                 }
                 best
             }
@@ -330,12 +328,19 @@ enum class LinkTier { TRACKER, CACHE, FUZZY }
  * Result of a linking attempt.
  */
 sealed class LinkResult {
-    /** Successfully linked to an AniList ID. */
+    /** Successfully linked to an AniList ID.
+     *
+     * @param anilistAnime the full AniListAnime data from the search results
+     *   (only non-null for Tier 3 fuzzy matches). When non-null, the importer
+     *   can use this directly without making a separate getAnimeDetails API call.
+     *   This fixes blank covers (uses AniList's CDN cover URL) + speeds up restore.
+     */
     data class Linked(
         val anilistId: Int,
         val tier: LinkTier,
         val confidence: Float,
         val matchedTitle: String? = null,
+        val anilistAnime: AniListAnime? = null,
     ) : LinkResult()
 
     /** Could not link — queued for manual resolution (Phase 6 review screen). */

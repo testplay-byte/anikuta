@@ -179,34 +179,51 @@ class AniyomiImporter(
                                 detail = tierDetail,
                             ))
 
-                            // Fetch full AniList metadata (all anime here are favorites —
-                            // we filtered non-favorites out before the loop)
-                            onProgress(AniyomiRestoreProgress.AnimeProgress(
-                                current = current, total = total,
-                                title = backupAnime.title, status = AnimeStatus.FETCHING_METADATA,
-                            ))
-                            val anilistAnime = try {
-                                anilistRepository.getAnimeDetails(linkResult.anilistId)
-                            } catch (e: Exception) {
-                                logcat(LogPriority.WARN, e) {
-                                    "Could not fetch AniList details for ${linkResult.anilistId} — using minimal data"
+                            // Use the AniListAnime from the search results when available
+                            // (Tier 3 fuzzy). This avoids a separate getAnimeDetails API call,
+                            // fixes blank covers (uses AniList's CDN cover URL), and speeds up restore.
+                            // For Tier 1 (tracker) and Tier 2 (cache), we don't have the anime data,
+                            // so we fall back to getAnimeDetails.
+                            val anilistAnime = if (linkResult.anilistAnime != null) {
+                                logcat(LogPriority.DEBUG) {
+                                    "Using search result data for '${backupAnime.title}' (skipping getAnimeDetails)"
                                 }
-                                AniListAnime(
-                                    id = linkResult.anilistId,
-                                    title = AniListTitle(
-                                        english = backupAnime.title.ifBlank { null },
-                                        romaji = backupAnime.title.ifBlank { null },
-                                    ),
-                                    coverImage = AniListCoverImage(
-                                        extraLarge = backupAnime.thumbnailUrl,
-                                        large = backupAnime.thumbnailUrl,
-                                    ),
-                                    description = backupAnime.description,
-                                    genres = backupAnime.genre.ifEmpty { null },
-                                )
+                                linkResult.anilistAnime
+                            } else {
+                                onProgress(AniyomiRestoreProgress.AnimeProgress(
+                                    current = current, total = total,
+                                    title = backupAnime.title, status = AnimeStatus.FETCHING_METADATA,
+                                ))
+                                try {
+                                    anilistRepository.getAnimeDetails(linkResult.anilistId)
+                                } catch (e: Exception) {
+                                    logcat(LogPriority.WARN, e) {
+                                        "Could not fetch AniList details for ${linkResult.anilistId} — using minimal data"
+                                    }
+                                    AniListAnime(
+                                        id = linkResult.anilistId,
+                                        title = AniListTitle(
+                                            english = backupAnime.title.ifBlank { null },
+                                            romaji = backupAnime.title.ifBlank { null },
+                                        ),
+                                        coverImage = AniListCoverImage(
+                                            extraLarge = backupAnime.thumbnailUrl,
+                                            large = backupAnime.thumbnailUrl,
+                                        ),
+                                        description = backupAnime.description,
+                                        genres = backupAnime.genre.ifEmpty { null },
+                                    )
+                                }
                             }
                             libraryStore.save(anilistAnime)
                             libraryCount++
+
+                            // Log category data for debugging
+                            logcat(LogPriority.DEBUG) {
+                                "Anime '${backupAnime.title}' (AniList:${linkResult.anilistId}) " +
+                                    "categories from backup: ${backupAnime.categories} " +
+                                    "categoryOrderToName: $categoryOrderToName"
+                            }
 
                             // Restore history
                             if (options.history) {
