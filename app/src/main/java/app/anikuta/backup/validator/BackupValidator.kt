@@ -165,9 +165,17 @@ class BackupValidator(
             warnings.add("$mangaCount manga entries found — manga is not supported and will be skipped.")
         }
 
-        // Estimate unlinked anime: anime without AniList tracking (syncId=2)
+        // Count favorites vs non-favorites. Only favorites are restored to the library.
+        // Non-favorites (watched-but-not-saved) are skipped to avoid inflating the library.
+        val favoriteCount = backup.backupAnime.count { it.favorite }
+        val nonFavoriteCount = backup.backupAnime.size - favoriteCount
+        if (nonFavoriteCount > 0) {
+            warnings.add("$nonFavoriteCount non-favorite anime (watched but not in library) will be skipped. Only $favoriteCount favorites will be restored.")
+        }
+
+        // Estimate unlinked anime: favorites without AniList tracking (syncId=2)
         val animeWithoutTracking = backup.backupAnime.count { anime ->
-            anime.tracking.none { it.syncId == 2 } // syncId 2 = AniList
+            anime.favorite && anime.tracking.none { it.syncId == 2 }
         }
 
         // Source names from the backup
@@ -178,7 +186,7 @@ class BackupValidator(
             createdAt = 0L,
             appVersion = "",
             schemaVersion = if (backup.isLegacy) 1 else 2,
-            libraryCount = backup.backupAnime.size,
+            libraryCount = favoriteCount, // show favorites count, not total
             historyCount = backup.backupAnime.sumOf { it.history.size },
             categoryCount = backup.backupAnimeCategories.size,
             trackingCount = backup.backupAnime.sumOf { it.tracking.size },

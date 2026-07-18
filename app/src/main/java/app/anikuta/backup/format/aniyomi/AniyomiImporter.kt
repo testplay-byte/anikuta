@@ -138,10 +138,15 @@ class AniyomiImporter(
 
         // ---- Anime restoration (with AniList linking) ----
         if (options.library) {
-            val total = backup.backupAnime.size
+            // Only process FAVORITE anime. Non-favorites (watched-but-not-saved)
+            // are skipped entirely — they don't go in the library and their history
+            // can't be restored without an AniList ID. This also speeds up restore
+            // significantly (e.g. 28 favorites instead of 139 total).
+            val favoriteAnime = backup.backupAnime.filter { it.favorite }
+            val total = favoriteAnime.size
             onProgress(AniyomiRestoreProgress.SectionStart("anime", total))
 
-            for ((index, backupAnime) in backup.backupAnime.withIndex()) {
+            for ((index, backupAnime) in favoriteAnime.withIndex()) {
                 val current = index + 1
                 try {
                     onProgress(AniyomiRestoreProgress.AnimeProgress(
@@ -176,44 +181,34 @@ class AniyomiImporter(
                                 detail = tierDetail,
                             ))
 
-                            // Only save to library if the anime is a FAVORITE in the backup.
-                            // Aniyomi backups include non-favorite anime (watched but not in
-                            // library) as history carriers — we restore their history but
-                            // don't add them to the library (fixes the "77 restored from 28" bug).
-                            val isFavorite = backupAnime.favorite
-                            if (isFavorite) {
-                                // Fetch full AniList metadata
-                                onProgress(AniyomiRestoreProgress.AnimeProgress(
-                                    current = current, total = total,
-                                    title = backupAnime.title, status = AnimeStatus.FETCHING_METADATA,
-                                ))
-                                val anilistAnime = try {
-                                    anilistRepository.getAnimeDetails(linkResult.anilistId)
-                                } catch (e: Exception) {
-                                    logcat(LogPriority.WARN, e) {
-                                        "Could not fetch AniList details for ${linkResult.anilistId} — using minimal data"
-                                    }
-                                    AniListAnime(
-                                        id = linkResult.anilistId,
-                                        title = AniListTitle(
-                                            english = backupAnime.title.ifBlank { null },
-                                            romaji = backupAnime.title.ifBlank { null },
-                                        ),
-                                        coverImage = AniListCoverImage(
-                                            extraLarge = backupAnime.thumbnailUrl,
-                                            large = backupAnime.thumbnailUrl,
-                                        ),
-                                        description = backupAnime.description,
-                                        genres = backupAnime.genre.ifEmpty { null },
-                                    )
+                            // Fetch full AniList metadata (all anime here are favorites —
+                            // we filtered non-favorites out before the loop)
+                            onProgress(AniyomiRestoreProgress.AnimeProgress(
+                                current = current, total = total,
+                                title = backupAnime.title, status = AnimeStatus.FETCHING_METADATA,
+                            ))
+                            val anilistAnime = try {
+                                anilistRepository.getAnimeDetails(linkResult.anilistId)
+                            } catch (e: Exception) {
+                                logcat(LogPriority.WARN, e) {
+                                    "Could not fetch AniList details for ${linkResult.anilistId} — using minimal data"
                                 }
-                                libraryStore.save(anilistAnime)
-                                libraryCount++
-                            } else {
-                                logcat(LogPriority.DEBUG) {
-                                    "Skipping non-favorite anime '${backupAnime.title}' (history-only) — not adding to library"
-                                }
+                                AniListAnime(
+                                    id = linkResult.anilistId,
+                                    title = AniListTitle(
+                                        english = backupAnime.title.ifBlank { null },
+                                        romaji = backupAnime.title.ifBlank { null },
+                                    ),
+                                    coverImage = AniListCoverImage(
+                                        extraLarge = backupAnime.thumbnailUrl,
+                                        large = backupAnime.thumbnailUrl,
+                                    ),
+                                    description = backupAnime.description,
+                                    genres = backupAnime.genre.ifEmpty { null },
+                                )
                             }
+                            libraryStore.save(anilistAnime)
+                            libraryCount++
 
                             // Restore history
                             if (options.history) {
@@ -237,8 +232,7 @@ class AniyomiImporter(
                             }
 
                             // Track category assignment (by name — resolved later)
-                            // Only for favorite anime (library members)
-                            if (isFavorite && options.categories && backupAnime.categories.isNotEmpty()) {
+                            if (options.categories && backupAnime.categories.isNotEmpty()) {
                                 val catNames = backupAnime.categories.mapNotNull { order ->
                                     categoryOrderToName[order]
                                 }

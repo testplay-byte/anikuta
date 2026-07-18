@@ -5,11 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.*
@@ -24,29 +21,26 @@ import app.anikuta.backup.RestoreProgress
 import app.anikuta.backup.format.anikuta.RestoreOptions
 import app.anikuta.backup.model.BackupSummary
 import app.anikuta.backup.validator.BackupValidator
-import app.anikuta.ui.settings.restore.RestorePreviewDialog
+import app.anikuta.ui.settings.restore.RestorePreviewScreen
 import app.anikuta.ui.settings.restore.RestoreProgressScreen
+import app.anikuta.ui.settings.restore.RestoreCompleteScreen
+import app.anikuta.ui.settings.restore.UnlinkedAnimeReviewScreen
 import android.net.Uri
-import app.anikuta.core.util.system.logcat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import logcat.LogPriority
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
  * Backup & Restore settings screen.
  *
- * Two export formats:
- *  - AniKuta format (.anikuta) — our own JSON format, complete data
- *  - Aniyomi format (.tachibk) — protobuf+gzip, aniyomi-compatible
- *
- * Restore uses the 4-step flow (Phase 3):
- *  1. User picks a file → BackupValidator.peekBackup (decode only)
- *  2. RestorePreviewDialog shows summary + options → user confirms
- *  3. RestoreProgressScreen shows live progress
- *  4. (Phase 6) Review screen for unlinked anime
+ * Restore flow (5 steps, all full-screen):
+ *  1. User picks a file → BackupValidator.peekBackup (loading overlay)
+ *  2. RestorePreviewScreen (full screen) — summary + options → user taps Restore
+ *  3. RestoreProgressScreen (full screen) — live progress → auto-advances to 4
+ *  4. RestoreCompleteScreen (full screen) — summary + Show Results + Review/Finish
+ *  5. UnlinkedAnimeReviewScreen (full screen, if unlinked > 0) → returns to 4
  */
 @Composable
 fun BackupSettingsScreen(onBack: () -> Unit) {
@@ -67,13 +61,15 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
     var isRestoring by remember { mutableStateOf(false) }
     var progressEvents by remember { mutableStateOf<List<RestoreProgress>>(emptyList()) }
     var restoreResult by remember { mutableStateOf<BackupManager.RestoreResult?>(null) }
-    var showReviewScreen by remember { mutableStateOf(false) }
+
+    // Full-screen overlays
+    var showPreviewScreen by remember { mutableStateOf(false) }
     var showCompleteScreen by remember { mutableStateOf(false) }
+    var showReviewScreen by remember { mutableStateOf(false) }
     var pendingCountState by remember { mutableStateOf(0) }
 
     val pendingLinkStore: app.anikuta.data.cache.PendingLinkStore = remember { Injekt.get() }
-    // Refresh pending count when the screen is shown or after restore completes
-    LaunchedEffect(isRestoring) {
+    LaunchedEffect(isRestoring, showReviewScreen) {
         pendingCountState = pendingLinkStore.pendingCount()
     }
 
@@ -84,14 +80,9 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
         if (uri != null) {
             scope.launch {
                 isBackingUp = true
-                val success = withContext(Dispatchers.IO) {
-                    backupManager.createAnikutaBackup(uri)
-                }
+                val success = withContext(Dispatchers.IO) { backupManager.createAnikutaBackup(uri) }
                 isBackingUp = false
-                Toast.makeText(context,
-                    if (success) "Backup created" else "Backup failed",
-                    Toast.LENGTH_SHORT
-                ).show()
+                Toast.makeText(context, if (success) "Backup created" else "Backup failed", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -102,14 +93,9 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
         if (uri != null) {
             scope.launch {
                 isBackingUp = true
-                val success = withContext(Dispatchers.IO) {
-                    backupManager.createAniyomiBackup(uri)
-                }
+                val success = withContext(Dispatchers.IO) { backupManager.createAniyomiBackup(uri) }
                 isBackingUp = false
-                Toast.makeText(context,
-                    if (success) "Aniyomi backup created" else "Backup failed",
-                    Toast.LENGTH_SHORT
-                ).show()
+                Toast.makeText(context, if (success) "Aniyomi backup created" else "Backup failed", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -118,17 +104,15 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            // Step 1: peek the backup (decode without restoring)
             pendingUri = uri
             isPeeking = true
             peekError = null
             scope.launch {
-                val summary = withContext(Dispatchers.IO) {
-                    validator.peekBackup(uri)
-                }
+                val summary = withContext(Dispatchers.IO) { validator.peekBackup(uri) }
                 isPeeking = false
                 if (summary.isParseable) {
                     previewSummary = summary
+                    showPreviewScreen = true
                 } else {
                     peekError = summary.parseError ?: "Could not parse backup"
                 }
@@ -136,13 +120,13 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
         }
     }
 
+    // ---- The settings list (shown when no full-screen overlay is active) ----
     SettingsSubpageScaffold(title = "Backup & Restore", onBack = onBack) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // ---- Create backup ----
             item {
                 SettingsGroupCard(title = "Create backup") {
                     ClickableSettingsRow(
@@ -153,8 +137,6 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                     )
                 }
             }
-
-            // ---- Restore backup ----
             item {
                 SettingsGroupCard(title = "Restore backup") {
                     ClickableSettingsRow(
@@ -173,13 +155,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                     }
                 }
             }
-
-            // ---- Auto backup ----
-            item {
-                app.anikuta.ui.settings.restore.AutoBackupSettingsSection()
-            }
-
-            // ---- Info ----
+            item { app.anikuta.ui.settings.restore.AutoBackupSettingsSection() }
             item {
                 SettingsGroupCard(title = "About backups") {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -187,53 +163,22 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("• AniKuta format (.anikuta) — our own format with all data", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("• Aniyomi format (.tachibk) — compatible with aniyomi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Restore shows a preview before proceeding, so you can see what's in the backup.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
     }
 
-    // Loading overlay (for backup creation + peek)
+    // Loading overlay (backup creation + peek)
     if (isBackingUp || isPeeking) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Card {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
+                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(if (isBackingUp) "Creating backup..." else "Reading backup...")
                 }
             }
-        }
-    }
-
-    // Step 3: Restore progress screen (full-screen overlay)
-    if (isRestoring) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            RestoreProgressScreen(
-                events = progressEvents,
-                isComplete = progressEvents.lastOrNull() is RestoreProgress.Complete ||
-                             progressEvents.lastOrNull() is RestoreProgress.Error,
-                onDone = {
-                    isRestoring = false
-                    // Show the full complete screen instead of the popup dialog
-                    showCompleteScreen = true
-                    pendingUri = null
-                    progressEvents = emptyList()
-                },
-                onCancel = {
-                    isRestoring = false
-                    pendingUri = null
-                    progressEvents = emptyList()
-                },
-            )
         }
     }
 
@@ -258,151 +203,106 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
         )
     }
 
-    // Step 2: Restore preview dialog
-    previewSummary?.let { summary ->
+    // Peek error dialog
+    peekError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { peekError = null; pendingUri = null },
+            title = { Text("Could not read backup") },
+            text = { Text(error) },
+            confirmButton = { TextButton(onClick = { peekError = null; pendingUri = null }) { Text("OK") } },
+        )
+    }
+
+    // ---- Step 2: Preview (full screen) ----
+    if (showPreviewScreen) {
+        val summary = previewSummary
         val uri = pendingUri
-        if (uri != null) {
-            RestorePreviewDialog(
-                summary = summary,
-                onRestore = { options ->
-                    previewSummary = null
-                    // Step 3: start the restore with live progress
-                    isRestoring = true
-                    progressEvents = emptyList()
-                    scope.launch {
-                        val result = withContext(Dispatchers.IO) {
-                            backupManager.restoreBackupWithOptions(uri, options) { event ->
-                                progressEvents = progressEvents + event
+        if (summary != null && uri != null) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                RestorePreviewScreen(
+                    summary = summary,
+                    onRestore = { options ->
+                        showPreviewScreen = false
+                        isRestoring = true
+                        progressEvents = emptyList()
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                backupManager.restoreBackupWithOptions(uri, options) { event ->
+                                    progressEvents = progressEvents + event
+                                }
                             }
+                            restoreResult = result
                         }
-                        restoreResult = result
-                    }
+                    },
+                    onCancel = {
+                        showPreviewScreen = false
+                        previewSummary = null
+                        pendingUri = null
+                    },
+                )
+            }
+        }
+    }
+
+    // ---- Step 3: Progress (full screen) ----
+    if (isRestoring) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            RestoreProgressScreen(
+                events = progressEvents,
+                isComplete = progressEvents.lastOrNull() is RestoreProgress.Complete ||
+                             progressEvents.lastOrNull() is RestoreProgress.Error,
+                onDone = {
+                    isRestoring = false
+                    showCompleteScreen = true
+                    pendingUri = null
+                    progressEvents = emptyList()
                 },
                 onCancel = {
-                    previewSummary = null
+                    isRestoring = false
                     pendingUri = null
+                    progressEvents = emptyList()
                 },
             )
         }
     }
 
-    // Peek error dialog
-    peekError?.let { error ->
-        AlertDialog(
-            onDismissRequest = {
-                peekError = null
-                pendingUri = null
-            },
-            title = { Text("Could not read backup") },
-            text = { Text(error) },
-            confirmButton = {
-                TextButton(onClick = {
-                    peekError = null
-                    pendingUri = null
-                }) { Text("OK") }
-            },
-        )
-    }
-
-    // Restore result dialog (shown after Step 3 "Done")
-    restoreResult?.let { result ->
-        when (result) {
-            is BackupManager.RestoreResult.Success -> {
-                AlertDialog(
-                    onDismissRequest = {
-                        restoreResult = null
-                        // Auto-navigate to review screen if there are unlinked anime
-                        if (result.unlinkedCount > 0) {
-                            pendingCountState = pendingLinkStore.pendingCount()
-                            showReviewScreen = true
-                        }
-                    },
-                    title = { Text("Restore complete") },
-                    text = {
-                        buildString {
-                            append("✓ Library: ${result.libraryCount} anime\n")
-                            append("✓ History: ${result.historyCount} entries\n")
-                            append("✓ Searches: ${result.searchCount} terms\n")
-                            append("✓ Categories: ${result.categoryCount}")
-                            if (result.unlinkedCount > 0) {
-                                append("\n\n⚠ ${result.unlinkedCount} anime could not be auto-linked to AniList.")
-                                append(" You'll be taken to the review screen to resolve them.")
-                            }
-                            result.note?.let { append("\n\n$it") }
-                        }.let { Text(it) }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            restoreResult = null
-                            // Auto-navigate to review screen if there are unlinked anime
-                            if (result.unlinkedCount > 0) {
-                                pendingCountState = pendingLinkStore.pendingCount()
-                                showReviewScreen = true
-                            }
-                        }) {
-                            Text(if (result.unlinkedCount > 0) "Review unlinked" else "OK")
-                        }
-                    },
-                )
-            }
-            is BackupManager.RestoreResult.Error -> {
-                AlertDialog(
-                    onDismissRequest = { restoreResult = null },
-                    title = { Text("Restore failed") },
-                    text = { Text(result.message) },
-                    confirmButton = { TextButton(onClick = { restoreResult = null }) { Text("OK") } },
-                )
-            }
-        }
-    }
-
-    // Step 4: Restore complete screen (full-screen overlay — replaces the old popup)
+    // ---- Step 4: Complete (full screen) ----
     if (showCompleteScreen) {
         val result = restoreResult
         Surface(modifier = Modifier.fillMaxSize()) {
-            if (result is BackupManager.RestoreResult.Success) {
-                app.anikuta.ui.settings.restore.RestoreCompleteScreen(
-                    libraryCount = result.libraryCount,
-                    historyCount = result.historyCount,
-                    categoryCount = result.categoryCount,
-                    preferenceCount = 0,
-                    unlinkedCount = result.unlinkedCount,
-                    errors = emptyList(),
-                    note = result.note,
-                    onReviewUnlinked = {
-                        showCompleteScreen = false
-                        showReviewScreen = true
-                        pendingCountState = pendingLinkStore.pendingCount()
-                    },
-                    onDone = {
-                        showCompleteScreen = false
-                        restoreResult = null
-                    },
-                )
-            } else {
-                // Error case — show simple error
-                app.anikuta.ui.settings.restore.RestoreCompleteScreen(
-                    libraryCount = 0, historyCount = 0, categoryCount = 0, preferenceCount = 0,
-                    unlinkedCount = 0,
-                    errors = listOf((result as? BackupManager.RestoreResult.Error)?.message ?: "Unknown error"),
-                    note = null,
-                    onReviewUnlinked = {},
-                    onDone = {
-                        showCompleteScreen = false
-                        restoreResult = null
-                    },
-                )
-            }
+            RestoreCompleteScreen(
+                libraryCount = (result as? BackupManager.RestoreResult.Success)?.libraryCount ?: 0,
+                historyCount = (result as? BackupManager.RestoreResult.Success)?.historyCount ?: 0,
+                categoryCount = (result as? BackupManager.RestoreResult.Success)?.categoryCount ?: 0,
+                preferenceCount = 0,
+                unlinkedCount = (result as? BackupManager.RestoreResult.Success)?.unlinkedCount ?: 0,
+                errors = if (result is BackupManager.RestoreResult.Error) listOf(result.message) else emptyList(),
+                note = (result as? BackupManager.RestoreResult.Success)?.note,
+                onReviewUnlinked = {
+                    showCompleteScreen = false
+                    showReviewScreen = true
+                    pendingCountState = pendingLinkStore.pendingCount()
+                },
+                onDone = {
+                    showCompleteScreen = false
+                    restoreResult = null
+                },
+            )
         }
     }
 
-    // Step 5: Unlinked-anime review screen (full-screen overlay)
+    // ---- Step 5: Review unlinked (full screen) ----
     if (showReviewScreen) {
         Surface(modifier = Modifier.fillMaxSize()) {
-            app.anikuta.ui.settings.restore.UnlinkedAnimeReviewScreen(
+            UnlinkedAnimeReviewScreen(
                 onDone = {
                     showReviewScreen = false
                     pendingCountState = pendingLinkStore.pendingCount()
+                    // If there are still unlinked anime, return to complete screen.
+                    // Otherwise, we're done.
+                    if (pendingLinkStore.pendingCount() > 0) {
+                        showCompleteScreen = true
+                    }
                 },
             )
         }
