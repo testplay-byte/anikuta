@@ -173,6 +173,11 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            // ---- Auto backup ----
+            item {
+                app.anikuta.ui.settings.restore.AutoBackupSettingsSection()
+            }
+
             // ---- Info ----
             item {
                 SettingsGroupCard(title = "About backups") {

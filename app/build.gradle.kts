@@ -146,6 +146,9 @@ dependencies {
     // UniFile (SAF / DocumentFile wrapper for folder selection)
     implementation(libs.unifile)
 
+    // DocumentFile (for SAF directory operations in auto-backup)
+    implementation(libs.documentfile)
+
     // androidx.preference (extension settings UI — PreferenceFragmentCompat)
     implementation(libs.preference.ktx)
 
