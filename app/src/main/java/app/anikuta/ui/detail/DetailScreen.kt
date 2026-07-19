@@ -1019,7 +1019,12 @@ private fun CategoryPickerDialog(
     onConfirm: (Set<Long>) -> Unit,
 ) {
     val allCategories = remember { viewModel.getAllCategories() }
-    val currentSelection = remember { mutableStateOf(viewModel.getCurrentCategories().toMutableSet()) }
+    // Use a SnapshotStateSet so Compose detects add/remove and recomposes.
+    val currentSelection = remember {
+        androidx.compose.runtime.mutableStateSetOf<Long>().apply {
+            addAll(viewModel.getCurrentCategories())
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1033,16 +1038,13 @@ private fun CategoryPickerDialog(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 allCategories.forEach { category ->
-                    val isSelected = category.id in currentSelection.value
+                    val isSelected = category.id in currentSelection
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                if (isSelected) {
-                                    currentSelection.value.remove(category.id)
-                                } else {
-                                    currentSelection.value.add(category.id)
-                                }
+                                if (isSelected) currentSelection.remove(category.id)
+                                else currentSelection.add(category.id)
                             }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1050,7 +1052,7 @@ private fun CategoryPickerDialog(
                         Checkbox(
                             checked = isSelected,
                             onCheckedChange = {
-                                if (it) currentSelection.value.add(category.id) else currentSelection.value.remove(category.id)
+                                if (it) currentSelection.add(category.id) else currentSelection.remove(category.id)
                             },
                             colors = androidx.compose.material3.CheckboxDefaults.colors(
                                 checkedColor = MaterialTheme.colorScheme.primary,
@@ -1067,7 +1069,7 @@ private fun CategoryPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(currentSelection.value.toSet()) }) {
+            TextButton(onClick = { onConfirm(currentSelection.toSet()) }) {
                 Text("Save")
             }
         },
