@@ -837,20 +837,24 @@ private fun DetailHeader(
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
             Row {
-                // Save button — tap to toggle save (Default category), long-press to pick categories
+                // Save button — tap to toggle save (Default category), long-press to pick categories.
+                // Uses combinedClickable on the Box (NOT IconButton, which consumes touch events
+                // and prevents onLongClick from firing). The Icon is wrapped in a Box with
+                // minimum touch target size (48dp) for accessibility.
                 Box(
-                    modifier = Modifier.combinedClickable(
-                        onClick = onSave,
-                        onLongClick = onLongPressSave,
-                    ),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .combinedClickable(
+                            onClick = onSave,
+                            onLongClick = onLongPressSave,
+                        ),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    IconButton(onClick = onSave) {
-                        Icon(
-                            if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = if (isSaved) "Saved" else "Save",
-                            tint = if (isSaved) MaterialTheme.colorScheme.primary else Color.White,
-                        )
-                    }
+                    Icon(
+                        if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = if (isSaved) "Saved (long-press for categories)" else "Save (long-press for categories)",
+                        tint = if (isSaved) MaterialTheme.colorScheme.primary else Color.White,
+                    )
                 }
                 IconButton(onClick = onShare) {
                     Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)

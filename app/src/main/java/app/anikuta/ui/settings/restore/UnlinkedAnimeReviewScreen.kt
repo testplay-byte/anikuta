@@ -1,7 +1,6 @@
 package app.anikuta.ui.settings.restore
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -11,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,22 +28,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,7 +59,6 @@ import androidx.compose.ui.unit.dp
 import app.anikuta.data.anilist.model.AniListAnime
 import app.anikuta.data.anilist.repository.AniListRepository
 import app.anikuta.data.cache.PendingLinkStore
-import app.anikuta.ui.theme.AnikutaSprings
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -73,19 +67,17 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Step 5 of the restore flow — the post-restore review screen for unlinked anime.
+ * Review Unlinked Anime screen — Step 5 of the restore flow.
  *
- * Redesigned to match the app's M3 Expressive design language:
- *  - Clean header with icon + count badge.
- *  - Each pending anime is a Card with cover image, title, source, history count.
- *  - Tap to expand → reveals search panel with manual keyword input + results.
- *  - Search results show cover thumbnails + metadata + link button.
+ * Redesigned with a clean, modern UI matching the app's M3 Expressive design:
+ *  - Header card with icon + count badge + description.
+ *  - Each anime is a Card with cover image, title, source, and expand button.
+ *  - Tap to expand reveals a search panel with AniList results (cover thumbnails).
+ *  - Manual keyword search input.
  *  - Three actions: Search (expand), Skip, Add without link.
- *  - Smooth expand/collapse animations (spring-based).
  *  - Link confirmation banner (auto-dismiss).
- *  - Color-coded status icons.
- *
- * @param onDone called when the user finishes reviewing.
+ *  - Empty state with Done button.
+ *  - Bottom Done bar.
  */
 @Composable
 fun UnlinkedAnimeReviewScreen(
@@ -115,41 +107,30 @@ fun UnlinkedAnimeReviewScreen(
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             tonalElevation = 2.dp,
         ) {
-            Column(
+            Row(
                 modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                ) {
                     Icon(
                         Icons.Default.CloudOff,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(8.dp).size(24.dp),
                     )
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Review Unlinked", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text(
-                            if (pendingList.isEmpty()) "All anime linked successfully"
-                            else "${pendingList.size} anime need manual linking",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (pendingList.isNotEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Text(
-                                "${pendingList.size}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            )
-                        }
-                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Review Unlinked", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (pendingList.isEmpty()) "All anime linked"
+                        else "${pendingList.size} need manual linking",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -172,7 +153,7 @@ fun UnlinkedAnimeReviewScreen(
                     ) {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Linked '$title' to AniList", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("Linked '$title'", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
                 LaunchedEffect(title) {
@@ -182,7 +163,7 @@ fun UnlinkedAnimeReviewScreen(
             }
         }
 
-        // ---- Pending anime list ----
+        // ---- Content ----
         if (pendingList.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -192,25 +173,21 @@ fun UnlinkedAnimeReviewScreen(
                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(64.dp))
                     Spacer(Modifier.height(16.dp))
                     Text("All Done!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Every anime has been linked to AniList.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Every anime has been linked.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(24.dp))
-                    Button(onClick = onDone) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Done")
-                    }
+                    Button(onClick = onDone) { Text("Done") }
                 }
             }
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(pendingList, key = { "${it.sourceId}:${it.animeUrl}" }) { anime ->
                     val key = "${anime.sourceId}:${anime.animeUrl}"
                     val isExpanded = expandedKey == key
-                    PendingAnimeCard(
+                    UnlinkedAnimeCard(
                         anime = anime,
                         isExpanded = isExpanded,
                         searchResults = if (isExpanded) searchResults else emptyList(),
@@ -260,20 +237,13 @@ fun UnlinkedAnimeReviewScreen(
                         onLink = { anilistId ->
                             scope.launch {
                                 withContext(Dispatchers.IO) {
-                                    // 1. Fetch full AniList metadata for the linked anime
                                     val linkedAnime = try {
                                         anilistRepository.getAnimeDetails(anilistId)
                                     } catch (e: Exception) {
-                                        // Fallback: build minimal anime from search result
-                                        val searchResult = searchResults.find { it.id == anilistId }
-                                        searchResult ?: return@withContext
+                                        searchResults.find { it.id == anilistId } ?: return@withContext
                                     }
-
-                                    // 2. Save to library
                                     val libraryStore = uy.kohesive.injekt.Injekt.get<app.anikuta.ui.library.LibraryStore>()
                                     libraryStore.save(linkedAnime)
-
-                                    // 3. Assign to categories (from the backup's category names)
                                     if (anime.categoryNames.isNotEmpty()) {
                                         val catStore = uy.kohesive.injekt.Injekt.get<app.anikuta.ui.library.CategoryStore>()
                                         val allCats = catStore.getCategories()
@@ -285,8 +255,6 @@ fun UnlinkedAnimeReviewScreen(
                                             catStore.setAnimeCategories(anilistId, catIds)
                                         }
                                     }
-
-                                    // 4. Restore pending history
                                     val watchProgressStore = uy.kohesive.injekt.Injekt.get<app.anikuta.player.WatchProgressStore>()
                                     for (hist in anime.pendingHistory) {
                                         try {
@@ -300,24 +268,12 @@ fun UnlinkedAnimeReviewScreen(
                                                 animeTitle = anime.title,
                                                 episodeNumber = -1f,
                                             )
-                                        } catch (e: Exception) {
-                                            // best-effort
-                                        }
+                                        } catch (_: Exception) {}
                                     }
-
-                                    // 5. Start release tracking
                                     try {
                                         val tracker = uy.kohesive.injekt.Injekt.get<app.anikuta.notification.ReleaseTracker>()
-                                        tracker.startTracking(
-                                            anilistId = anilistId,
-                                            title = anime.title,
-                                            coverUrl = anime.thumbnailUrl,
-                                        )
-                                    } catch (e: Exception) {
-                                        // best-effort
-                                    }
-
-                                    // 6. Remove from pending
+                                        tracker.startTracking(anilistId, anime.title, anime.thumbnailUrl)
+                                    } catch (_: Exception) {}
                                     pendingLinkStore.remove(anime.sourceId, anime.animeUrl)
                                 }
                             }
@@ -327,15 +283,11 @@ fun UnlinkedAnimeReviewScreen(
                         },
                         onSkip = {
                             pendingLinkStore.remove(anime.sourceId, anime.animeUrl)
-                            if (expandedKey == key) {
-                                expandedKey = null
-                                searchResults = emptyList()
-                            }
+                            if (expandedKey == key) { expandedKey = null; searchResults = emptyList() }
                         },
                         onAddWithoutLink = {
                             pendingLinkStore.remove(anime.sourceId, anime.animeUrl)
-                            expandedKey = null
-                            searchResults = emptyList()
+                            expandedKey = null; searchResults = emptyList()
                         },
                     )
                 }
@@ -343,25 +295,27 @@ fun UnlinkedAnimeReviewScreen(
         }
 
         // ---- Bottom bar ----
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            tonalElevation = 3.dp,
-            shadowElevation = 8.dp,
-        ) {
-            Button(
-                onClick = onDone,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+        if (pendingList.isNotEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                tonalElevation = 3.dp,
+                shadowElevation = 8.dp,
             ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Done")
+                Button(
+                    onClick = onDone,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                ) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Done")
+                }
             }
         }
     }
 }
 
 @Composable
-private fun PendingAnimeCard(
+private fun UnlinkedAnimeCard(
     anime: PendingLinkStore.PendingAnime,
     isExpanded: Boolean,
     searchResults: List<AniListAnime>,
@@ -375,11 +329,6 @@ private fun PendingAnimeCard(
     onSkip: () -> Unit,
     onAddWithoutLink: () -> Unit,
 ) {
-    val rotation by animateFloatAsState(
-        targetValue = if (isExpanded) 180f else 0f,
-        label = "expand_rotation",
-    )
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -390,12 +339,11 @@ private fun PendingAnimeCard(
         elevation = CardDefaults.cardElevation(defaultElevation = if (isExpanded) 2.dp else 1.dp),
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // ---- Cover + title row (tap to expand) ----
+            // Cover + title row (tap to expand)
             Row(
                 modifier = Modifier.fillMaxWidth().clickable { onToggle() },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Cover image
                 if (!anime.thumbnailUrl.isNullOrBlank()) {
                     AsyncImage(
                         model = anime.thumbnailUrl,
@@ -417,95 +365,71 @@ private fun PendingAnimeCard(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(anime.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("From: ${anime.sourceName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(anime.sourceName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (anime.pendingHistory.isNotEmpty()) {
-                        Text("${anime.pendingHistory.size} history entries", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${anime.pendingHistory.size} history entries", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                // Expand/collapse icon
-                Icon(
-                    if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp),
-                )
             }
 
-            // ---- Action buttons (always visible) ----
+            // Action buttons
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Button(
-                    onClick = onToggle,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                ) {
+                Button(onClick = onToggle, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Search AniList", style = MaterialTheme.typography.labelMedium)
+                    Text("Search")
                 }
-                OutlinedButton(
-                    onClick = onSkip,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                ) {
+                OutlinedButton(onClick = onSkip) {
                     Icon(Icons.Default.SkipNext, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Skip", style = MaterialTheme.typography.labelMedium)
+                    Text("Skip")
                 }
-                OutlinedButton(
-                    onClick = onAddWithoutLink,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                ) {
+                OutlinedButton(onClick = onAddWithoutLink) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Add", style = MaterialTheme.typography.labelMedium)
+                    Text("Add")
                 }
             }
 
-            // ---- Search panel (expandable) ----
+            // Expandable search panel
             AnimatedVisibility(visible = isExpanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Manual search input
                     OutlinedTextField(
                         value = manualQuery,
                         onValueChange = onManualQueryChange,
-                        label = { Text("Search AniList (type your own keywords)") },
+                        label = { Text("Search keywords") },
                         placeholder = { Text(anime.title) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         trailingIcon = {
-                            IconButton(onClick = { onManualSearch(manualQuery) }) {
-                                Icon(Icons.Default.Search, contentDescription = "Search")
-                            }
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "Search",
+                                modifier = Modifier.clickable { onManualSearch(manualQuery) },
+                            )
                         },
-                        keyboardActions = KeyboardActions(
-                            onSearch = { onManualSearch(manualQuery) },
-                        ),
+                        keyboardActions = KeyboardActions(onSearch = { onManualSearch(manualQuery) }),
                     )
-
-                    // Loading
                     if (isSearching) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(8.dp))
-                            Text("Searching AniList...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Searching...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-
-                    // Error
                     searchError?.let {
                         Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.errorContainer) {
                             Text("⚠ $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(8.dp))
                         }
                     }
-
-                    // Results
                     if (searchResults.isNotEmpty()) {
-                        Text("Tap a result to link:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+                        Text("Tap to link:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
                         searchResults.forEach { result ->
-                            SearchResultCard(result) { onLink(result.id) }
+                            SearchResultRow(result) { onLink(result.id) }
                         }
                     }
                 }
@@ -515,24 +439,16 @@ private fun PendingAnimeCard(
 }
 
 @Composable
-private fun SearchResultCard(result: AniListAnime, onLink: () -> Unit) {
-    val isPressed = remember { mutableStateOf(false) }
-    val containerColor by animateColorAsState(
-        targetValue = if (isPressed.value) MaterialTheme.colorScheme.secondaryContainer
-        else MaterialTheme.colorScheme.surfaceContainerLowest,
-        label = "result_card_color",
-    )
-
+private fun SearchResultRow(result: AniListAnime, onLink: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth().clickable { onLink() },
         shape = RoundedCornerShape(12.dp),
-        color = containerColor,
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
         Row(
             modifier = Modifier.padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Thumbnail
             val thumbUrl = result.coverImage.extraLarge ?: result.coverImage.large ?: result.coverImage.medium
             if (!thumbUrl.isNullOrBlank()) {
                 AsyncImage(
@@ -547,8 +463,19 @@ private fun SearchResultCard(result: AniListAnime, onLink: () -> Unit) {
                 Text(result.title.preferred(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("AniList:${result.id} • ${result.seasonYear ?: ""} ${result.format ?: ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = onLink) {
-                Icon(Icons.Default.Link, contentDescription = "Link", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.clickable { onLink() },
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.Link, contentDescription = "Link", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Link", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
             }
         }
     }
