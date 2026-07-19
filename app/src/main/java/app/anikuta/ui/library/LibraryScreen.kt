@@ -108,6 +108,7 @@ fun LibraryScreen(
     // Create-category dialog
     if (showCreateCategoryDialog) {
         var newCategoryName by remember { mutableStateOf("") }
+        val context = androidx.compose.ui.platform.LocalContext.current
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showCreateCategoryDialog = false },
             title = { Text("New category") },
@@ -122,7 +123,14 @@ fun LibraryScreen(
             confirmButton = {
                 TextButton(onClick = {
                     if (newCategoryName.isNotBlank()) {
-                        viewModel.createCategory(newCategoryName)
+                        val result = viewModel.createCategory(newCategoryName)
+                        if (result == -1L) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "A category with that name already exists",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        }
                     }
                     showCreateCategoryDialog = false
                 }) { Text("Create") }

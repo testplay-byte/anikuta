@@ -84,4 +84,33 @@ class SubDubStore(
         )
         store.set(map)
     }
+
+    /**
+     * Restore a sub/dub entry from backup, preserving the original `lastUpdated`
+     * timestamp (unlike [update], which stamps `now`).
+     *
+     * Used by the backup restore path. Bug #5 fix: the old restore called [update],
+     * which overwrote `lastUpdated` with the current time, losing the original
+     * timestamp and making the cache appear fresher than it really was.
+     */
+    fun restore(
+        anilistId: Int,
+        hasSub: Boolean,
+        hasDub: Boolean,
+        subCount: Int,
+        dubCount: Int,
+        totalEpisodes: Int,
+        lastUpdated: Long,
+    ) {
+        val map = store.get().toMutableMap()
+        map[anilistId.toString()] = SubDubInfo(
+            hasSub = hasSub,
+            hasDub = hasDub,
+            subCount = subCount,
+            dubCount = dubCount,
+            totalEpisodes = totalEpisodes,
+            lastUpdated = lastUpdated,
+        )
+        store.set(map)
+    }
 }

@@ -188,9 +188,12 @@ class LibraryViewModel : ViewModel() {
     private fun applyFilterAndSort() {
         val selected = _selectedCategoryId.value
         val filtered = if (selected == 0L) {
-            // Default category = show all (anime not assigned to any custom category
-            // OR assigned to Default). For simplicity, "Default" shows everything.
-            allAnime
+            // Default category: show anime explicitly assigned to Default (id=0),
+            // OR anime not assigned to any category (they default to Default).
+            allAnime.filter { anime ->
+                val cats = categoryAssignments[anime.id.toString()] ?: emptySet()
+                cats.isEmpty() || cats.contains(0L)
+            }
         } else {
             allAnime.filter { anime ->
                 val cats = categoryAssignments[anime.id.toString()] ?: emptySet()
@@ -224,8 +227,11 @@ class LibraryViewModel : ViewModel() {
         viewModelScope.launch {
             val catStore = categoryStore ?: return@launch
             catStore.changes.collect { state ->
-                _categories.value = state.categories
                 categoryAssignments = state.assignments
+                // Default category (id=0) is ALWAYS visible — it's the system
+                // category that anime default to when no category is assigned.
+                // It can't be deleted. The user wants to always see it.
+                _categories.value = state.categories
                 applyFilterAndSort()
             }
         }

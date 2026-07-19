@@ -18,12 +18,16 @@ import app.anikuta.data.cache.SubDubStore
 import app.anikuta.data.cache.ExtensionLinkStore
 import app.anikuta.data.cache.EpisodeSeenStore
 import app.anikuta.data.cache.ReleaseTrackingStore
+import app.anikuta.data.cache.PendingLinkStore
 import app.anikuta.notification.NotificationPreferences
 import app.anikuta.notification.ReleaseCheckPlanner
 import app.anikuta.notification.SubDubResolver
 import app.anikuta.notification.ReleaseTracker
 import app.anikuta.notification.NotificationDispatcher
 import app.anikuta.backup.BackupManager
+import app.anikuta.backup.AutoBackupPreferences
+import app.anikuta.backup.prefs.PreferenceCollector
+import app.anikuta.backup.prefs.PreferenceRestorer
 import app.anikuta.data.handlers.anime.AndroidAnimeDatabaseHandler
 import app.anikuta.data.handlers.anime.AnimeDatabaseHandler
 import app.anikuta.data.anilist.repository.AniListRepository
@@ -232,6 +236,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { ExtensionLinkStore(get<PreferenceStore>()) }
         // Episode seen (watched) tracking
         addSingletonFactory { EpisodeSeenStore(get<PreferenceStore>()) }
+        // Pending-link store (unlinked anime from aniyomi-format restore)
+        addSingletonFactory { PendingLinkStore(get<PreferenceStore>()) }
 
         // ---- Phase N (Notifications) — release tracking system ----
         // Release-tracking state store (per-anime tracking + offset learning)
@@ -274,5 +280,11 @@ class AppModule(val app: Application) : InjektModule {
                 playbackStateStore = get(),
             )
         }
+
+        // Backup: preference collector + restorer (shared by both formats)
+        addSingletonFactory { PreferenceCollector(get<PreferenceStore>()) }
+        addSingletonFactory { PreferenceRestorer(get<PreferenceStore>()) }
+        // Auto-backup preferences
+        addSingletonFactory { AutoBackupPreferences(get<PreferenceStore>()) }
     }
 }

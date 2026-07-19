@@ -1,7 +1,10 @@
 package app.anikuta.ui.detail
 
 import android.content.Intent
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -62,6 +65,7 @@ fun DetailScreen(
     val videoPicker by viewModel.videoPicker.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val isEnrichingMetadata by viewModel.isEnrichingMetadata.collectAsState()
+    var showCategoryPicker by remember { mutableStateOf(false) }
     val downloadStatus by viewModel.downloadStatus.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val downloadedOnDisk by viewModel.downloadedOnDisk.collectAsState()
@@ -288,14 +292,16 @@ fun DetailScreen(
                         onBack = onBack,
                         onSave = {
                             viewModel.toggleSaved()
-                            // Confirmation toast — the bookmark icon change is
-                            // subtle; this gives clear feedback (user request).
                             android.widget.Toast.makeText(
                                 context,
                                 if (isSaved) "Removed from library"
                                 else "Saved to library",
                                 android.widget.Toast.LENGTH_SHORT,
                             ).show()
+                        },
+                        onLongPressSave = {
+                            // Show category picker
+                            showCategoryPicker = true
                         },
                         onShare = {
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -750,7 +756,24 @@ fun DetailScreen(
                 ep?.let { episodeSeenStore?.markUnseen(anilistId, it.url) }
             },
         )
+
+    // Category picker dialog (long-press save → pick categories)
+    if (showCategoryPicker) {
+        CategoryPickerDialog(
+            viewModel = viewModel,
+            onDismiss = { showCategoryPicker = false },
+            onConfirm = { selectedIds ->
+                viewModel.saveToCategories(selectedIds)
+                showCategoryPicker = false
+                android.widget.Toast.makeText(
+                    context,
+                    "Saved to ${if (selectedIds.isEmpty()) "Default" else selectedIds.size} categor${if (selectedIds.size == 1) "y" else "ies"}",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            },
+        )
     }
+}
 
 @Composable
 private fun DetailHeader(
@@ -761,6 +784,7 @@ private fun DetailHeader(
     episodeState: EpisodeState,
     onBack: () -> Unit,
     onSave: () -> Unit,
+    onLongPressSave: () -> Unit = {},
     onShare: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -813,10 +837,22 @@ private fun DetailHeader(
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
             Row {
-                IconButton(onClick = onSave) {
+                // Save button — tap to toggle save (Default category), long-press to pick categories.
+                // Uses combinedClickable on the Box (NOT IconButton, which consumes touch events
+                // and prevents onLongClick from firing). The Icon is wrapped in a Box with
+                // minimum touch target size (48dp) for accessibility.
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .combinedClickable(
+                            onClick = onSave,
+                            onLongClick = onLongPressSave,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Icon(
                         if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        contentDescription = if (isSaved) "Saved" else "Save",
+                        contentDescription = if (isSaved) "Saved (long-press for categories)" else "Save (long-press for categories)",
                         tint = if (isSaved) MaterialTheme.colorScheme.primary else Color.White,
                     )
                 }
@@ -969,5 +1005,77 @@ private fun InfoCard(title: String, body: String) {
             Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+/**
+ * Category picker dialog — shown when the user long-presses the save button.
+ * Lets the user pick which categories to save the anime to.
+ * Multi-select with checkboxes. If nothing is selected, defaults to the Default category.
+ */
+@Composable
+private fun CategoryPickerDialog(
+    viewModel: DetailViewModel,
+    onDismiss: () -> Unit,
+    onConfirm: (Set<Long>) -> Unit,
+) {
+    val allCategories = remember { viewModel.getAllCategories() }
+    // Use a SnapshotStateSet so Compose detects add/remove and recomposes.
+    val currentSelection = remember {
+        androidx.compose.runtime.mutableStateSetOf<Long>().apply {
+            addAll(viewModel.getCurrentCategories())
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Save to categories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Select categories for this anime. If none selected, it goes to Default.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                allCategories.forEach { category ->
+                    val isSelected = category.id in currentSelection
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (isSelected) currentSelection.remove(category.id)
+                                else currentSelection.add(category.id)
+                            }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = {
+                                if (it) currentSelection.add(category.id) else currentSelection.remove(category.id)
+                            },
+                            colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            category.name + if (category.id == 0L) " (auto)" else "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (category.id == 0L) FontWeight.Medium else FontWeight.Normal,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(currentSelection.toSet()) }) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 

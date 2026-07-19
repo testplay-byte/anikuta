@@ -1,5 +1,6 @@
 package app.anikuta.data.anilist.repository
 
+import app.anikuta.data.anilist.AniListRateLimiter
 import app.anikuta.data.anilist.api.AniListQueries
 import app.anikuta.data.anilist.model.*
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -27,6 +28,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
  */
 class AniListRepository(
     private val networkHelper: NetworkHelper,
+    private val rateLimiter: AniListRateLimiter = AniListRateLimiter(),
 ) {
     private val client get() = networkHelper.client
     private val json = Json { ignoreUnknownKeys = true }
@@ -39,6 +41,7 @@ class AniListRepository(
         variables: Map<String, Any?> = emptyMap(),
         responseParser: (JsonObject) -> List<AniListAnime>,
     ): List<AniListAnime> = withContext(Dispatchers.IO) {
+        rateLimiter.acquire() // enforce 80 req/min limit
         val jsonBody = buildJsonObject {
             put("query", query)
             if (variables.isNotEmpty()) {
@@ -98,6 +101,7 @@ class AniListRepository(
         graphqlRequest(AniListQueries.freshlyUpdated, mapOf("page" to page, "perPage" to perPage)) { parseMediaList(it) }
 
     suspend fun getGenres(): List<String> = withContext(Dispatchers.IO) {
+        rateLimiter.acquire() // enforce 80 req/min limit
         val jsonBody = buildJsonObject {
             put("query", AniListQueries.genres)
         }.toString().toRequestBody(jsonMime)
@@ -139,6 +143,7 @@ class AniListRepository(
         graphqlRequest(AniListQueries.searchAnimeWithAdult, mapOf("search" to query, "page" to page, "perPage" to perPage)) { parseMediaList(it) }
 
     suspend fun getAnimeDetails(id: Int): AniListAnime = withContext(Dispatchers.IO) {
+        rateLimiter.acquire() // enforce 80 req/min limit
         val jsonBody = buildJsonObject {
             put("query", AniListQueries.animeDetails)
             putJsonObject("variables") { put("id", id) }

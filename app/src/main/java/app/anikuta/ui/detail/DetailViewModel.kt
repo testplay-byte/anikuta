@@ -1110,6 +1110,72 @@ class DetailViewModel(
     }
 
     /**
+     * Save the anime to the library AND assign it to specific categories.
+     * Used by the long-press save → category picker flow on the DetailScreen.
+     *
+     * If the anime is already saved, only updates the category assignments.
+     * If not saved, saves it first, then assigns categories.
+     *
+     * @param categoryIds the set of category IDs to assign the anime to.
+     *   If empty, the anime is assigned to the Default category.
+     */
+    fun saveToCategories(categoryIds: Set<Long>) {
+        val store = libraryStore ?: run {
+            Log.w(TAG, "LibraryStore unavailable — saveToCategories is no-op")
+            return
+        }
+        val anime = (_anime.value as? DetailState.Success)?.anime ?: run {
+            Log.w(TAG, "Anime not loaded yet — cannot save to categories")
+            return
+        }
+
+        // Save to library if not already saved
+        if (!_isSaved.value) {
+            store.save(anime)
+            try {
+                val tracker = uy.kohesive.injekt.Injekt.get<app.anikuta.notification.ReleaseTracker>()
+                tracker.startTracking(
+                    anilistId = anilistId,
+                    title = anime.title.preferred(),
+                    coverUrl = anime.coverImage?.large,
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not start release tracking: ${e.message}")
+            }
+            _isSaved.value = true
+        }
+
+        // Assign to categories
+        try {
+            val catStore = uy.kohesive.injekt.Injekt.get<app.anikuta.ui.library.CategoryStore>()
+            catStore.setAnimeCategories(anilistId, categoryIds)
+            Log.d(TAG, "Saved anime $anilistId to categories: $categoryIds")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not assign categories: ${e.message}")
+        }
+    }
+
+    /** Get the current category assignments for this anime (for the category picker). */
+    fun getCurrentCategories(): Set<Long> {
+        return try {
+            val catStore = uy.kohesive.injekt.Injekt.get<app.anikuta.ui.library.CategoryStore>()
+            catStore.getAnimeCategories(anilistId)
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    /** Get all available categories (for the category picker). */
+    fun getAllCategories(): List<app.anikuta.ui.library.CategoryStore.Category> {
+        return try {
+            val catStore = uy.kohesive.injekt.Injekt.get<app.anikuta.ui.library.CategoryStore>()
+            catStore.getCategories()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
      * Phase 7: Background soft-refresh of the episode list.
      * Guarded by [REFRESH_GUARD_MS] (5 min) per anime to avoid hammering.
      * If the refreshed list differs from cached, updates the UI smoothly.
